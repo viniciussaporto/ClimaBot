@@ -27,17 +27,22 @@ client.on('ready', () => {
 		console.log('Weather Data:', weatherData); // Log weather data for debugging
 		const temperature = weatherData.temperature; // Access temperature from weatherData
 		const weatherDescription = weatherData.weatherDescription; // Access weatherDescription from weatherData
-		const formattedInfo = `Weather in ${location}: ${temperature}°C, ${weatherDescription}`;
+    	const windSpeed = weatherData.windSpeed; // Access windSpeed from weatherData
+    	const windDirection = weatherData.windDirection; // Access windDirection from weatherData
+
+		//	const formattedInfo = `Weather in ${location}: ${temperature}°C, ${weatherDescription}`;
 		const embed = new EmbedBuilder()
-			.setTitle('Weather Information')
-			.addFields(
-				{ name: 'Temperature:', value: '${temperature}°C' },
-				{ name: '\u200B', value: '\u200B' },
-				{ name: 'Weather Code description:', value: '${weatherDescription}', inline: true },
-				{ name: 'Inline field title', value: 'Some value here', inline: true },
-			)
-			.setDescription(formattedInfo);
-		message.channel.send({ embeds: [embed] });
+    .setTitle('Weather Information')
+    .addFields(
+		{ name:	'Location:', value: `${location}`},
+    	{ name:	'Temperature:', value: `${temperature}°C`},
+    	{ name:	'Weather Description:', value: `${weatherDescription}`},
+    	{ name:	'Wind Speed:', value: `${windSpeed} km/h`},
+    	{ name:	'Wind Direction:', value: `${windDirection}°`},
+	)
+    .setColor('#0099ff');
+
+	message.channel.send({ embeds: [embed] });
 	  } catch (error) {
 		console.error('Error fetching weather information:', error);
 		message.channel.send('Error fetching weather information.');
@@ -66,27 +71,30 @@ client.on('ready', () => {
 	const { lat, lng } = coordinates;
 	const trimmedLat = lat.toString().trim();
 	const trimmedLng = lng.toString().trim();
-	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,weathercode&forecast_days=1`;
+	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,weathercode,windspeed_10m,winddirection_10m&forecast_days=1`;
   
 	try {
 	  const response = await axios.get(weatherUrl);
-	  console.log(response.data);
+	  console.log('Raw Response:', response.data); // Log the raw response
 	  const { hourly } = response.data; // Extract hourly data from the response
   
 	  if (!hourly || !hourly.temperature_2m || hourly.temperature_2m.length === 0) {
 		throw new Error('Weather data not available');
 	  }
   
-	  const currentDateTime = new Date();
-	  const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime);
-	  const temperature = hourly.temperature_2m[closestTimeIndex];
-	  const weatherCode = hourly.weathercode[closestTimeIndex];
-	  const weatherDescription = getWeatherDescription(weatherCode);
-  
-	  return {
-		temperature,
-		weatherDescription
-	  };
+		const currentDateTime = new Date();
+		const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime);
+		const temperature = hourly.temperature_2m[closestTimeIndex];
+		const weatherCode = hourly.weathercode[closestTimeIndex];
+		const weatherDescription = getWeatherDescription(weatherCode);
+		const windSpeed = hourly.windspeed_10m[closestTimeIndex];
+		const windDirection = hourly.winddirection_10m[closestTimeIndex];
+    return {
+      temperature,
+      weatherDescription,
+      windSpeed,
+      windDirection
+    };
 	} catch (error) {
 	  console.error('Error fetching weather data from Open-Meteo API:', error);
 	  throw new Error('Error fetching weather data from Open-Meteo API');
@@ -114,95 +122,33 @@ client.on('ready', () => {
 	// Define the weather code to description mappings based on WMO 4677 weather code table
 	const weatherCodeMappings = {
 	  0: 'Clear sky',
-	  1: 'Clear sky with few clouds',
+	  1: 'Mainly clear',
 	  2: 'Partly cloudy',
-	  3: 'Partly cloudy with rain showers',
-	  4: 'Partly cloudy with thunderstorms',
-	  5: 'Partly cloudy with snow showers',
-	  6: 'Cloudy',
-	  7: 'Cloudy with rain showers',
-	  8: 'Cloudy with thunderstorms',
-	  9: 'Cloudy with snow showers',
-	  10: 'Fog',
-	  20: 'Mist',
-	  21: 'Drizzle',
-	  22: 'Rain',
-	  23: 'Snowfall',
-	  24: 'Rain showers',
-	  25: 'Snow showers',
-	  26: 'Thunderstorm',
-	  27: 'Thunderstorm with hail',
-	  28: 'Thunderstorm with snow',
-	  29: 'Thunderstorm with heavy snow',
-	  30: 'Hail',
-	  31: 'Snow',
-	  32: 'Dust or sand whirls',
-	  33: 'Fog',
-	  34: 'Volcanic ash',
-	  35: 'Smoke',
-	  36: 'Haze',
-	  37: 'Blowing snow',
-	  38: 'Blowing sand',
-	  39: 'Blowing spray',
-	  40: 'Mist',
-	  41: 'Patchy rain nearby',
-	  42: 'Patchy snow nearby',
-	  43: 'Patchy sleet nearby',
-	  44: 'Patchy freezing drizzle nearby',
-	  45: 'Patchy moderate rain',
-	  46: 'Moderate or heavy rain nearby',
-	  47: 'Patchy light freezing rain',
-	  48: 'Moderate or heavy freezing rain',
-	  49: 'Light rain shower',
-	  50: 'Moderate or heavy rain shower',
-	  51: 'Torrential rain shower',
-	  52: 'Light sleet showers',
-	  53: 'Moderate or heavy sleet showers',
-	  54: 'Light snow showers',
-	  55: 'Moderate or heavy snow showers',
-	  56: 'Light showers of ice pellets',
-	  57: 'Moderate or heavy showers of ice pellets',
-	  58: 'Light showers of hail',
-	  59: 'Moderate or heavy showers of hail',
-	  60: 'Light rain',
-	  61: 'Moderate rain',
-	  62: 'Heavy rain',
-	  63: 'Light freezing rain',
-	  64: 'Moderate or heavy freezing rain',
-	  65: 'Light sleet',
-	  66: 'Moderate or heavy sleet',
-	  67: 'Light snowfall',
-	  68: 'Moderate or heavy snowfall',
-	  69: 'Light showers of ice pellets',
-	  70: 'Moderate or heavy showers of ice pellets',
-	  71: 'Light showers of hail',
-	  72: 'Moderate or heavy showers of hail',
-	  73: 'Light thunderstorm',
-	  74: 'Moderate or heavy thunderstorm',
-	  75: 'Light thunderstorm with hail',
-	  76: 'Moderate or heavy thunderstorm with hail',
-	  77: 'Light thunderstorm with snow',
-	  78: 'Moderate or heavy thunderstorm with snow',
-	  79: 'Light thunderstorm with heavy snow',
-	  80: 'Light drizzle',
-	  81: 'Drizzle',
-	  82: 'Heavy drizzle',
-	  83: 'Light rain',
-	  84: 'Moderate rain',
-	  85: 'Heavy rain',
-	  86: 'Light freezing rain',
-	  87: 'Moderate or heavy freezing rain',
-	  88: 'Light sleet',
-	  89: 'Moderate or heavy sleet',
-	  90: 'Patchy light rain',
-	  91: 'Light rain shower',
-	  92: 'Moderate or heavy rain shower',
-	  93: 'Light snow',
-	  94: 'Moderate or heavy snow',
-	  95: 'Light rain with thunder',
-	  96: 'Moderate or heavy rain with thunder',
-	  97: 'Light snow with thunder',
-	  98: 'Moderate or heavy snow with thunder',
+	  3: 'Overcast',
+	  45: 'Fog',
+	  46: 'Depositing rime fog',
+	  51: 'Light drizzle',
+	  53: 'Moderate drizzle',
+	  55: 'Dense intensity drizzle',
+	  56: 'Light freezing drizzle',
+	  57: 'Dense freezing drizzle',
+	  61: 'Slight rain',
+	  63: 'Moderte rain',
+	  65: 'Heavy rain',
+	  66: 'Light freezing rain',
+	  67: 'Heavy freezing rain',
+	  71: 'Slight snowfall',
+	  73: 'Moderate snowfall',
+	  75: 'Heavy snowfall',
+	  77: 'Snow grains',
+	  80: 'Slight rain showers',
+	  81: 'Moderate rain showers',
+	  82: 'Violent rain showers',
+	  85: 'Slight snow showers',
+	  86: 'Heavy snow showers',
+	  95: 'Thunderstorm',
+	  96: 'Slight hail thunderstorm',
+	  99: 'Heavy hail thunderstorm',
 	};
   
 	return weatherCodeMappings[weatherCode] || 'Unknown';
