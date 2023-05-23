@@ -22,21 +22,21 @@ client.on('ready', () => {
 		  return;
 		}
   
-		const location = args.slice(1).join(' ');
+		const location = args.slice(1).join(' '); // Gets 1st arg and joins the spaces for OpenCage API
 		const coordinates = await getCoordinates(location);
-		console.log('Coordinates:', coordinates); // Log coordinates for debugging
+		//console.log('Coordinates:', coordinates); // Log coordinates for debugging
 		const weatherData = await getWeatherData(coordinates);
-		console.log('Weather Data:', weatherData); // Log weather data for debugging
+		//console.log('Weather Data:', weatherData); // Log weather data for debugging
 		const temperature = weatherData.temperature; // Access temperature from weatherData
 		const weatherDescription = weatherData.weatherDescription; // Access weatherDescription from weatherData
     	const windSpeed = weatherData.windSpeed; // Access windSpeed from weatherData
     	const windDirection = weatherData.windDirection; // Access windDirection from weatherData
 
 		//	const formattedInfo = `Weather in ${location}: ${temperature}°C, ${weatherDescription}`;
-		const embed = new EmbedBuilder()
+		const embed = new EmbedBuilder() // Embed builder, still missing images, 'feels like' temperature, barometric pressure and other stuff
     .setTitle('Weather Information')
     .addFields(
-		{ name:	'Location:', value: `${location}`},
+		{ name:	'Location:', value: `${location}`}, // Needs changing to OpenCage API complete locale description
     	{ name:	'Temperature:', value: `${temperature}°C`},
     	{ name:	'Weather Description:', value: `${weatherDescription}`},
     	{ name:	'Wind Speed:', value: `${windSpeed} km/h`},
@@ -71,26 +71,26 @@ client.on('ready', () => {
   
   async function getWeatherData(coordinates) {
 	const { lat, lng } = coordinates;
-	const trimmedLat = lat.toString().trim();
+	const trimmedLat = lat.toString().trim(); //Converts int to string and trims it for Open-Meteo
 	const trimmedLng = lng.toString().trim();
 	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,weathercode,windspeed_10m,winddirection_10m&forecast_days=1`;
   
 	try {
 	  const response = await axios.get(weatherUrl);
-	  console.log('Raw Response:', response.data); // Log the raw response
+	  //console.log('Raw Response:', response.data); // Log the raw response
 	  const { hourly } = response.data; // Extract hourly data from the response
   
 	  if (!hourly || !hourly.temperature_2m || hourly.temperature_2m.length === 0) {
 		throw new Error('Weather data not available');
 	  }
   
-		const currentDateTime = new Date();
-		const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime);
-		const temperature = hourly.temperature_2m[closestTimeIndex];
-		const weatherCode = hourly.weathercode[closestTimeIndex];
-		const weatherDescription = getWeatherDescription(weatherCode);
-		const windSpeed = hourly.windspeed_10m[closestTimeIndex];
-		const windDirection = hourly.winddirection_10m[closestTimeIndex];
+		const currentDateTime = new Date(); //Gets current date and time
+		const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime); //Does the approximation because Open-Meteo only deals in full hours
+		const temperature = hourly.temperature_2m[closestTimeIndex]; //Gets temperature from the json provided by the API
+		const weatherCode = hourly.weathercode[closestTimeIndex]; //Gets weather code for condition from the API
+		const weatherDescription = getWeatherDescription(weatherCode); //Converts code to it's correct designation according to WMO code table
+		const windSpeed = hourly.windspeed_10m[closestTimeIndex]; //Gets wind speed
+		const windDirection = hourly.winddirection_10m[closestTimeIndex]; //Gets wind direction
     return {
       temperature,
       weatherDescription,
@@ -113,7 +113,7 @@ client.on('ready', () => {
   
 	  if (diff < minDiff) {
 		minDiff = diff;
-		closestIndex = i;
+		closestIndex = i; // Does the diff and reachs to the lesser value to use in the index
 	  }
 	}
   
@@ -157,41 +157,3 @@ client.on('ready', () => {
   }
 
 client.login(token);
-
-// const { Discord, GatewayIntentBits } = require('discord.js');
-// const axios = require('axios');
-
-// const client = new Discord.Client({
-// 	intents: [
-// 		GatewayIntentBits.Guilds,
-// 		GatewayIntentBits.GuildMessages,
-// 		GatewayIntentBits.MessageContent,
-// 	],
-//   });
-
-// const token = 'YOUR_DISCORD_TOKEN';
-// const apiKey = 'YOUR_WEATHER_API_KEY';
-
-// client.on('ready', () => {
-//   console.log(`Logged in as ${client.user.tag}`);
-// });
-
-// client.on('message', (message) => {
-//   if (message.content.startsWith('!weather')) {
-//     const location = message.content.split(' ')[1];
-//     const apiUrl = `https://api.open-meteo.com/v1/forecast?location=${location}`;
-
-//     axios.get(apiUrl)
-//       .then((response) => {
-//         const weatherInfo = response.data;
-//         const formattedInfo = `Weather in ${location}: ${weatherInfo.temperature}°C, ${weatherInfo.description}`;
-//         message.channel.send(formattedInfo);
-//       })
-//       .catch((error) => {
-//         console.error('Error fetching weather information:', error);
-//         message.channel.send('Error fetching weather information.');
-//       });
-//   }
-// });
-
-// client.login(token);
