@@ -1,11 +1,13 @@
 const Discord = require('discord.js');
+require('dotenv').config();
+
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
+
 const axios = require('axios');
+const token = process.env.TOKEN; 
+const openCageApiKey = process.env.OPENCAGEAPIKEY; 
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent], partials: [Partials.Channel] });
-
-const token = 'MTEwOTU5ODI0NDg4NDk3OTc5Mg.G_b8DY.87YGtDSJZrMLSMA8jvgbxLDGRpxxx71gyhfOUM';
-const openCageApiKey = 'b7b537ab470d47149df63e51c16acbc5';
 
 client.on('ready', () => {
 	console.log(`Logged in as ${client.user.tag}`);
@@ -167,7 +169,7 @@ client.login(token);
 // 	],
 //   });
 
-// const token = 'MTEwOTU5ODI0NDg4NDk3OTc5Mg.G_b8DY.87YGtDSJZrMLSMA8jvgbxLDGRpxxx71gyhfOUM';
+// const token = 'YOUR_DISCORD_TOKEN';
 // const apiKey = 'YOUR_WEATHER_API_KEY';
 
 // client.on('ready', () => {
