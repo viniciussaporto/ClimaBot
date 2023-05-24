@@ -155,11 +155,11 @@ async function getWeatherData(coordinates) {
 function getClosestTimeIndex(timeArray, targetDateTime) {
     let minDiff = Infinity;
     let closestIndex = 0;
-    const targetTimestamp = targetDateTime.getTime();
+    const targetTimestamp = targetDateTime.toISOString();
 
     for (let i = 0; i < timeArray.length; i++) {
-        const time = new Date(timeArray[i]).getTime();
-        const diff = Math.abs(time - targetTimestamp);
+        const time = timeArray[i];
+        const diff = Math.abs(new Date(time) - new Date(targetTimestamp));
 
         if (diff < minDiff) {
             minDiff = diff;
