@@ -71,6 +71,8 @@ client.on('interactionCreate', async (interaction) => {
         const windSpeed = weatherData.windSpeed;
         const windDirection = weatherData.windDirection;
         const reportedLocation = weatherData.formatted;
+		const relativeHumidity = weatherData.relativeHumidity;
+		const relativePressure = weatherData.relativePressure;
 
         const embed = new Discord.EmbedBuilder()
             .setTitle('Weather Information')
@@ -79,7 +81,9 @@ client.on('interactionCreate', async (interaction) => {
 				{ name: 'Location', value: `${reportedLocation}.`},
                 { name: 'Temperature:', value: `${temperature}°C` },
                 { name: 'Wind Speed:', value: `${windSpeed} km/h` },
-                { name: 'Wind Direction:', value: `${windDirection}°`, inline: true }
+                { name: 'Wind Direction:', value: `${windDirection}°`, inline: true },
+				{ name: 'Humidity:', value: `${relativeHumidity}%` },
+				{ name: 'Pressure at sea level:', value: `${relativePressure}hPa` },
             )
             .setColor('#0099ff');
 
@@ -109,7 +113,7 @@ async function getWeatherData(coordinates) {
     const { lat, lng, formatted } = coordinates;
     const trimmedLat = lat.toString().trim();
     const trimmedLng = lng.toString().trim();
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,weathercode,windspeed_10m,winddirection_10m&forecast_days=1`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,windspeed_10m,winddirection_10m&forecast_days=1`;
 
     try {
         const response = await axios.get(weatherUrl);
@@ -126,6 +130,8 @@ async function getWeatherData(coordinates) {
         const weatherCode = hourly.weathercode[closestTimeIndex];
         const windSpeed = hourly.windspeed_10m[closestTimeIndex];
         const windDirection = hourly.winddirection_10m[closestTimeIndex];
+		const relativeHumidity = hourly.relativeHumidity_2m[closestTimeIndex];
+		const relativePressure = hourly.pressure_msl[closestTimeIndex];
 
         return {
             temperature,
