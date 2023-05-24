@@ -196,7 +196,7 @@ Distributed under the MIT License.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@viniciussaporto](https://twitter.com/viniciussaporto) - vinicius.saporto@gmail.com
+[@viniciussaporto](https://twitter.com/viniciussaporto) - vinicius.saporto@gmail.com
 
 Project Link: [https://github.com/viniciussaporto/ClimaBot](https://github.com/viniciussaporto/ClimaBot)
 
