@@ -155,20 +155,22 @@ async function getWeatherData(coordinates) {
 function getClosestTimeIndex(timeArray, targetDateTime) {
     let minDiff = Infinity;
     let closestIndex = 0;
-    const targetTimestamp = targetDateTime.toISOString();
-
+  
+    const targetHours = targetDateTime.getHours();
+  
     for (let i = 0; i < timeArray.length; i++) {
-        const time = timeArray[i];
-        const diff = Math.abs(new Date(time) - new Date(targetTimestamp));
-
-        if (diff < minDiff) {
-            minDiff = diff;
-            closestIndex = i;
-        }
+      const forecastTime = new Date(timeArray[i]);
+      const forecastHours = forecastTime.getHours();
+      const diff = Math.abs(forecastHours - targetHours);
+  
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
     }
-
+  
     return closestIndex;
-}
+  }
 
 function getWeatherDescription(weatherCode) {
 	// Define the weather code to description mappings based on WMO 4677 weather code table
