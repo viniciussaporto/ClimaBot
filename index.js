@@ -126,12 +126,16 @@ async function getWeatherData(coordinates) {
         const currentDateTime = new Date();
         const closestTimeIndex = getClosestTimeIndex(hourly.temperature_2m, currentDateTime);
 
+        if (closestTimeIndex === -1) {
+            throw new Error('Unable to determine closest time index');
+        }
+
         const temperature = hourly.temperature_2m[closestTimeIndex];
         const weatherCode = hourly.weathercode[closestTimeIndex];
         const windSpeed = hourly.windspeed_10m[closestTimeIndex];
         const windDirection = hourly.winddirection_10m[closestTimeIndex];
-		const relativeHumidity = hourly.relativeHumidity_2m[closestTimeIndex];
-		const relativePressure = hourly.pressure_msl[closestTimeIndex];
+        const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
+        const relativePressure = hourly.pressure_msl[closestTimeIndex];
 
         return {
             temperature,
@@ -139,6 +143,8 @@ async function getWeatherData(coordinates) {
             windSpeed,
             windDirection,
             formatted,
+            relativeHumidity,
+            relativePressure,
         };
     } catch (error) {
         console.error('Error fetching weather data from Open-Meteo API:', error);
