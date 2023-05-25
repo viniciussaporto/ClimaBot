@@ -84,9 +84,9 @@ client.on('interactionCreate', async (interaction) => {
                     { name: 'Temperature:', value: `${temperature}°C` },
                     { name: 'Wind Speed:', value: `${windSpeed} km/h`, inline: true },
                     { name: 'Wind Direction:', value: `${windDirection}°`, inline: true },
-                    { name: 'Humidity:', value: `${relativeHumidity}%`, inline: true },
+                    { name: 'Humidity:', value: `${relativeHumidity}%`, inline: false },
                     { name: 'Pressure at sea level:', value: `${relativePressure}hPa`, inline: true },
-                    { name: 'Cloudiness:', value: `${cloudiness}%`, inline: false },
+                    { name: 'Cloudiness:', value: `${cloudiness}%`, inline: true },
                 )
                 .setColor('#0099ff');
 
