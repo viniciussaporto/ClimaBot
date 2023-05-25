@@ -126,7 +126,8 @@ async function getWeatherData(coordinates) {
       }
   
       const currentDateTime = new Date();
-      const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime.getTime());
+      const adjustedDateTime = new Date(currentDateTime.getTime() + utc_offset_seconds * 1000); // Adjusting current time based on UTC offset
+      const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
   
       if (closestTimeIndex === -1) {
         throw new Error('Unable to determine closest time index');
@@ -155,7 +156,6 @@ async function getWeatherData(coordinates) {
       throw new Error('Error fetching weather data from Open-Meteo API');
     }
   }
-  
 
 function getClosestTimeIndex(timeArray, targetDateTime) {
     let minDiff = Infinity;
