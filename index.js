@@ -73,6 +73,7 @@ client.on('interactionCreate', async (interaction) => {
         const reportedLocation = weatherData.formatted;
 		const relativeHumidity = weatherData.relativeHumidity;
 		const relativePressure = weatherData.relativePressure;
+        const cloudiness = weatherData.cloudiness;
 
         const embed = new Discord.EmbedBuilder()
             .setTitle('Weather Information')
@@ -84,6 +85,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: 'Wind Direction:', value: `${windDirection}°`, inline: true },
 				{ name: 'Humidity:', value: `${relativeHumidity}%`, inline: true },
 				{ name: 'Pressure at sea level:', value: `${relativePressure}hPa`, inline: true },
+                { name: 'Cloudiness:', value: `${cloudiness}%`, inline: false },
             )
             .setColor('#0099ff');
 
@@ -113,55 +115,55 @@ async function getWeatherData(coordinates) {
     const { lat, lng, formatted } = coordinates;
     const trimmedLat = lat.toString().trim();
     const trimmedLng = lng.toString().trim();
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,windspeed_10m,winddirection_10m&forecast_days=1`;
-
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+  
     try {
-        const response = await axios.get(weatherUrl);
-        const { hourly } = response.data;
-
-        if (!hourly || !hourly.temperature_2m || hourly.temperature_2m.length === 0) {
-            throw new Error('Weather data not available');
-        }
-
-        const currentDateTime = new Date();
-        const closestTimeIndex = getClosestTimeIndex(hourly.temperature_2m, currentDateTime);
-
-        if (closestTimeIndex === -1) {
-            throw new Error('Unable to determine closest time index');
-        }
-
-        const temperature = hourly.temperature_2m[closestTimeIndex];
-        const weatherCode = hourly.weathercode[closestTimeIndex];
-        const windSpeed = hourly.windspeed_10m[closestTimeIndex];
-        const windDirection = hourly.winddirection_10m[closestTimeIndex];
-        const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
-        const relativePressure = hourly.pressure_msl[closestTimeIndex];
-
-        return {
-            temperature,
-            weatherDescription: getWeatherDescription(weatherCode),
-            windSpeed,
-            windDirection,
-            formatted,
-            relativeHumidity,
-            relativePressure,
-        };
+      const response = await axios.get(weatherUrl);
+      const { hourly, utc_offset_seconds } = response.data;
+  
+      if (!hourly || !hourly.temperature_2m || hourly.temperature_2m.length === 0) {
+        throw new Error('Weather data not available');
+      }
+  
+      const currentDateTime = new Date();
+      const closestTimeIndex = getClosestTimeIndex(hourly.time, currentDateTime.getTime());
+  
+      if (closestTimeIndex === -1) {
+        throw new Error('Unable to determine closest time index');
+      }
+  
+      const temperature = hourly.temperature_2m[closestTimeIndex];
+      const weatherCode = hourly.weathercode[closestTimeIndex];
+      const windSpeed = hourly.windspeed_10m[closestTimeIndex];
+      const windDirection = hourly.winddirection_10m[closestTimeIndex];
+      const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
+      const relativePressure = hourly.pressure_msl[closestTimeIndex];
+      const cloudiness = hourly.cloudcover[closestTimeIndex];
+  
+      return {
+        temperature,
+        weatherDescription: getWeatherDescription(weatherCode),
+        windSpeed,
+        windDirection,
+        formatted,
+        relativeHumidity,
+        relativePressure,
+        cloudiness,
+      };
     } catch (error) {
-        console.error('Error fetching weather data from Open-Meteo API:', error);
-        throw new Error('Error fetching weather data from Open-Meteo API');
+      console.error('Error fetching weather data from Open-Meteo API:', error);
+      throw new Error('Error fetching weather data from Open-Meteo API');
     }
-}
+  }
+  
 
 function getClosestTimeIndex(timeArray, targetDateTime) {
     let minDiff = Infinity;
     let closestIndex = 0;
   
-    const targetHours = targetDateTime.getHours();
-  
     for (let i = 0; i < timeArray.length; i++) {
-      const forecastTime = new Date(timeArray[i]);
-      const forecastHours = forecastTime.getHours();
-      const diff = Math.abs(forecastHours - targetHours);
+      const time = timeArray[i];
+      const diff = Math.abs(new Date(time) - targetDateTime);
   
       if (diff < minDiff) {
         minDiff = diff;
