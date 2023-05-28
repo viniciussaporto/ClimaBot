@@ -218,13 +218,13 @@
 // client.login(token);
 
 const Discord = require('discord.js');
+const axios = require('axios');
 require('dotenv').config();
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 
-const axios = require('axios');
 const token = process.env.TOKEN;
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
 const openWeatherMapApiKey = process.env.OPENWEATHERMAPAPIKEY;
@@ -295,22 +295,23 @@ client.on('interactionCreate', async (interaction) => {
             const relativeHumidity = weatherData.relativeHumidity;
             const relativePressure = weatherData.relativePressure;
             const cloudiness = weatherData.cloudiness;
-            const weatherMapImageUrl = await getWeatherMapImageUrl(coordinates);
 
             const embed = new Discord.MessageEmbed()
                 .setTitle('Weather Information')
+                .setDescription(`Location: ${reportedLocation}`)
                 .addFields(
-                    { name: 'Location', value: `${reportedLocation}.`, inline: true },
                     { name: 'Weather Description:', value: weatherDescription, inline: true },
-                    { name: 'Temperature:', value: `${temperature}°C` },
+                    { name: 'Temperature:', value: `${temperature}°C`, inline: true },
                     { name: 'Wind Speed:', value: `${windSpeed} km/h`, inline: true },
                     { name: 'Wind Direction:', value: `${windDirection}°`, inline: true },
-                    { name: 'Humidity:', value: `${relativeHumidity}%`, inline: false },
+                    { name: 'Humidity:', value: `${relativeHumidity}%`, inline: true },
                     { name: 'Pressure at sea level:', value: `${relativePressure}hPa`, inline: true },
                     { name: 'Cloudiness:', value: `${cloudiness}%`, inline: true },
                 )
-                .setColor('#0099ff')
-                .setImage(weatherMapImageUrl);
+                .setColor('#0099ff');
+
+            const weatherMapUrl = `https://tile.openweathermap.org/map/precipitation_new/5/${coordinates.lat}/${coordinates.lng}.png?appid=${openWeatherMapApiKey}`;
+            embed.setThumbnail(weatherMapUrl);
 
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
@@ -322,7 +323,7 @@ client.on('interactionCreate', async (interaction) => {
 
 async function getCoordinates(location) {
     try {
-        const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${location}&pretty=1&no_annotations=1`;
+        const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${encodeURIComponent(location)}&pretty=1&no_annotations=1`;
         const response = await axios.get(geocodingUrl);
 
         if (response.data.results.length === 0) {
@@ -334,47 +335,39 @@ async function getCoordinates(location) {
 
         return { lat, lng, formatted };
     } catch (error) {
+        console.error('Error fetching coordinates from OpenCage Geocoding API:', error);
         throw new Error('Error fetching coordinates from OpenCage Geocoding API');
     }
 }
 
-async function getWeatherData(coordinates) {
-    const { lat, lng, formatted } = coordinates;
-    const trimmedLat = lat.toString().trim();
-    const trimmedLng = lng.toString().trim();
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${trimmedLat}&lon=${trimmedLng}&appid=${openWeatherMapApiKey}&units=metric`;
-
+async function getWeatherData(coordinates, location) {
     try {
+        const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${coordinates.lat}&lon=${coordinates.lng}&units=metric&appid=${openWeatherMapApiKey}`;
         const response = await axios.get(weatherUrl);
-        const { main, wind, weather } = response.data;
 
-        const temperature = main.temp;
-        const weatherDescription = weather[0].description;
-        const windSpeed = wind.speed;
-        const windDirection = wind.deg;
-        const relativeHumidity = main.humidity;
-        const relativePressure = main.pressure;
+        const weatherData = response.data;
+        const temperature = weatherData.main.temp;
+        const weatherDescription = weatherData.weather[0].description;
+        const windSpeed = weatherData.wind.speed;
+        const windDirection = weatherData.wind.deg;
+        const relativeHumidity = weatherData.main.humidity;
+        const relativePressure = weatherData.main.pressure;
+        const cloudiness = weatherData.clouds.all;
 
         return {
             temperature,
             weatherDescription,
             windSpeed,
             windDirection,
-            formatted,
+            formatted: location,
             relativeHumidity,
             relativePressure,
+            cloudiness
         };
     } catch (error) {
-        console.error('Error fetching weather data from OpenWeatherMap API:', error);
+        console.error('Error fetching weather data:', error);
         throw new Error('Error fetching weather data from OpenWeatherMap API');
     }
-}
-
-async function getWeatherMapImageUrl(coordinates) {
-    const { lat, lng } = coordinates;
-    const weatherMapUrl = `https://tile.openweathermap.org/map/precipitation_new/5/${lat}/${lng}.png?appid=${openWeatherMapApiKey}`;
-
-    return weatherMapUrl;
 }
 
 function getWeatherDescription(weatherCode) {
