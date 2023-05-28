@@ -9,6 +9,7 @@ const axios = require('axios');
 const token = process.env.TOKEN;
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
 const clientId = process.env.CLIENT_ID;
+const openWeatherMapApiKey = process.env.OPENWEATHERMAPAPIKEY;
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent], partials: [Partials.Channel] });
 const commands = [];
@@ -33,7 +34,19 @@ async function registerSlashCommands(guildId) {
                 }
             ]
         });
-
+        commands.push({
+            name: 'radar',
+            description: 'Get the radar image for a location(BETA)',
+            options: [
+                {
+                    name: 'location',
+                    type: '3',
+                    description: 'The location to get the redar information for(BETA)',
+                    required: true
+                }
+            ]
+        });
+        
         const rest = new REST({ version: '9' }).setToken(token);
 
         await rest.put(
@@ -79,7 +92,7 @@ client.on('interactionCreate', async (interaction) => {
             const embed = new Discord.EmbedBuilder()
                 .setTitle('Weather Information')
                 .addFields(
-                    { name: 'Location', value: `${reportedLocation}.`, inline: true},
+                    { name: 'Location', value: `${reportedLocation}`, inline: true},
                     { name: 'Weather Description:', value: weatherDescription, inline: true },
                     { name: 'Temperature:', value: `${temperature}°C` },
                     { name: 'Wind Speed:', value: `${windSpeed} km/h`, inline: true },
@@ -95,8 +108,44 @@ client.on('interactionCreate', async (interaction) => {
             console.error('Error fetching weather data:', error);
             await interaction.reply('Unable to retrieve weather information.');
         }
+    } else if (commandName === 'radar') {
+        const location = options.getString('location');
+        if (!location) {
+          await interaction.reply('Please provide a location.');
+          return;
+        }
+    
+        try {
+          const radarImage = await fetchRadarImage(location);
+    
+          const embed = new MessageEmbed()
+            .setTitle('Weather Radar')
+            .setDescription(`Radar image for ${location}:`)
+            .setImage(radarImage)
+            .setColor('#0099ff');
+    
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Failed to retrieve radar image:', error);
+          await interaction.reply({ content: 'Failed to retrieve radar image.', ephemeral: true });
+        }
+      }
+    });
+
+    async function fetchRadarImage(location) {
+        try {
+            const coordinates = await getCoordinates(location);
+            const { lat, lng } = coordinates;
+            
+            const unixTimestamp = Math.floor(Date.now() / 1000); // Get the current Unix timestamp
+            
+            const apiUrl = `http://maps.openweathermap.org/maps/2.0/weather/PA0/2/${lat}/${lng}?date=${unixTimestamp}&appid=${openWeatherMapApiKey}`;
+            return apiUrl;
+        } catch (error) {
+          console.error('Failed to retrieve radar image:', error);
+          throw new Error('Failed to retrieve radar image.');
+        }
     }
-});
 
 async function getCoordinates(location) {
     try {
