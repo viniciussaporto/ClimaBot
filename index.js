@@ -296,7 +296,7 @@ client.on('interactionCreate', async (interaction) => {
             const relativePressure = weatherData.relativePressure;
             const cloudiness = weatherData.cloudiness;
 
-            const embed = new Discord.MessageEmbed()
+            const embed = new Discord.EmbedBuilder()
                 .setTitle('Weather Information')
                 .setDescription(`Location: ${reportedLocation}`)
                 .addFields(
