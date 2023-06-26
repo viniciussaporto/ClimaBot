@@ -34,18 +34,18 @@ async function registerSlashCommands() {
                     }
                 ]
             },
-            {
-                name: 'radar',
-                description: 'Get the radar image for a location(THIS FUNCTIONALITY DOES NOT WORK CURRENTLY)',
-                options: [
-                    {
-                        name: 'location',
-                        type: 3,
-                        description: 'The location to get the radar image for(THIS FUNCTIONALITY DOES NOT WORK CURRENTLY)',
-                        required: true
-                    }
-                ]
-            }
+            // {
+            //     name: 'radar',
+            //     description: 'Get the radar image for a location(THIS FUNCTIONALITY DOES NOT WORK CURRENTLY)',
+            //     options: [
+            //         {
+            //             name: 'location',
+            //             type: 3,
+            //             description: 'The location to get the radar image for(THIS FUNCTIONALITY DOES NOT WORK CURRENTLY)',
+            //             required: true
+            //         }
+            //     ]
+            // }
         ];
 
         const rest = new REST({ version: '9' }).setToken(token);
@@ -114,7 +114,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
             const coordinates = await getCoordinates(location);
             const { latitude, longitude } = coordinates; // Extract latitude and longitude from coordinates object
-            const radarImageBuffer = await fetchRadarImage(latitude, longitude);
+            // const radarImageBuffer = await fetchRadarImage(latitude, longitude);
 
             const attachment = new MessageAttachment(radarImageBuffer, 'radar.png');
             const embed = new Discord.EmbedBuilder()
