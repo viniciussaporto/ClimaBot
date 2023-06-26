@@ -1,102 +1,10 @@
-const Discord = require('discord.js');
+const axios = require('axios');
+const { EmbedBuilder } = require('discord.js');
+
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v9');
-
-const axios = require('axios');
-const token = process.env.TOKEN;
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
-const clientId = process.env.CLIENT_ID;
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent], partials: [Partials.Channel] });
-const commands = [];
-
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}`);
-});
-
-async function registerSlashCommands(guildId) {
-    try {
-        console.log(`Started refreshing application (/) commands for guild ID ${guildId}.`);
-
-        commands.push({
-            name: 'weather',
-            description: 'Get the weather information for a location',
-            options: [
-                {
-                    name: 'location',
-                    type: 3,
-                    description: 'The location to get the weather information for',
-                    required: true
-                }
-            ]
-        });
-
-        const rest = new REST({ version: '9' }).setToken(token);
-
-        await rest.put(
-            guildId ? Routes.applicationGuildCommands(clientId, guildId) : Routes.applicationCommands(clientId),
-            { body: commands }
-        );
-
-        console.log(`Successfully registered application (/) commands for guild ID ${guildId}.`);
-    } catch (error) {
-        console.error(`Error registering application (/) commands for guild ID ${guildId}:`, error);
-    }
-}
-
-client.on('guildCreate', (guild) => {
-    const guildId = guild.id;
-    registerSlashCommands(guildId);
-});
-
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isCommand()) return;
-
-    const { commandName, options, guildId } = interaction;
-
-    if (commandName === 'weather') {
-        const location = options.getString('location');
-        if (!location) {
-            await interaction.reply('Please provide a location.');
-            return;
-        }
-
-        try {
-            const coordinates = await getCoordinates(location);
-            const weatherData = await getWeatherData(coordinates, coordinates.formatted);
-            const temperature = weatherData.temperature;
-            const weatherDescription = weatherData.weatherDescription;
-            const windSpeed = weatherData.windSpeed;
-            const windDirection = weatherData.windDirection;
-            const reportedLocation = weatherData.formatted;
-            const relativeHumidity = weatherData.relativeHumidity;
-            const relativePressure = weatherData.relativePressure;
-            const cloudiness = weatherData.cloudiness;
-
-            const embed = new Discord.EmbedBuilder()
-                .setTitle('Weather Information')
-                .addFields(
-                    { name: 'Location', value: `${reportedLocation}.`, inline: true},
-                    { name: 'Weather Description:', value: weatherDescription, inline: true },
-                    { name: 'Temperature:', value: `${temperature}°C` },
-                    { name: 'Wind Speed:', value: `${windSpeed} km/h`, inline: true },
-                    { name: 'Wind Direction:', value: `${windDirection}°`, inline: true },
-                    { name: 'Humidity:', value: `${relativeHumidity}%`, inline: false },
-                    { name: 'Pressure at sea level:', value: `${relativePressure}hPa`, inline: true },
-                    { name: 'Cloudiness:', value: `${cloudiness}%`, inline: true },
-                )
-                .setColor('#0099ff');
-
-            await interaction.reply({ embeds: [embed] });
-        } catch (error) {
-            console.error('Error fetching weather data:', error);
-            await interaction.reply('Unable to retrieve weather information.');
-        }
-    }
-});
+const openWeatherMapApiKey = process.env.OPENWEATHERMAPAPIKEY;
 
 async function getCoordinates(location) {
     try {
@@ -155,6 +63,8 @@ async function getWeatherData(coordinates) {
             relativeHumidity,
             relativePressure,
             cloudiness,
+            trimmedLat,
+            trimmedLng,
         };
     } catch (error) {
         console.error('Error fetching weather data from Open-Meteo API:', error);
@@ -215,4 +125,4 @@ function getWeatherDescription(weatherCode) {
     return weatherCodeMappings[weatherCode] || 'Unknown';
 }
 
-client.login(token);
+module.exports = { getCoordinates, getWeatherData };
