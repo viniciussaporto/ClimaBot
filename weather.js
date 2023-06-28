@@ -1,3 +1,5 @@
+//@ts-check
+
 const axios = require('axios');
 const { EmbedBuilder } = require('discord.js');
 
