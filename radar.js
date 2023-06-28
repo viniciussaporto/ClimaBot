@@ -1,3 +1,5 @@
+//@ts-check
+
 const axios = require('axios');
 // const { createCanvas, loadImage } = require('canvas');
 // const Jimp = require('jimp');
