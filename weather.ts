@@ -1,14 +1,53 @@
-//@ts-check
-
-const axios = require('axios');
-const { EmbedBuilder } = require('discord.js');
+import axios from 'axios';
+import { EmbedBuilder } from 'discord.js';
 
 require('dotenv').config();
 
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
 const openWeatherMapApiKey = process.env.OPENWEATHERMAPAPIKEY;
 
-async function getCoordinates(location) {
+export interface WeatherData {
+    latitude:              number;
+    longitude:             number;
+    generationtime_ms:     number;
+    utc_offset_seconds:    number;
+    timezone:              string;
+    timezone_abbreviation: string;
+    elevation:             number;
+    hourly_units:          HourlyUnits;
+    hourly:                Hourly;
+}
+
+export interface Hourly {
+    time:                string[];
+    temperature_2m:      number[];
+    relativehumidity_2m: number[];
+    weathercode:         number[];
+    pressure_msl:        number[];
+    cloudcover:          number[];
+    windspeed_10m:       number[];
+    winddirection_10m:   number[];
+}
+
+export interface HourlyUnits {
+    time:                string;
+    temperature_2m:      string;
+    relativehumidity_2m: string;
+    weathercode:         string;
+    pressure_msl:        string;
+    cloudcover:          string;
+    windspeed_10m:       string;
+    winddirection_10m:   string;
+}
+
+
+interface Location {
+    lat: number;
+    lng: number;
+    formattedLocation: string;
+}
+
+export async function getCoordinates(location?: string): Promise<Location> {
     try {
         const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${location}&pretty=1&no_annotations=1`;
         const response = await axios.get(geocodingUrl);
@@ -20,20 +59,20 @@ async function getCoordinates(location) {
         const { lat, lng } = response.data.results[0].geometry;
         const formatted = response.data.results[0].formatted;
 
-        return { lat, lng, formatted };
+        return { lat, lng, formattedLocation: formatted };
     } catch (error) {
         throw new Error('Error fetching coordinates from OpenCage Geocoding API');
     }
 }
 
-async function getWeatherData(coordinates) {
-    const { lat, lng, formatted } = coordinates;
+export async function getWeatherData(coordinates: Location) {
+    const { lat, lng, formattedLocation } = coordinates;
     const trimmedLat = lat.toString().trim();
     const trimmedLng = lng.toString().trim();
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
 
     try {
-        const response = await axios.get(weatherUrl);
+        const response = await axios.get<WeatherData>(weatherUrl);
         const { hourly, utc_offset_seconds } = response.data;
 
         if (!hourly || !hourly.temperature_2m || hourly.temperature_2m.length === 0) {
@@ -61,7 +100,7 @@ async function getWeatherData(coordinates) {
             weatherDescription: getWeatherDescription(weatherCode),
             windSpeed,
             windDirection,
-            formatted,
+            formattedLocation,
             relativeHumidity,
             relativePressure,
             cloudiness,
@@ -74,13 +113,13 @@ async function getWeatherData(coordinates) {
     }
 }
 
-function getClosestTimeIndex(timeArray, targetDateTime) {
+function getClosestTimeIndex(timeArray: string[], targetDateTime: number) {
     let minDiff = Infinity;
     let closestIndex = 0;
 
     for (let i = 0; i < timeArray.length; i++) {
         const time = timeArray[i];
-        const diff = Math.abs(new Date(time) - targetDateTime);
+        const diff = Math.abs(new Date(time).getTime() - targetDateTime);
 
         if (diff < minDiff) {
             minDiff = diff;
@@ -91,9 +130,9 @@ function getClosestTimeIndex(timeArray, targetDateTime) {
     return closestIndex;
 }
 
-function getWeatherDescription(weatherCode) {
+function getWeatherDescription(weatherCode: number) {
     // Define the weather code to description mappings based on WMO 4677 weather code table
-    const weatherCodeMappings = {
+    const weatherCodeMappings: { [weatherCode: number]: string } = {
         0: 'Clear sky',
         1: 'Mainly clear',
         2: 'Partly cloudy',
@@ -126,5 +165,3 @@ function getWeatherDescription(weatherCode) {
 
     return weatherCodeMappings[weatherCode] || 'Unknown';
 }
-
-module.exports = { getCoordinates, getWeatherData };

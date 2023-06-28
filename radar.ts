@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const openWeatherMapApiKey = process.env.OPENWEATHERMAPAPIKEY;
 
-async function loadImageFromURL(url) {
+async function loadImageFromURL(url: string) {
     try {
         // const response = await axios.get(url, { responseType: 'arraybuffer' });
         // const imageBuffer = Buffer.from(response.data, 'binary');
@@ -20,7 +20,7 @@ async function loadImageFromURL(url) {
     }
 }
 
-async function fetchRadarImage(latitude, longitude) {
+export async function fetchRadarImage(latitude: any, longitude: any) {
     try {
         // const zoomLevel = 3;
         // const tileX = Math.floor((longitude + 180) / 360 * (2 ** zoomLevel));
