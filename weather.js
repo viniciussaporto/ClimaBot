@@ -63,6 +63,7 @@ async function getWeatherData(coordinates) {
             relativeHumidity,
             relativePressure,
             cloudiness,
+            weatherCode,
             trimmedLat,
             trimmedLng,
         };
