@@ -86,7 +86,7 @@
 [![Product Name Screen Shot][product-screenshot]](https://imgur.com/fkxvR8k)
 
 Well, to use it, it's as simple as clicking the `View Demo` button at the start of this page and adding it to your Discord server.
-If you want to self-host (which is what I recommend) you should clone this repository into your host, install node.js and npm, create a .env file with your Discord Bot Token(TOKEN), OpenCage API Key(OPENCAGEAPIKEY), Discord Bot Client ID(CLIENT_ID) and proceed to run it by typing ```node index.js```.
+If you want to self-host (which is what I recommend) you should clone this repository into your host, install node.js and npm, create a .env file with your Discord Bot Token(TOKEN), OpenCage API Key(OPENCAGEAPIKEY), Discord Bot Client ID(CLIENT_ID) and proceed to run it by typing first ```npm install```, and after ```npm start```.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -126,7 +126,7 @@ This is an example of how to list things you need to use the software and how to
 1. Get a free API Key at [https://example.com](https://example.com)
 2. Clone the repo
    ```sh
-   git clone https://github.com/github_username/repo_name.git
+   git clone git@github.com:viniciussaporto/ClimaBot.git
    ```
 3. Install NPM packages
    ```sh
