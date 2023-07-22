@@ -1,9 +1,7 @@
-import { AttachmentBuilder } from "discord.js";
-
 export const getWeatherImage = (weatherCode: number): string => {
-	let weatherImage: string
+	let weatherImage: string;
 
-    switch (weatherCode) {
+	switch (weatherCode) {
 		case 0: // Clear sky
 			weatherImage = 'images/icons8-sun-96.png';
 			break;
@@ -91,7 +89,7 @@ export const getWeatherImage = (weatherCode: number): string => {
 		default:
 			weatherImage = 'images/icons8-puzzled-96.png';
 			break;
-    }
+	}
 
 	return weatherImage;
 };
