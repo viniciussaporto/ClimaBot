@@ -3,9 +3,9 @@ import {Client, GatewayIntentBits, Partials, type BaseInteraction, AttachmentBui
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
-import {getWeatherImage} from './weatherImages';
+import {getWeatherImage} from './utils/weatherImages';
 
-import {getCoordinates, getWeatherData} from './weather.js';
+import {getCoordinates, getWeatherData} from './utils/weather.js';
 
 dotenv.config();
 
