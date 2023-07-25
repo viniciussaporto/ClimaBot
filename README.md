@@ -82,7 +82,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 <p align="center">
-  <img src="![image](https://github.com/viniciussaporto/ClimaBot/assets/73244946/f822eed2-8054-4ac7-9350-eebdd5e1bed8)" />
+  <img src="https://i.imgur.com/wbJhigJ.png" />
 </p>
 
 Well, to use it, it's as simple as clicking the `View Demo` button at the start of this page and adding it to your Discord server.
