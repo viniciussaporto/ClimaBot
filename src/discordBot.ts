@@ -7,6 +7,7 @@ import {getWeatherImage} from './utils/weatherImages';
 
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
+import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
 
 dotenv.config();
 
@@ -130,7 +131,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			const coordinates = await getCoordinates(location);
 			const forecastData = await getForecastData(coordinates);
 
-			const forecastEmbed = await generateForecastMessage(forecastData);
+			const forecastEmbed = await generateForecastMessage(forecastData, coordinates);
 
 			await interaction.reply({embeds: [forecastEmbed]});
 		} catch (error: any) {
@@ -140,26 +141,32 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	}
 });
 
-async function generateForecastMessage(forecastData: ForecastData): Promise<EmbedBuilder> {
+async function generateForecastMessage(forecastData: ForecastData, coordinates: WeatherLocation): Promise<EmbedBuilder> {
 	const {daily} = forecastData;
+	const formattedLocation = await getFormattedLocation(coordinates);
 
 	const embed = new Discord.EmbedBuilder()
 		.setTitle('Weather Forecast 5-days')
-		.setColor('#0099ff');
+		.setColor('#0099ff')
+		.setDescription(`Location ${formattedLocation}`);
 
 	daily.time.forEach((day, index) => {
 		const maxTemperature = daily.temperature_2m_max[index];
 		const minTemperature = daily.temperature_2m_min[index];
 		const precipitationProbability = daily.precipitation_probability_max[index];
 
-		const formattedDate = new Date(day).toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit'});
+		const formattedDate = new Date(day).toLocaleDateString('en-US', {
+			weekday: 'long',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		});
 
 		embed.addFields(
 			{name: '\u200b', value: `${formattedDate}`},
 			{name: 'Max. Temp.:', value: `${maxTemperature}°C`},
 			{name: 'Min. Temp.:', value: `${minTemperature}°C`, inline: true},
 			{name: 'Rain Prob.:', value: `${precipitationProbability}%`, inline: true},
-
 		);
 	});
 
