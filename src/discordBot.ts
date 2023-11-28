@@ -6,6 +6,7 @@ import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
 
 import {getCoordinates, getWeatherData} from './utils/weather.js';
+import { getForecastData, ForecastData } from './utils/weather.js';
 
 dotenv.config();
 
@@ -20,22 +21,34 @@ client.on('ready', () => {
 
 async function registerSlashCommands() {
 	try {
-		console.log('Started refreshing global application (/) commands.');
-
-		const commands = [
+	  console.log('Started refreshing global application (/) commands.');
+  
+	  const commands = [
+		{
+		  name: 'weather',
+		  description: 'Get the weather information for a location',
+		  options: [
 			{
-				name: 'weather',
-				description: 'Get the weather information for a location',
-				options: [
-					{
-						name: 'location',
-						type: 3,
-						description: 'The location to get the weather information for',
-						required: true,
-					},
-				],
+			  name: 'location',
+			  type: 3,
+			  description: 'The location to get the weather information for',
+			  required: true,
 			},
-		];
+		  ],
+		},
+		{
+		  name: 'forecast',
+		  description: 'Get a 5-day weather forecast for a location',
+		  options: [
+			{
+			  name: 'location',
+			  type: 3,
+			  description: 'The location to get the weather forecast for',
+			  required: true,
+			},
+		  ],
+		},
+	  ];
 
 		const rest = new REST({version: '9'}).setToken(token);
 
@@ -102,8 +115,40 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			console.error('Error fetching weather data:', error);
 			await interaction.reply('Unable to retrieve weather information.');
 		}
+	}		else if (commandName === 'forecast') {
+		const location = options.getString('location');
+		if (!location) {
+		  await interaction.reply('Please provide a location.');
+		  return;
+		}
+
+		try {
+			const coordinates = await getCoordinates(location);
+			const forecastData = await getForecastData(coordinates);
+
+			const forecastMessage = await generateForecastMessage(forecastData);
+
+			await interaction.reply(forecastMessage);
+		} catch (error: any) {
+			console.error('Error fetching forecast data:', error);
+			await interaction.reply('Unable to retrieve forecast information.');
+		}
 	}
 });
+
+async function generateForecastMessage(forecastData: ForecastData): Promise<string> {
+	const { daily } = forecastData;
+
+	const forecastMessage: string[] = daily.time.map((day: string, index: number) => {
+	  const maxTemperature: number = daily.temperature_2m_max[index];
+	  const minTemperature: number = daily.temperature_2m_min[index];
+	  const precipitationProbability: number = daily.precipitation_probability_max[index];
+
+	  return `${day}: Max Temp: ${maxTemperature}°C, Min Temp: ${minTemperature}°C, Precipitation Probability: ${precipitationProbability}%`;
+	});
+
+	return `5-Day Forecast:\n${forecastMessage.join('\n')}`;
+}
 
 void client.login(token);
 
