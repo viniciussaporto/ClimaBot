@@ -45,21 +45,21 @@ export type HourlyUnits = {
 export type ForecastData = {
 	daily_units: DailyUnits;
 	daily: Daily;
-  };
-  
-  export type Daily = {
+};
+
+export type Daily = {
 	time: string[];
 	temperature_2m_max: number[];
 	temperature_2m_min: number[];
 	precipitation_probability_max: number[];
-  };
-  
-  export type DailyUnits = {
+};
+
+export type DailyUnits = {
 	time: string;
 	temperature_2m_max: string;
 	temperature_2m_min: string;
 	precipitation_probability_max: string;
-  };
+};
 
 type Location = {
 	lat: number;
@@ -78,19 +78,19 @@ type GeocodingApiResponse = {
 };
 
 export async function getForecastData(coordinates: Location) {
-	const { lat, lng } = coordinates;
+	const {lat, lng} = coordinates;
 	const trimmedLat = lat.toString().trim();
 	const trimmedLng = lng.toString().trim();
 	const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=5`;
 
 	try {
-	  const response = await axios.get<ForecastData>(forecastUrl);
-	  return response.data;
+		const response = await axios.get<ForecastData>(forecastUrl);
+		return response.data;
 	} catch (error) {
-	  console.error('Error fetching forecast data from Open-Meteo API:', error);
-	  throw new Error('Error fetching forecast data from Open-Meteo API');
+		console.error('Error fetching forecast data from Open-Meteo API:', error);
+		throw new Error('Error fetching forecast data from Open-Meteo API');
 	}
-  }
+}
 
 export async function getCoordinates(location?: string): Promise<Location> {
 	try {
