@@ -8,6 +8,12 @@ dotenv.config();
 
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
 
+export type Location = {
+	lat: number;
+	lng: number;
+	formattedLocation: string;
+};
+
 export type WeatherData = {
 	latitude: number;
 	longitude: number;
@@ -45,6 +51,7 @@ export type HourlyUnits = {
 export type ForecastData = {
 	daily_units: DailyUnits;
 	daily: Daily;
+	formattedLocation: string;
 };
 
 export type Daily = {
@@ -59,12 +66,6 @@ export type DailyUnits = {
 	temperature_2m_max: string;
 	temperature_2m_min: string;
 	precipitation_probability_max: string;
-};
-
-type Location = {
-	lat: number;
-	lng: number;
-	formattedLocation: string;
 };
 
 type GeocodingApiResponse = {
@@ -89,6 +90,26 @@ export async function getForecastData(coordinates: Location) {
 	} catch (error) {
 		console.error('Error fetching forecast data from Open-Meteo API:', error);
 		throw new Error('Error fetching forecast data from Open-Meteo API');
+	}
+}
+
+export async function getFormattedLocation(coordinates: Location): Promise<string> {
+	const {lat, lng} = coordinates;
+
+	try {
+		const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${lat}+${lng}&pretty=1&no_annotations=1`;
+		const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
+
+		if (response.data.results.length === 0) {
+			throw new Error('Location not found');
+		}
+
+		const {formatted} = response.data.results[0];
+
+		return formatted;
+	} catch (error) {
+		console.error('Error fetching coordinates from OpenCage Geocoding API:', error);
+		throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 	}
 }
 
