@@ -155,7 +155,11 @@ async function generateForecastMessage(forecastData: ForecastData): Promise<Embe
 		const formattedDate = new Date(day).toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit'});
 
 		embed.addFields(
-			{name: `${formattedDate}`, value: `Max. Temp.: ${maxTemperature}°C\nMin. Temp.: ${minTemperature}°C\nRain Prob.: ${precipitationProbability}%`, inline: false},
+			{name: '\u200b', value: `${formattedDate}`},
+			{name: 'Max. Temp.:', value: `${maxTemperature}°C`},
+			{name: 'Min. Temp.:', value: `${minTemperature}°C`, inline: true},
+			{name: 'Rain Prob.:', value: `${precipitationProbability}%`, inline: true},
+
 		);
 	});
 
