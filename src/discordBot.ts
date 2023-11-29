@@ -146,16 +146,16 @@ async function generateForecastMessage(forecastData: ForecastData, coordinates: 
 	const formattedLocation = await getFormattedLocation(coordinates);
 
 	const embed = new Discord.EmbedBuilder()
-		.setTitle('Weather Forecast 5-days')
+		.setTitle('Previsão para 5 dias')
 		.setColor('#0099ff')
-		.setDescription(`Location ${formattedLocation}`);
+		.setDescription(`${formattedLocation}`);
 
 	daily.time.forEach((day, index) => {
 		const maxTemperature = daily.temperature_2m_max[index];
 		const minTemperature = daily.temperature_2m_min[index];
 		const precipitationProbability = daily.precipitation_probability_max[index];
 
-		const formattedDate = new Date(day).toLocaleDateString('en-US', {
+		const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
 			weekday: 'long',
 			year: 'numeric',
 			month: '2-digit',
@@ -164,9 +164,9 @@ async function generateForecastMessage(forecastData: ForecastData, coordinates: 
 
 		embed.addFields(
 			{name: '\u200b', value: `${formattedDate}`},
-			{name: 'Max. Temp.:', value: `${maxTemperature}°C`},
-			{name: 'Min. Temp.:', value: `${minTemperature}°C`, inline: true},
-			{name: 'Rain Prob.:', value: `${precipitationProbability}%`, inline: true},
+			{name: 'Temp. Max.:', value: `${maxTemperature}°C`},
+			{name: 'Temp. Min.:', value: `${minTemperature}°C`, inline: true},
+			{name: 'Prob. Chuva:', value: `${precipitationProbability}%`, inline: true},
 		);
 	});
 
