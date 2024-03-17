@@ -97,8 +97,10 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 	const {lat, lng} = coordinates;
 
 	try {
-		const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${lat}+${lng}&pretty=1&no_annotations=1`;
+		const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${lat}+${lng}&language=en&no_annotations=1&pretty=1`;
 		const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
+
+		console.log('geocodingUrl:', geocodingUrl);
 
 		if (response.data.results.length === 0) {
 			throw new Error('Location not found');
