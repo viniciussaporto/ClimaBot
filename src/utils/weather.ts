@@ -3,10 +3,13 @@
 
 import axios from 'axios';
 import dotenv from 'dotenv';
+import {createCanvas, loadImage} from 'canvas';
+import {createGzip} from 'zlib';
 
 dotenv.config();
 
 const openCageApiKey = process.env.OPENCAGEAPIKEY;
+const rainviewerApiKey = process.env.RAINVIEWERAPIKEY;
 
 export type Location = {
 	lat: number;
@@ -162,6 +165,8 @@ export async function getWeatherData(coordinates: Location) {
 		const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
 		const relativePressure = hourly.pressure_msl[closestTimeIndex];
 		const cloudiness = hourly.cloudcover[closestTimeIndex];
+		const weatherImage = await getWeatherImageFromRainviewer(lat, lng);
+		const weatherMap = await generateWeatherMap(lat, lng, weatherImage);
 
 		return {
 			temperature,
@@ -175,10 +180,54 @@ export async function getWeatherData(coordinates: Location) {
 			weatherCode,
 			trimmedLat,
 			trimmedLng,
+			weatherImage,
+			weatherMap,
 		};
 	} catch (error) {
 		console.error('Error fetching weather data from Open-Meteo API:', error);
 		throw new Error('Error fetching weather data from Open-Meteo API');
+	}
+}
+
+export async function generateWeatherMap(lat: number, lng: number, weatherImage: string): Promise<Buffer> {
+	const mapWidth = 600;
+	const mapHeight = 400;
+	const zoom = 10;
+
+	const osmUrl = `https://a.tile.openstreetmap.org/${zoom}/${Math.floor((lng + 180) / 360 * 2 ** zoom)}/${Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * 2 ** zoom)}.png`;
+
+	// Get OSM tile
+	const canvas = createCanvas(mapWidth, mapHeight);
+	const ctx = canvas.getContext('2d');
+
+	// Load and draw the OSM tile
+	const mapImage = await loadImage(osmUrl);
+	ctx.drawImage(mapImage, 0, 0, mapWidth, mapHeight);
+
+	// Load and draw the weather overlay
+	const overlay = await loadImage(osmUrl);
+	ctx.globalAlpha = 0.6; // Set transparency for overlay
+	ctx.drawImage(overlay, 0, 0, mapWidth, mapHeight);
+	ctx.globalAlpha = 1.0;
+
+	// Convert canvas to buffer
+	return canvas.toBuffer('image/png');
+}
+
+async function getWeatherImageFromRainviewer(lat: number, lng: number): Promise<string> {
+	const rainviewerUrl = `https://api.rainviewer.com/public/weather?lat=${lat}&lon=${lng}&key=${rainviewerApiKey}`;
+
+	try {
+		const response = await axios.get(rainviewerUrl);
+
+		if (response.data?.images) {
+			return response.data.images[0].url;
+		}
+
+		throw new Error('No image found!');
+	} catch (error) {
+		console.error('Error fetching weather image from Rainviewer API:', error);
+		throw new Error('Error fetching weather image from Rainviewer API');
 	}
 }
 

@@ -95,10 +95,11 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				cloudiness,
 				weatherCode,
 				formattedLocation,
+				weatherMap,
 			} = response;
 
 			const weatherImage = getWeatherImage(weatherCode);
-			const attachment = new AttachmentBuilder(weatherImage, {name: 'weather.png'});
+			const attachment = new AttachmentBuilder(weatherMap, {name: 'weather_map.png'});
 
 			const embed = new Discord.EmbedBuilder()
 				.setTitle('Weather Information')
@@ -112,7 +113,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 					{name: 'Pressure at Sea Level', value: `${relativePressure}hPa`, inline: true},
 					{name: 'Cloudiness', value: `${cloudiness}%`, inline: true},
 				)
-				.setImage('attachment://weather.png')
+				.setImage('attachment://weather_map.png')
 				.setColor('#0099ff');
 
 			await interaction.reply({embeds: [embed], files: [attachment]});
