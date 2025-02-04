@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
 
+import {createRoleSelectMenu, handleRoleSelect} from './utils/roles.js';
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
 import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
@@ -15,7 +16,7 @@ const token: string = process.env.TOKEN!;
 const clientId = process.env.CLIENT_ID!;
 
 const client = new Client({
-	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions],
 	partials: [Partials.Channel],
 });
 
@@ -52,6 +53,11 @@ async function registerSlashCommands() {
 					},
 				],
 			},
+			{
+				name: 'roles',
+				description: 'Manage self-assignable roles in this server',
+				options: []
+			},
 		];
 
 		const rest = new REST({version: '9'}).setToken(token);
@@ -70,6 +76,13 @@ async function registerSlashCommands() {
 client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	if (!interaction.isChatInputCommand()) {
 		return;
+	}
+
+	if (interaction.isStringSelectMenu()) {
+		if (interaction.customId === 'role-select') {
+			await handleRoleSelect(interaction);
+			return;
+		}
 	}
 
 	const {commandName, options} = interaction;
@@ -154,6 +167,32 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			await interaction.reply('Unable to retrieve forecast information.');
 		}
 	}
+			else if (commandName === 'roles') {
+				if (!interaction.inGuild()) {
+					await interaction.reply( {
+						content: "This command only works in server!",
+						ephemeral: true
+					});
+					return;
+				}
+
+				const guild = interaction.guild!;
+				const roleMenu = createRoleSelectMenu(guild);
+
+				if (!roleMenu) {
+					await interaction.reply( {
+						content: "No assignable roles available in this server!",
+						ephemeral: true
+					});
+					return;
+
+				await interaction.reply( {
+					content: 'Choose a role to add/remove:',
+					components: [roleMenu],
+					ephemeral:true
+				});
+				}
+			}
 });
 
 async function generateForecastMessage(
