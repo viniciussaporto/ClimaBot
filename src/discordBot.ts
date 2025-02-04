@@ -103,14 +103,14 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			const embed = new Discord.EmbedBuilder()
 				.setTitle('Weather Information')
 				.addFields(
-					{name: 'Location', value: `${formattedLocation}`, inline: true},
-					{name: 'Weather Description', value: weatherDescription, inline: true},
-					{name: 'Temperature', value: `${temperature}°C`, inline: true},
-					{name: 'Wind Speed', value: `${windSpeed} km/h`, inline: true},
-					{name: 'Wind Direction', value: `${windDirection}°`, inline: true},
-					{name: 'Humidity', value: `${relativeHumidity}%`, inline: true},
-					{name: 'Pressure at Sea Level', value: `${relativePressure}hPa`, inline: true},
-					{name: 'Cloudiness', value: `${cloudiness}%`, inline: true},
+					{value: `${formattedLocation}`, inline: true},
+					{value: weatherDescription, inline: true},
+					{value: `Temperature:${temperature}°C`, inline: true},
+					{value: `Wind speed:${windSpeed} km/h`, inline: true},
+					{value: `Wind dir.:${windDirection}°`, inline: true},
+					{value: `Humidity:${relativeHumidity}%`, inline: true},
+					{value: `Pressure:${relativePressure}hPa`, inline: true},
+					{value: `Cloud cover.:${cloudiness}%`, inline: true},
 				)
 				.setImage('attachment://weather.png')
 				.setColor('#0099ff');
