@@ -1,10 +1,10 @@
 import Discord, {type EmbedBuilder} from 'discord.js';
-import {Client, GatewayIntentBits, Partials, type BaseInteraction, AttachmentBuilder} from 'discord.js';
+import {Client, GatewayIntentBits, Partials, ButtonBuilder, ButtonStyle, ActionRowBuilder, type BaseInteraction, AttachmentBuilder} from 'discord.js';
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
-import type {ButtonInteraction} from 'discord.js'
+import type {BaseInteraction, ButtonInteraction} from 'discord.js'
 
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
 import {getCoordinates, getWeatherData} from './utils/weather.js';
@@ -80,16 +80,20 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	}
 
 	if (interaction.isStringSelectMenu()) {
-		if (interaction.customId === 'role-select') {
-			await handleRoleSelect(interaction);
-			return;
-		}
-	}
+        if (interaction.customId === 'role-select') {
+            await handleRoleSelect(interaction);
+        }
+        return;
+    }
 
-	if (interaction.isButton() && interaction.customId.startsWith('roles-')) {
-		await handleRolePagination(interaction);
-		return;
-	}
+    if (interaction.isButton()) {
+        if (interaction.customId.startsWith('roles-')) {
+            await handleRolePagination(interaction);
+        }
+        return;
+    }
+
+    if (!interaction.isChatInputCommand()) return;
 
 	const {commandName, options} = interaction;
 
