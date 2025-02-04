@@ -153,35 +153,35 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 });
 
 async function generateForecastMessage(forecastData: ForecastData, coordinates: WeatherLocation): Promise<EmbedBuilder> {
-	const {daily} = forecastData;
-	const formattedLocation = await getFormattedLocation(coordinates);
+    const { daily } = forecastData;
+    const formattedLocation = await getFormattedLocation(coordinates);
 
-	const embed = new Discord.EmbedBuilder()
-		.setTitle('Previsão para 5 dias')
-		.setColor('#0099ff')
-		.setDescription(`${formattedLocation}`);
+    const embed = new Discord.EmbedBuilder()
+        .setTitle(`🌦 Previsão para 5 dias - ${formattedLocation}`)
+        .setColor('#0099ff');
 
-	daily.time.forEach((day, index) => {
-		const maxTemperature = daily.temperature_2m_max[index];
-		const minTemperature = daily.temperature_2m_min[index];
-		const precipitationProbability = daily.precipitation_probability_max[index];
+    daily.time.forEach((day, index) => {
+        const maxTemp = daily.temperature_2m_max[index];
+        const minTemp = daily.temperature_2m_min[index];
+        const rainProb = daily.precipitation_probability_max[index];
 
-		const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
-			weekday: 'long',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-		});
+        const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
+            weekday: 'short',
+            month: '2-digit',
+            day: '2-digit'
+        });
 
-		embed.addFields(
-			{name: '\u200b', value: `${formattedDate}`},
-			{name: 'Temp. Max.:', value: `${maxTemperature}°C`},
-			{name: 'Temp. Min.:', value: `${minTemperature}°C`, inline: true},
-			{name: 'Prob. Chuva:', value: `${precipitationProbability}%`, inline: true},
-		);
-	});
+        embed.addFields({
+            name: `📅 ${formattedDate}`,
+            value: [
+                `⬆ ${maxTemp}°C ⬇ ${minTemp}°C`,
+                `💧 Prob. Chuva: ${rainProb}%`
+            ].join('\n'),
+            inline: true
+        });
+    });
 
-	return embed;
+    return embed;
 }
 
 void client.login(token);
