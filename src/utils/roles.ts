@@ -139,6 +139,7 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
 			new ActionRowBuilder<ButtonBuilder>().addComponents(buttons) // Explicit type
 		);
 	}
+}
 
 export async function handleRolePagination(interaction: ButtonInteraction) {
     if (!interaction.inGuild()) return;
