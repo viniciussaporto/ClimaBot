@@ -141,8 +141,12 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		try {
 			const coordinates = await getCoordinates(location);
 			const forecastData = await getForecastData(coordinates);
+			const weatherRespornse = await getWeatherData(coordinates);
 
-			const forecastEmbed = await generateForecastMessage(forecastData, coordinates);
+			const forecastEmbed = await generateForecastMessage(
+				forecastData,
+				weatherRespornse.formattedLocation
+			);
 
 			await interaction.reply({embeds: [forecastEmbed]});
 		} catch (error: any) {
@@ -152,9 +156,11 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	}
 });
 
-async function generateForecastMessage(forecastData: ForecastData, coordinates: WeatherLocation): Promise<EmbedBuilder> {
+async function generateForecastMessage(
+    forecastData: ForecastData, 
+    formattedLocation: string
+): Promise<EmbedBuilder> {
     const { daily } = forecastData;
-    const formattedLocation = await getFormattedLocation(coordinates);
 
     const embed = new Discord.EmbedBuilder()
         .setTitle(`🌦 Previsão para 5 dias - ${formattedLocation}`)
