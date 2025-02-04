@@ -130,15 +130,21 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
         );
     }
 
-	const components = [
-		new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
-	];
-	
-	if (buttons.length > 0) {
-		components.push(
-			new ActionRowBuilder<ButtonBuilder>().addComponents(buttons) // Explicit type
-		);
-	}
+	const components: (ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[] = [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
+    ];
+
+    if (buttons.length > 0) {
+        components.push(
+            new ActionRowBuilder<ButtonBuilder>().addComponents(buttons)
+        );
+    }
+
+    return {
+        content: `**Available Roles** (${allRoles.length} total)`,
+        components,
+        ephemeral: true
+    };
 }
 
 export async function handleRolePagination(interaction: ButtonInteraction) {
