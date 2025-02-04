@@ -6,7 +6,7 @@ import {
     ActionRowBuilder,
 	ButtonBuilder,
 	ButtonStyle,
-	ComponenteType,
+	ComponentType,
     PermissionFlagsBits,
 	type ButtonInteraction
 } from 'discord.js';
@@ -130,22 +130,15 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
         );
     }
 
-    const components = [
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
-    ];
-
-    if (buttons.length > 0) {
-        components.push(
-            new ActionRowBuilder<ButtonBuilder>().addComponents(buttons)
-        );
-    }
-
-    return {
-        content: `**Available Roles** (${allRoles.length} total)`,
-        components,
-        ephemeral: true
-    };
-}
+	const components = [
+		new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
+	];
+	
+	if (buttons.length > 0) {
+		components.push(
+			new ActionRowBuilder<ButtonBuilder>().addComponents(buttons) // Explicit type
+		);
+	}
 
 export async function handleRolePagination(interaction: ButtonInteraction) {
     if (!interaction.inGuild()) return;

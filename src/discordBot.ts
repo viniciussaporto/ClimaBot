@@ -79,13 +79,14 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		return;
 	}
 
-	if (interaction.isStringSelectMenu()) {
+    if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'role-select') {
             await handleRoleSelect(interaction);
         }
         return;
     }
 
+    // Then handle buttons
     if (interaction.isButton()) {
         if (interaction.customId.startsWith('roles-')) {
             await handleRolePagination(interaction);
@@ -93,6 +94,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
         return;
     }
 
+    // Finally handle commands
     if (!interaction.isChatInputCommand()) return;
 
 	const {commandName, options} = interaction;
