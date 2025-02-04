@@ -4,7 +4,11 @@ import {
     StringSelectMenuInteraction,
     StringSelectMenuBuilder,
     ActionRowBuilder,
-    PermissionFlagsBits
+	ButtonBuilder,
+	ButtonStyle,
+	ComponenteType,
+    PermissionFlagsBits,
+	type ButtonInteraction
 } from 'discord.js';
 
 const DANGEROUS_PERMISSIONS = [
@@ -34,19 +38,18 @@ const DANGEROUS_PERMISSIONS = [
 const ROLES_PER_PAGE = 25;
 
 export function getAssignableRoles(guild: Guild): Role[] {
-    return guild.roles.cache.filter(role => {
+    return Array.from(guild.roles.cache.filter(role => {
         const hasDangerousPerms = role.permissions.any(DANGEROUS_PERMISSIONS);
         const isManaged = role.managed;
         const isBotRole = role.id === guild.members.me?.roles.highest.id;
         const isEveryone = role.id === guild.id;
         
-        return !hasDangerousPerms &&
-               !isManaged &&
-               !isBotRole &&
+        return !hasDangerousPerms && 
+               !isManaged && 
+               !isBotRole && 
                !isEveryone &&
                role.editable;
-    }).sort((a, b) => b.position - a.position)
-      .array();
+    }).values()).sort((a, b) => b.position - a.position);
 }
 
 export async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
