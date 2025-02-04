@@ -4,7 +4,10 @@ import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
-import type {ButtonInteraction} from 'discord.js'
+import type {
+    ButtonInteraction,
+    StringSelectMenuInteraction
+} from 'discord.js';
 
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
 import {getCoordinates, getWeatherData} from './utils/weather.js';
