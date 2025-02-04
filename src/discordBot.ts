@@ -101,19 +101,30 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			const attachment = new AttachmentBuilder(weatherImage, {name: 'weather.png'});
 
 			const embed = new Discord.EmbedBuilder()
-				.setTitle('Weather Information')
+				.setTitle(`🌤 Weather in ${formattedLocation}`)
+				.setDescription(`**${weatherDescription}**`)
 				.addFields(
-					{name: '\u200b', value: `**${formattedLocation}**`, inline: false},
-					{name: '\u200b', value: weatherDescription, inline: false},
-					{name: '\u200b', value: `**Temperature:**${temperature}°C`, inline: true},
-					{name: '\u200b', value: `**Wind speed:**${windSpeed} km/h`, inline: true},
-					{name: '\u200b', value: `**Wind dir.:**${windDirection}°`, inline: true},
-					{name: '\u200b', value: `**Humidity:**${relativeHumidity}%`, inline: true},
-					{name: '\u200b', value: `**Pressure:**${relativePressure}hPa`, inline: true},
-					{name: '\u200b', value: `**Cloud cover.:**${cloudiness}%`, inline: true},
+				{
+					name: '\u200b', // Zero-width space
+					value: [
+					`🌡 **Temperature:** ${temperature}°C`,
+					`💧 **Humidity:** ${relativeHumidity}%`,
+					`☁ **Clouds:** ${cloudiness}%`
+					].join('\n'),
+					inline: true
+				},
+				{
+					name: '\u200b',
+					value: [
+					`🌬 **Wind:** ${windSpeed} km/h`,
+					`🧭 **Direction:** ${windDirection}°`,
+					`📊 **Pressure:** ${relativePressure}hPa`
+					].join('\n'),
+					inline: true
+				}
 				)
-				.setImage('attachment://weather.png')
-				.setColor('#0099ff');
+				.setColor('#0099ff')
+				.setImage('attachment://weather.png');
 
 			await interaction.reply({embeds: [embed], files: [attachment]});
 		} catch (error) {
