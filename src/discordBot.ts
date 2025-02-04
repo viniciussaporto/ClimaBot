@@ -103,8 +103,8 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			const embed = new Discord.EmbedBuilder()
 				.setTitle('Weather Information')
 				.addFields(
-					{name: '\u200b', value: `**${formattedLocation}**`, inline: true},
-					{name: '\u200b', value: weatherDescription, inline: true},
+					{name: '\u200b', value: `**${formattedLocation}**`, inline: false},
+					{name: '\u200b', value: weatherDescription, inline: false},
 					{name: '\u200b', value: `**Temperature:**${temperature}°C`, inline: true},
 					{name: '\u200b', value: `**Wind speed:**${windSpeed} km/h`, inline: true},
 					{name: '\u200b', value: `**Wind dir.:**${windDirection}°`, inline: true},
