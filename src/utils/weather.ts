@@ -1,6 +1,3 @@
-// Disabling the naming-convention rule as we need objects keyed by number
-/* eslint-disable @typescript-eslint/naming-convention */
-
 import axios from 'axios';
 import dotenv from 'dotenv';
 
@@ -18,7 +15,7 @@ export type WeatherData = {
 	latitude: number;
 	longitude: number;
 	generationtime_ms: number;
-	utc_offset_seconds: number;
+	utcOffsetSeconds: number;
 	timezone: string;
 	timezone_abbreviation: string;
 	elevation: number;
@@ -139,14 +136,14 @@ export async function getWeatherData(coordinates: Location) {
 
 	try {
 		const response = await axios.get<WeatherData>(weatherUrl);
-		const {hourly, utc_offset_seconds} = response.data;
+		const {hourly, utcOffsetSeconds} = response.data;
 
 		if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
 			throw new Error('Weather data not available');
 		}
 
 		const currentDateTime = new Date();
-		const adjustedDateTime = new Date(currentDateTime.getTime() + (utc_offset_seconds * 1000)); // Adjusting current time based on UTC offset
+		const adjustedDateTime = new Date(currentDateTime.getTime() + (utcOffsetSeconds * 1000));
 		const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
 
 		if (closestTimeIndex === -1) {
@@ -198,7 +195,6 @@ function getClosestTimeIndex(timeArray: string[], targetDateTime: number): numbe
 }
 
 function getWeatherDescription(weatherCode: number) {
-	// Define the weather code to description mappings based on WMO 4677 weather code table
 	const weatherCodeMappings: Record<number, string> = {
 		0: 'Clear sky',
 		1: 'Mainly clear',

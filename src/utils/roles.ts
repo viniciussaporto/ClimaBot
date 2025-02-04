@@ -1,7 +1,7 @@
 import {
-	Role,
-	Guild,
-	StringSelectMenuInteraction,
+	type Role,
+	type Guild,
+	type StringSelectMenuInteraction,
 	StringSelectMenuBuilder,
 	ActionRowBuilder,
 	ButtonBuilder,
@@ -11,7 +11,7 @@ import {
 	type ButtonInteraction,
 } from 'discord.js';
 
-const DANGEROUS_PERMISSIONS = [
+const dagerousPermissions = [
 	PermissionFlagsBits.Administrator,
 	PermissionFlagsBits.ManageChannels,
 	PermissionFlagsBits.ManageRoles,
@@ -35,20 +35,20 @@ const DANGEROUS_PERMISSIONS = [
 	PermissionFlagsBits.CreateEvents,
 	PermissionFlagsBits.ManageEvents,
 ];
-const ROLES_PER_PAGE = 25;
+const rolesPerPage = 25;
 
 export function getAssignableRoles(guild: Guild): Role[] {
 	return Array.from(guild.roles.cache.filter(role => {
-		const hasDangerousPerms = role.permissions.any(DANGEROUS_PERMISSIONS);
+		const hasDangerousPerms = role.permissions.any(dagerousPermissions);
 		const isManaged = role.managed;
 		const isBotRole = role.id === guild.members.me?.roles.highest.id;
 		const isEveryone = role.id === guild.id;
 
-		return !hasDangerousPerms &&
-				!isManaged &&
-				!isBotRole &&
-				!isEveryone &&
-               role.editable;
+		return !hasDangerousPerms
+				&& !isManaged
+				&& !isBotRole
+				&& !isEveryone
+				&& role.editable;
 	}).values()).sort((a, b) => b.position - a.position);
 }
 
@@ -95,17 +95,16 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 	}
 }
 
-export function createRoleMenu(guild: Guild, page: number = 0) {
+export function createRoleMenu(guild: Guild, page = 0) {
 	const allRoles = getAssignableRoles(guild);
-	const totalPages = Math.ceil(allRoles.length / ROLES_PER_PAGE);
-	const startIdx = page * ROLES_PER_PAGE;
-	const pageRoles = allRoles.slice(startIdx, startIdx + ROLES_PER_PAGE);
+	const totalPages = Math.ceil(allRoles.length / rolesPerPage);
+	const startIdx = page * rolesPerPage;
+	const pageRoles = allRoles.slice(startIdx, startIdx + rolesPerPage);
 
 	if (pageRoles.length === 0) {
 		return null;
 	}
 
-	// Create select menu
 	const selectMenu = new StringSelectMenuBuilder()
 		.setCustomId('role-select')
 		.setPlaceholder(`Select roles (Page ${page + 1}/${totalPages})`)
@@ -115,7 +114,6 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
 			emoji: role.unicodeEmoji ?? '🔹',
 		})));
 
-	// Create navigation buttons
 	const buttons = [];
 	if (page > 0) {
 		buttons.push(
@@ -126,7 +124,7 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
 		);
 	}
 
-	if (startIdx + ROLES_PER_PAGE < allRoles.length) {
+	if (startIdx + rolesPerPage < allRoles.length) {
 		buttons.push(
 			new ButtonBuilder()
 				.setCustomId(`roles-next_${page}`)
@@ -135,7 +133,7 @@ export function createRoleMenu(guild: Guild, page: number = 0) {
 		);
 	}
 
-	const components: (ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[] = [
+	const components: Array<ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>> = [
 		new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu),
 	];
 
@@ -158,7 +156,7 @@ export async function handleRolePagination(interaction: ButtonInteraction) {
 	}
 
 	const [action, page] = interaction.customId.split('_');
-	const newPage = parseInt(page);
+	const newPage = parseInt(page, 10);
 
 	const menuData = createRoleMenu(
 		interaction.guild!,
