@@ -5,8 +5,9 @@ import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
 import type {
-    ButtonInteraction,
-    StringSelectMenuInteraction
+	ButtonInteraction,
+	StringSelectMenuInteraction,
+	ChatInputCommandInteraction,
 } from 'discord.js';
 
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
@@ -60,7 +61,7 @@ async function registerSlashCommands() {
 			{
 				name: 'roles',
 				description: 'Manage self-assignable roles in this server',
-				options: []
+				options: [],
 			},
 		];
 
@@ -78,27 +79,25 @@ async function registerSlashCommands() {
 }
 
 client.on('interactionCreate', async (interaction: BaseInteraction) => {
-	if (!interaction.isChatInputCommand()) {
+	if (interaction.isStringSelectMenu()) {
+		if (interaction.customId === 'role-select') {
+			await handleRoleSelect(interaction);
+		}
+
 		return;
 	}
 
-    if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'role-select') {
-            await handleRoleSelect(interaction);
-        }
-        return;
-    }
+	if (interaction.isButton()) {
+		if (interaction.customId.startsWith('roles-')) {
+			await handleRolePagination(interaction);
+		}
 
-    // Then handle buttons
-    if (interaction.isButton()) {
-        if (interaction.customId.startsWith('roles-')) {
-            await handleRolePagination(interaction);
-        }
-        return;
-    }
+		return;
+	}
 
-    // Finally handle commands
-    if (!interaction.isChatInputCommand()) return;
+	if (!interaction.isChatInputCommand()) {
+		return;
+	}
 
 	const {commandName, options} = interaction;
 
@@ -132,24 +131,24 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				.setTitle(`🌤 Weather in ${formattedLocation}`)
 				.setDescription(`**${weatherDescription}**`)
 				.addFields(
-				{
-					name: '\u200b', // Zero-width space
-					value: [
-					`🌡 **Temperature:** ${temperature}°C`,
-					`💧 **Humidity:** ${relativeHumidity}%`,
-					`☁ **Clouds:** ${cloudiness}%`
-					].join('\n'),
-					inline: true
-				},
-				{
-					name: '\u200b',
-					value: [
-					`🌬 **Wind:** ${windSpeed} km/h`,
-					`🧭 **Direction:** ${windDirection}°`,
-					`📊 **Pressure:** ${relativePressure}hPa`
-					].join('\n'),
-					inline: true
-				}
+					{
+						name: '\u200b', // Zero-width space
+						value: [
+							`🌡 **Temperature:** ${temperature}°C`,
+							`💧 **Humidity:** ${relativeHumidity}%`,
+							`☁ **Clouds:** ${cloudiness}%`,
+						].join('\n'),
+						inline: true,
+					},
+					{
+						name: '\u200b',
+						value: [
+							`🌬 **Wind:** ${windSpeed} km/h`,
+							`🧭 **Direction:** ${windDirection}°`,
+							`📊 **Pressure:** ${relativePressure}hPa`,
+						].join('\n'),
+						inline: true,
+					},
 				)
 				.setColor('#0099ff')
 				.setImage('attachment://weather.png');
@@ -173,7 +172,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 			const forecastEmbed = await generateForecastMessage(
 				forecastData,
-				weatherRespornse.formattedLocation
+				weatherRespornse.formattedLocation,
 			);
 
 			await interaction.reply({embeds: [forecastEmbed]});
@@ -181,69 +180,68 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			console.error('Error fetching forecast data:', error);
 			await interaction.reply('Unable to retrieve forecast information.');
 		}
+	}	else if (commandName === 'roles') {
+		if (!interaction.inGuild()) {
+			await interaction.reply({
+				content: 'This command only works in server!',
+				ephemeral: true,
+			});
+			return;
+		}
+
+		const guild = interaction.guild!;
+		// Const roleMenu = createRoleSelectMenu(guild);
+		const menuData = createRoleMenu(interaction.guild!);
+
+		if (!menuData) {
+			await interaction.reply({
+				content: 'No assignable roles available in this server!',
+				ephemeral: true,
+			});
+			return;
+		}
+
+		await interaction.reply(menuData);
+		// Await interaction.reply( {
+		// 	content: 'Choose a role to add/remove:',
+		// 	components: [roleMenu],
+		// 	ephemeral:true;
 	}
-			else if (commandName === 'roles') {
-				if (!interaction.inGuild()) {
-					await interaction.reply( {
-						content: "This command only works in server!",
-						ephemeral: true
-					});
-					return;
-				}
-
-				const guild = interaction.guild!;
-				// const roleMenu = createRoleSelectMenu(guild);
-				const menuData = createRoleMenu(interaction.guild!);
-
-				if (!menuData) {
-					await interaction.reply( {
-						content: "No assignable roles available in this server!",
-						ephemeral: true
-					});
-					return;
-				}
-				
-				await interaction.reply(menuData);
-				// await interaction.reply( {
-				// 	content: 'Choose a role to add/remove:',
-				// 	components: [roleMenu],
-				// 	ephemeral:true;
-				}
-			}
+},
 );
 
 async function generateForecastMessage(
-    forecastData: ForecastData, 
-    formattedLocation: string
+	forecastData: ForecastData,
+	formattedLocation: string,
 ): Promise<EmbedBuilder> {
-    const { daily } = forecastData;
+	const {daily} = forecastData;
 
-    const embed = new Discord.EmbedBuilder()
-        .setTitle(`🌦 Previsão para 5 dias - ${formattedLocation}`)
-        .setColor('#0099ff');
+	const embed = new Discord.EmbedBuilder()
+		.setTitle(`🌦 Previsão para 5 dias - ${formattedLocation}`)
+		.setColor('#0099ff');
 
-    daily.time.forEach((day, index) => {
-        const maxTemp = daily.temperature_2m_max[index];
-        const minTemp = daily.temperature_2m_min[index];
-        const rainProb = daily.precipitation_probability_max[index];
+	daily.time.forEach((day, index) => {
+		const maxTemp = daily.temperature_2m_max[index];
+		const minTemp = daily.temperature_2m_min[index];
+		const rainProb = daily.precipitation_probability_max[index];
 
-        const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
-            weekday: 'short',
-            month: '2-digit',
-            day: '2-digit'
-        });
+		const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
+			weekday: 'short',
+			month: '2-digit',
+			day: '2-digit',
+		});
 
-        embed.addFields({
-            name: `📅 ${formattedDate}`,
-            value: [
-                `⬆ ${maxTemp}°C ⬇ ${minTemp}°C`,
-                `💧 Prob. Chuva: ${rainProb}%`
-            ].join('\n'),
-            inline: true
-        });
-    });
+		embed.addFields({
+			name: `📅 ${formattedDate}`,
+			value: [
+				`⬆ ${maxTemp}°C ⬇ ${minTemp}°C`,
+				`💧 Prob. Chuva: ${rainProb}%`,
+			].join('\n'),
+			inline: true,
+		});
+	});
 
-    return embed;
+	return embed;
 }
 
 void client.login(token);
