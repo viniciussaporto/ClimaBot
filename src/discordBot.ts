@@ -4,8 +4,9 @@ import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
+import type {ButtonInteraction} from 'discord.js'
 
-import {createRoleSelectMenu, handleRoleSelect} from './utils/roles.js';
+import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
 import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
@@ -83,6 +84,11 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			await handleRoleSelect(interaction);
 			return;
 		}
+	}
+
+	if (interaction.isButton() && interaction.customId.startsWith('roles-')) {
+		await handleRolePagination(interaction);
+		return;
 	}
 
 	const {commandName, options} = interaction;
@@ -177,23 +183,25 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				}
 
 				const guild = interaction.guild!;
-				const roleMenu = createRoleSelectMenu(guild);
+				// const roleMenu = createRoleSelectMenu(guild);
+				const menuData = createRoleMenu(interaction.guild!);
 
-				if (!roleMenu) {
+				if (!menuData) {
 					await interaction.reply( {
 						content: "No assignable roles available in this server!",
 						ephemeral: true
 					});
 					return;
-
-				await interaction.reply( {
-					content: 'Choose a role to add/remove:',
-					components: [roleMenu],
-					ephemeral:true
-				});
+				}
+				
+				await interaction.reply(menuData);
+				// await interaction.reply( {
+				// 	content: 'Choose a role to add/remove:',
+				// 	components: [roleMenu],
+				// 	ephemeral:true;
 				}
 			}
-});
+);
 
 async function generateForecastMessage(
     forecastData: ForecastData, 
