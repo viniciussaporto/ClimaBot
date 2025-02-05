@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import {
 	type Role,
 	type Guild,
@@ -11,46 +13,85 @@ import {
 	type ButtonInteraction,
 } from 'discord.js';
 
-const dagerousPermissions = [
+const dangerousPermissions = [
 	PermissionFlagsBits.Administrator,
 	PermissionFlagsBits.ManageChannels,
 	PermissionFlagsBits.ManageRoles,
-	PermissionFlagsBits.ManageGuildExpressions,
-	PermissionFlagsBits.ViewAuditLog,
-	PermissionFlagsBits.ViewGuildInsights,
-	PermissionFlagsBits.ManageWebhooks,
-	PermissionFlagsBits.ManageGuild,
 	PermissionFlagsBits.ManageNicknames,
 	PermissionFlagsBits.KickMembers,
 	PermissionFlagsBits.BanMembers,
 	PermissionFlagsBits.ModerateMembers,
-	PermissionFlagsBits.MentionEveryone,
 	PermissionFlagsBits.ManageMessages,
-	PermissionFlagsBits.ManageThreads,
 	PermissionFlagsBits.SendTTSMessages,
-	PermissionFlagsBits.PrioritySpeaker,
 	PermissionFlagsBits.MuteMembers,
 	PermissionFlagsBits.DeafenMembers,
 	PermissionFlagsBits.MoveMembers,
-	PermissionFlagsBits.CreateEvents,
-	PermissionFlagsBits.ManageEvents,
 ];
 const rolesPerPage = 25;
+const logFilePath = path.join(process.cwd(), 'roleExclusions.log');
+
+function getFlaggedPermissions(role: Role): string[] {
+	return dangerousPermissions
+		.filter(perm => role.permissions.has(perm))
+		.map(perm => {
+			const permissionName = Object.entries(PermissionFlagsBits)
+				.find(([_, value]) => value === perm)?.[0];
+			return permissionName ?? `0x${perm.toString(16)}`;
+		});
+}
+
+async function logExcludedRole(role: Role) {
+	const logEntry = {
+		timestamp: new Date().toISOString(),
+		roleId: role.id,
+		roleName: role.name,
+		permissions: getFlaggedPermissions(role),
+	};
+
+	try {
+		await fs.appendFile(
+			logFilePath,
+			`${JSON.stringify(logEntry)}\n`,
+		);
+	} catch (error) {
+		console.error('Failed to write to role exclusion log:', error);
+	}
+}
 
 export function getAssignableRoles(guild: Guild): Role[] {
-	return Array.from(guild.roles.cache.filter(role => {
-		const hasDangerousPerms = role.permissions.any(dagerousPermissions);
+	const excludedRoles: Role[] = [];
+
+	const roles = Array.from(guild.roles.cache.filter(role => {
+		const hasDangerousPerms = role.permissions.any(dangerousPermissions);
 		const isManaged = role.managed;
 		const isBotRole = role.id === guild.members.me?.roles.highest.id;
 		const isEveryone = role.id === guild.id;
+		const isEditable = role.editable;
+
+		if (hasDangerousPerms) {
+			excludedRoles.push(role);
+		}
 
 		return !hasDangerousPerms
 				&& !isManaged
 				&& !isBotRole
 				&& !isEveryone
 				&& role.editable;
-	}).values()).sort((a, b) => b.position - a.position);
+	}).values());
+
+	if (excludedRoles.length > 0) {
+		Promise.all(excludedRoles.map(logExcludedRole))
+			.catch(console.error);
+	}
+
+	return roles.sort((a, b) => b.position - a.position);
 }
+// Unused old logic without role logging
+// return Array.from(guild.roles.cache.filter(role => {
+// 	const hasDangerousPerms = role.permissions.any(dangerousPermissions);
+// 	const isManaged = role.managed;
+// 	const isBotRole = role.id === guild.members.me?.roles.highest.id;
+// 	const isEveryone = role.id === guild.id;
 
 export async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
 	if (!interaction.inGuild()) {
