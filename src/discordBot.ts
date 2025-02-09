@@ -195,7 +195,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 		if (!menuData) {
 			await interaction.reply({
-				content: 'No assignable roles available in this server!',
+				content: 'No assignable roles available in this server or missing bot permissions (check bot role hierarchy)!',
 				ephemeral: true,
 			});
 			return;
