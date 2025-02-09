@@ -11,6 +11,7 @@ import {
 	ComponentType,
 	PermissionFlagsBits,
 	type ButtonInteraction,
+	type ChatInputCommandInteraction,
 } from 'discord.js';
 
 const dangerousPermissions = [
