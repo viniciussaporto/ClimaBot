@@ -1,35 +1,57 @@
-import Discord, {type EmbedBuilder} from 'discord.js';
-import {Client, GatewayIntentBits, Partials, ButtonBuilder, ButtonStyle, ActionRowBuilder, type BaseInteraction, AttachmentBuilder} from 'discord.js';
+import {
+	Client,
+	GatewayIntentBits,
+	Partials,
+	ButtonBuilder,
+	ButtonStyle,
+	ActionRowBuilder,
+	type BaseInteraction,
+	AttachmentBuilder,
+	MessageFlags,
+	EmbedBuilder,
+	Routes,
+	type ButtonInteraction,
+	type StringSelectMenuInteraction,
+	type ChatInputCommandInteraction,
+} from 'discord.js';
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
-import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
-import type {
-	ButtonInteraction,
-	StringSelectMenuInteraction,
-	ChatInputCommandInteraction,
-} from 'discord.js';
-
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
-import {getCoordinates, getWeatherData} from './utils/weather.js';
-import {getForecastData, type ForecastData} from './utils/weather.js';
-import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
+import {
+	getCoordinates,
+	getWeatherData,
+	getForecastData,
+	type ForecastData,
+	getFormattedLocation,
+	type Location as WeatherLocation,
+} from './utils/weather.js';
 
 dotenv.config();
 
-const token: string = process.env.TOKEN!;
-const clientId = process.env.CLIENT_ID!;
+const token = process.env.TOKEN;
+const clientId = process.env.CLIENT_ID;
+
+if (!token || !clientId) {
+	throw new Error('Missing required environment variables');
+}
 
 const client = new Client({
-	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions],
+	intents: [
+		GatewayIntentBits.Guilds,
+		GatewayIntentBits.GuildMessages,
+		GatewayIntentBits.MessageContent,
+		GatewayIntentBits.GuildMembers,
+		GatewayIntentBits.GuildMessageReactions,
+	],
 	partials: [Partials.Channel],
 });
 
 client.on('ready', () => {
-	console.log(`Logged in as ${client.user!.tag}`);
+	console.log(`Logged in as ${client.user?.tag ?? 'unknown client'}`);
 });
 
-async function registerSlashCommands() {
+async function registerSlashCommands(): Promise<void> {
 	try {
 		console.log('Started refreshing global application (/) commands.');
 
@@ -65,15 +87,10 @@ async function registerSlashCommands() {
 			},
 		];
 
-		const rest = new REST({version: '9'}).setToken(token);
-
-		await rest.put(
-			Routes.applicationCommands(clientId),
-			{body: commands},
-		);
-
+		const rest = new REST({version: '10'}).setToken(token);
+		await rest.put(Routes.applicationCommands(clientId), {body: commands});
 		console.log('Successfully registered global application (/) commands.');
-	} catch (error: any) {
+	} catch (error: unknown) {
 		console.error('Error registering global application (/) commands:', error);
 	}
 }
@@ -101,51 +118,38 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 	const {commandName, options} = interaction;
 
-	if (commandName === 'weather') {
-		const location = options.getString('location');
-		if (!location) {
-			await interaction.reply('Please provide a location.');
-			return;
-		}
+	try {
+		if (commandName === 'weather') {
+			const location = options.getString('location');
+			if (!location) {
+				await interaction.reply('Please provide a location.');
+				return;
+			}
 
-		try {
 			const coordinates = await getCoordinates(location);
 			const response = await getWeatherData(coordinates);
-
-			const {
-				temperature,
-				weatherDescription,
-				windSpeed,
-				windDirection,
-				relativeHumidity,
-				relativePressure,
-				cloudiness,
-				weatherCode,
-				formattedLocation,
-			} = response;
-
-			const weatherImage = getWeatherImage(weatherCode);
+			const weatherImage = getWeatherImage(response.weatherCode);
 			const attachment = new AttachmentBuilder(weatherImage, {name: 'weather.png'});
 
-			const embed = new Discord.EmbedBuilder()
-				.setTitle(`🌤 Weather in ${formattedLocation}`)
-				.setDescription(`**${weatherDescription}**`)
+			const embed = new EmbedBuilder()
+				.setTitle(`🌤 Weather in ${response.formattedLocation}`)
+				.setDescription(`**${response.weatherDescription}**`)
 				.addFields(
 					{
-						name: '\u200b', // Zero-width space
+						name: '\u200b',
 						value: [
-							`🌡 **Temperature:** ${temperature}°C`,
-							`💧 **Humidity:** ${relativeHumidity}%`,
-							`☁ **Clouds:** ${cloudiness}%`,
+							`🌡 **Temperature:** ${response.temperature}°C`,
+							`💧 **Humidity:** ${response.relativeHumidity}%`,
+							`☁ **Clouds:** ${response.cloudiness}%`,
 						].join('\n'),
 						inline: true,
 					},
 					{
 						name: '\u200b',
 						value: [
-							`🌬 **Wind:** ${windSpeed} km/h`,
-							`🧭 **Direction:** ${windDirection}°`,
-							`📊 **Pressure:** ${relativePressure}hPa`,
+							`🌬 **Wind:** ${response.windSpeed} km/h`,
+							`🧭 **Direction:** ${response.windDirection}°`,
+							`📊 **Pressure:** ${response.relativePressure}hPa`,
 						].join('\n'),
 						inline: true,
 					},
@@ -153,78 +157,92 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				.setColor('#0099ff')
 				.setImage('attachment://weather.png');
 
-			await interaction.reply({embeds: [embed], files: [attachment]});
-		} catch (error) {
-			console.error('Error fetching weather data:', error);
-			await interaction.reply('Unable to retrieve weather information.');
-		}
-	}		else if (commandName === 'forecast') {
-		const location = options.getString('location');
-		if (!location) {
-			await interaction.reply('Please provide a location.');
-			return;
-		}
+			await interaction.reply({
+				embeds: [embed.toJSON()],
+				files: [attachment],
+			});
+		} else if (commandName === 'forecast') {
+			const location = options.getString('location');
+			if (!location) {
+				await interaction.reply('Please provide a location.');
+				return;
+			}
 
-		try {
 			const coordinates = await getCoordinates(location);
-			const forecastData = await getForecastData(coordinates);
-			const weatherRespornse = await getWeatherData(coordinates);
+			const [forecastData, weatherResponse] = await Promise.all([
+				getForecastData(coordinates),
+				getWeatherData(coordinates),
+			]);
 
 			const forecastEmbed = await generateForecastMessage(
 				forecastData,
-				weatherRespornse.formattedLocation,
+				weatherResponse.formattedLocation,
 			);
-
 			await interaction.reply({embeds: [forecastEmbed]});
-		} catch (error: any) {
-			console.error('Error fetching forecast data:', error);
-			await interaction.reply('Unable to retrieve forecast information.');
-		}
-	}	else if (commandName === 'roles') {
-		if (!interaction.inGuild()) {
+		} else if (commandName === 'roles') {
+			if (!interaction.inGuild()) {
+				await interaction.reply({
+					content: 'This command only works in server!',
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+
+			const {guild} = interaction;
+			if (!guild) {
+				await interaction.reply({
+					content: 'Could not resolve guild information',
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+
+			const member = await guild.members.fetch(interaction.user.id);
+			const menuData = createRoleMenu(guild, member, 0);
+
+			if (!menuData) {
+				await interaction.reply({
+					content: 'No assignable roles available in this server or missing bot permissions!',
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+
 			await interaction.reply({
-				content: 'This command only works in server!',
-				ephemeral: true,
+				...menuData,
+				flags: MessageFlags.Ephemeral,
 			});
-			return;
 		}
+	} catch (error: unknown) {
+		console.error(`Error handling command ${commandName}:`, error);
+		const content = commandName === 'roles'
+			? 'Failed to process roles command'
+			: `Unable to retrieve ${commandName} information.`;
 
-		const guild = interaction.guild!;
-		// Const roleMenu = createRoleSelectMenu(guild);
-		const menuData = createRoleMenu(interaction.guild!);
-
-		if (!menuData) {
+		if (interaction.replied || interaction.deferred) {
+			await interaction.followUp({
+				content,
+				flags: MessageFlags.Ephemeral,
+			});
+		} else {
 			await interaction.reply({
-				content: 'No assignable roles available in this server or missing bot permissions (check bot role hierarchy)!',
-				ephemeral: true,
+				content,
+				flags: MessageFlags.Ephemeral,
 			});
-			return;
 		}
-
-		await interaction.reply(menuData);
-		// Await interaction.reply( {
-		// 	content: 'Choose a role to add/remove:',
-		// 	components: [roleMenu],
-		// 	ephemeral:true;
 	}
-},
-);
+});
 
 async function generateForecastMessage(
 	forecastData: ForecastData,
 	formattedLocation: string,
 ): Promise<EmbedBuilder> {
 	const {daily} = forecastData;
-
-	const embed = new Discord.EmbedBuilder()
+	const embed = new EmbedBuilder()
 		.setTitle(`🌦 Previsão para 5 dias - ${formattedLocation}`)
 		.setColor('#0099ff');
 
 	daily.time.forEach((day, index) => {
-		const maxTemp = daily.temperature_2m_max[index];
-		const minTemp = daily.temperature_2m_min[index];
-		const rainProb = daily.precipitation_probability_max[index];
-
 		const formattedDate = new Date(day).toLocaleDateString('pt-BR', {
 			weekday: 'short',
 			month: '2-digit',
@@ -234,8 +252,8 @@ async function generateForecastMessage(
 		embed.addFields({
 			name: `📅 ${formattedDate}`,
 			value: [
-				`⬆ ${maxTemp}°C ⬇ ${minTemp}°C`,
-				`💧 Prob. Chuva: ${rainProb}%`,
+				`⬆ ${daily.temperature_2m_max[index]}°C ⬇ ${daily.temperature_2m_min[index]}°C`,
+				`💧 Prob. Chuva: ${daily.precipitation_probability_max[index]}%`,
 			].join('\n'),
 			inline: true,
 		});
@@ -244,6 +262,5 @@ async function generateForecastMessage(
 	return embed;
 }
 
-void client.login(token);
-
+client.login(token).catch(console.error);
 void registerSlashCommands();

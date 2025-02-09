@@ -3,6 +3,7 @@ import path from 'path';
 import {
 	type Role,
 	type Guild,
+	type GuildMember,
 	type StringSelectMenuInteraction,
 	StringSelectMenuBuilder,
 	ActionRowBuilder,
@@ -10,6 +11,7 @@ import {
 	ButtonStyle,
 	ComponentType,
 	PermissionFlagsBits,
+	MessageFlags,
 	type ButtonInteraction,
 	type ChatInputCommandInteraction,
 } from 'discord.js';
@@ -137,7 +139,7 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 	}
 }
 
-export function createRoleMenu(guild: Guild, page = 0) {
+export function createRoleMenu(guild: Guild, member: GuildMember, page = 0) {
 	const allRoles = getAssignableRoles(guild);
 	const totalPages = Math.ceil(allRoles.length / rolesPerPage);
 	const startIdx = page * rolesPerPage;
@@ -150,11 +152,14 @@ export function createRoleMenu(guild: Guild, page = 0) {
 	const selectMenu = new StringSelectMenuBuilder()
 		.setCustomId('role-select')
 		.setPlaceholder(`Select roles (Page ${page + 1}/${totalPages})`)
-		.addOptions(pageRoles.slice(0, 25).map(role => ({
-			label: role.name,
-			value: role.id,
-			emoji: role.unicodeEmoji ?? '🔹',
-		})));
+		.addOptions(pageRoles.slice(0, 25).map(role => {
+			const hasRole = member.roles.cache.has(role.id);
+			return {
+				label: role.name,
+				value: role.id,
+				emoji: {name: hasRole ? '✅' : '❌'}, // This doesn't work, it's defaulting to Unicode blue diamond.
+			};
+		}));
 
 	const buttons = [];
 	if (page > 0) {
@@ -188,7 +193,7 @@ export function createRoleMenu(guild: Guild, page = 0) {
 	return {
 		content: `**Available Roles** (${allRoles.length} total)`,
 		components,
-		ephemeral: true,
+		// Remove ephemeral: true,
 	};
 }
 
@@ -199,9 +204,14 @@ export async function handleRolePagination(interaction: ButtonInteraction) {
 
 	const [action, page] = interaction.customId.split('_');
 	const newPage = parseInt(page, 10);
+	const guild = interaction.guild!;
+
+	// Fetch the member's current roles
+	const member = await guild.members.fetch(interaction.user.id);
 
 	const menuData = createRoleMenu(
-		interaction.guild!,
+		guild,
+		member,
 		action === 'next' ? newPage + 1 : newPage - 1,
 	);
 
