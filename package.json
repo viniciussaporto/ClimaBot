@@ -165,7 +165,6 @@
     "tslib": "^2.8.1",
     "type-check": "^0.4.0",
     "type-fest": "^0.20.2",
-    "typescript": "^5.7.3",
     "undici": "^5.28.5",
     "undici-types": "^6.19.8",
     "uri-js": "^4.4.1",
@@ -174,17 +173,23 @@
     "whatwg-url": "^5.0.0",
     "which": "^2.0.2",
     "wide-align": "^1.1.5",
+    "winston": "^3.17.0",
     "wrappy": "^1.0.2",
     "ws": "^8.18.0",
     "yallist": "^4.0.0",
     "yocto-queue": "^0.1.0"
   },
   "scripts": {
-    "start": "node dist/discordBot.js",
-    "tsc": "tsc",
+    "start": "ts-node dist/discordBot.js",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
 }

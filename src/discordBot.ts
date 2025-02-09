@@ -26,6 +26,7 @@ import {
 	getFormattedLocation,
 	type Location as WeatherLocation,
 } from './utils/weather.js';
+import {apiRequestCounter, apiResponseTimeHistogram} from './utils/metrics';
 
 dotenv.config();
 
@@ -117,6 +118,9 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	}
 
 	const {commandName, options} = interaction;
+
+	apiRequestCounter.labels('discord_interaction', commandName).inc();
+	const timer = apiResponseTimeHistogram.labels('discord_interaction').startTimer();
 
 	try {
 		if (commandName === 'weather') {
@@ -212,12 +216,16 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				...menuData,
 				flags: MessageFlags.Ephemeral,
 			});
+			timer({status: 'success'});
 		}
 	} catch (error: unknown) {
 		console.error(`Error handling command ${commandName}:`, error);
 		const content = commandName === 'roles'
 			? 'Failed to process roles command'
 			: `Unable to retrieve ${commandName} information.`;
+
+		apiRequestCounter.labels('discord_interaction', 'error').inc();
+		timer({status: 'error'});
 
 		if (interaction.replied || interaction.deferred) {
 			await interaction.followUp({

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import {apiRequestCounter, apiResponseTimeHistogram} from './metrics';
 
 dotenv.config();
 
@@ -75,19 +76,35 @@ type GeocodingApiResponse = {
 	}>;
 };
 
-export async function getForecastData(coordinates: Location) {
-	const {lat, lng} = coordinates;
-	const trimmedLat = lat.toString().trim();
-	const trimmedLng = lng.toString().trim();
-	const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=5`;
-
+async function withMetrics<T>(apiName: string, fn: () => Promise<T>): Promise<T> {
+	const end = apiResponseTimeHistogram.labels(apiName).startTimer();
 	try {
-		const response = await axios.get<ForecastData>(forecastUrl);
-		return response.data;
+		const result = await fn();
+		apiRequestCounter.labels(apiName, 'success').inc();
+		return result;
 	} catch (error) {
-		console.error('Error fetching forecast data from Open-Meteo API:', error);
-		throw new Error('Error fetching forecast data from Open-Meteo API');
+		apiRequestCounter.labels(apiName, 'error').inc();
+		throw error;
+	} finally {
+		end();
 	}
+}
+
+export async function getForecastData(coordinates: Location) {
+	return withMetrics('openmeteo_forecast', async () => {
+		const {lat, lng} = coordinates;
+		const trimmedLat = lat.toString().trim();
+		const trimmedLng = lng.toString().trim();
+		const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=5`;
+
+		try {
+			const response = await axios.get<ForecastData>(forecastUrl);
+			return response.data;
+		} catch (error) {
+			console.error('Error fetching forecast data from Open-Meteo API:', error);
+			throw new Error('Error fetching forecast data from Open-Meteo API');
+		}
+	});
 }
 
 export async function getFormattedLocation(coordinates: Location): Promise<string> {
@@ -111,70 +128,74 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 }
 
 export async function getCoordinates(location?: string): Promise<Location> {
-	try {
-		const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${location}&pretty=1&no_annotations=1`;
-		const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
+	return withMetrics('opencage_geocode', async () => {
+		try {
+			const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${location}&pretty=1&no_annotations=1`;
+			const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
 
-		if (response.data.results.length === 0) {
-			throw new Error('Location not found');
+			if (response.data.results.length === 0) {
+				throw new Error('Location not found');
+			}
+
+			const {lat, lng} = response.data.results[0].geometry;
+			const {formatted} = response.data.results[0];
+
+			return {lat, lng, formattedLocation: formatted};
+		} catch (error) {
+			throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 		}
-
-		const {lat, lng} = response.data.results[0].geometry;
-		const {formatted} = response.data.results[0];
-
-		return {lat, lng, formattedLocation: formatted};
-	} catch (error) {
-		throw new Error('Error fetching coordinates from OpenCage Geocoding API');
-	}
+	});
 }
 
 export async function getWeatherData(coordinates: Location) {
-	const {lat, lng, formattedLocation} = coordinates;
-	const trimmedLat = lat.toString().trim();
-	const trimmedLng = lng.toString().trim();
-	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+	return withMetrics('openmeteo_weather', async () => {
+		const {lat, lng, formattedLocation} = coordinates;
+		const trimmedLat = lat.toString().trim();
+		const trimmedLng = lng.toString().trim();
+		const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
 
-	try {
-		const response = await axios.get<WeatherData>(weatherUrl);
-		const {hourly, utcOffsetSeconds} = response.data;
+		try {
+			const response = await axios.get<WeatherData>(weatherUrl);
+			const {hourly, utcOffsetSeconds} = response.data;
 
-		if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
-			throw new Error('Weather data not available');
+			if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
+				throw new Error('Weather data not available');
+			}
+
+			const currentDateTime = new Date();
+			const adjustedDateTime = new Date(currentDateTime.getTime() + (utcOffsetSeconds * 1000));
+			const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
+
+			if (closestTimeIndex === -1) {
+				throw new Error('Unable to determine closest time index');
+			}
+
+			const temperature = hourly.temperature_2m[closestTimeIndex];
+			const weatherCode = hourly.weathercode[closestTimeIndex];
+			const windSpeed = hourly.windspeed_10m[closestTimeIndex];
+			const windDirection = hourly.winddirection_10m[closestTimeIndex];
+			const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
+			const relativePressure = hourly.pressure_msl[closestTimeIndex];
+			const cloudiness = hourly.cloudcover[closestTimeIndex];
+
+			return {
+				temperature,
+				weatherDescription: getWeatherDescription(weatherCode),
+				windSpeed,
+				windDirection,
+				formattedLocation,
+				relativeHumidity,
+				relativePressure,
+				cloudiness,
+				weatherCode,
+				trimmedLat,
+				trimmedLng,
+			};
+		} catch (error) {
+			console.error('Error fetching weather data from Open-Meteo API:', error);
+			throw new Error('Error fetching weather data from Open-Meteo API');
 		}
-
-		const currentDateTime = new Date();
-		const adjustedDateTime = new Date(currentDateTime.getTime() + (utcOffsetSeconds * 1000));
-		const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
-
-		if (closestTimeIndex === -1) {
-			throw new Error('Unable to determine closest time index');
-		}
-
-		const temperature = hourly.temperature_2m[closestTimeIndex];
-		const weatherCode = hourly.weathercode[closestTimeIndex];
-		const windSpeed = hourly.windspeed_10m[closestTimeIndex];
-		const windDirection = hourly.winddirection_10m[closestTimeIndex];
-		const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
-		const relativePressure = hourly.pressure_msl[closestTimeIndex];
-		const cloudiness = hourly.cloudcover[closestTimeIndex];
-
-		return {
-			temperature,
-			weatherDescription: getWeatherDescription(weatherCode),
-			windSpeed,
-			windDirection,
-			formattedLocation,
-			relativeHumidity,
-			relativePressure,
-			cloudiness,
-			weatherCode,
-			trimmedLat,
-			trimmedLng,
-		};
-	} catch (error) {
-		console.error('Error fetching weather data from Open-Meteo API:', error);
-		throw new Error('Error fetching weather data from Open-Meteo API');
-	}
+	});
 }
 
 function getClosestTimeIndex(timeArray: string[], targetDateTime: number): number {
