@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, {AxiosError} from 'axios';
 import dotenv from 'dotenv';
 import {apiRequestCounter, apiResponseTimeHistogram} from './metrics';
 
@@ -82,15 +82,19 @@ async function withMetrics<T>(apiName: string, fn: () => Promise<T>): Promise<T>
 		const result = await fn();
 		apiRequestCounter.labels(apiName, 'success').inc();
 		return result;
-	} catch (error) {
+	} catch (error: unknown) {
 		apiRequestCounter.labels(apiName, 'error').inc();
-		throw error;
+		if (error instanceof Error) {
+			throw error;
+		}
+
+		throw new Error('Unknown error occurred');
 	} finally {
 		end();
 	}
 }
 
-export async function getForecastData(coordinates: Location) {
+export async function getForecastData(coordinates: Location): Promise<ForecastData> {
 	return withMetrics('openmeteo_forecast', async () => {
 		const {lat, lng} = coordinates;
 		const trimmedLat = lat.toString().trim();
@@ -100,8 +104,13 @@ export async function getForecastData(coordinates: Location) {
 		try {
 			const response = await axios.get<ForecastData>(forecastUrl);
 			return response.data;
-		} catch (error) {
-			console.error('Error fetching forecast data from Open-Meteo API:', error);
+		} catch (error: unknown) {
+			if (axios.isAxiosError(error)) {
+				console.error('Axios error fetching forecast data:', error);
+			} else {
+				console.error('Unexpected error fetching forecast data:', error);
+			}
+
 			throw new Error('Error fetching forecast data from Open-Meteo API');
 		}
 	});
@@ -121,8 +130,13 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 		const {formatted} = response.data.results[0];
 
 		return formatted;
-	} catch (error) {
-		console.error('Error fetching coordinates from OpenCage Geocoding API:', error);
+	} catch (error: unknown) {
+		if (axios.isAxiosError(error)) {
+			console.error('Axios error fetching coordinates:', error);
+		} else {
+			console.error('Unexpected error fetching coordinates:', error);
+		}
+
 		throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 	}
 }
@@ -141,13 +155,19 @@ export async function getCoordinates(location?: string): Promise<Location> {
 			const {formatted} = response.data.results[0];
 
 			return {lat, lng, formattedLocation: formatted};
-		} catch (error) {
+		} catch (error: unknown) {
+			if (axios.isAxiosError(error)) {
+				console.error('Axios error fetching coordinates:', error);
+			} else {
+				console.error('Unexpected error fetching coordinates:', error);
+			}
+
 			throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 		}
 	});
 }
 
-export async function getWeatherData(coordinates: Location) {
+export async function getWeatherData(coordinates: Location): Promise<WeatherData> {
 	return withMetrics('openmeteo_weather', async () => {
 		const {lat, lng, formattedLocation} = coordinates;
 		const trimmedLat = lat.toString().trim();
@@ -191,8 +211,13 @@ export async function getWeatherData(coordinates: Location) {
 				trimmedLat,
 				trimmedLng,
 			};
-		} catch (error) {
-			console.error('Error fetching weather data from Open-Meteo API:', error);
+		} catch (error: unknown) {
+			if (axios.isAxiosError(error)) {
+				console.error('Axios error fetching weather data:', error);
+			} else {
+				console.error('Unexpected error fetching weather data:', error);
+			}
+
 			throw new Error('Error fetching weather data from Open-Meteo API');
 		}
 	});
@@ -249,39 +274,3 @@ const getWeatherDescription = (weatherCode: number): string => {
 
 	return weatherCodeMappings.get(weatherCode) ?? 'Unknown';
 };
-
-// Commented because of new version that follows es2021 rules
-// function getWeatherDescription(weatherCode: number) {
-// 	const weatherCodeMappings: Record<number, string> = {
-// 		0: 'Clear sky',
-// 		1: 'Mainly clear',
-// 		2: 'Partly cloudy',
-// 		3: 'Overcast',
-// 		45: 'Fog',
-// 		46: 'Depositing rime fog',
-// 		51: 'Light drizzle',
-// 		53: 'Moderate drizzle',
-// 		55: 'Dense intensity drizzle',
-// 		56: 'Light freezing drizzle',
-// 		57: 'Dense freezing drizzle',
-// 		61: 'Slight rain',
-// 		63: 'Moderate rain',
-// 		65: 'Heavy rain',
-// 		66: 'Light freezing rain',
-// 		67: 'Heavy freezing rain',
-// 		71: 'Slight snowfall',
-// 		73: 'Moderate snowfall',
-// 		75: 'Heavy snowfall',
-// 		77: 'Snow grains',
-// 		80: 'Slight rain showers',
-// 		81: 'Moderate rain showers',
-// 		82: 'Violent rain showers',
-// 		85: 'Slight snow showers',
-// 		86: 'Heavy snow showers',
-// 		95: 'Thunderstorm',
-// 		96: 'Slight hail thunderstorm',
-// 		99: 'Heavy hail thunderstorm',
-// 	};
-
-// 	return weatherCodeMappings[weatherCode] || 'Unknown';
-// }

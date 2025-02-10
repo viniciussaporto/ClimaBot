@@ -26,6 +26,7 @@ import {
 	getFormattedLocation,
 	type Location as WeatherLocation,
 } from './utils/weather.js';
+import './utils/metrics';
 import {apiRequestCounter, apiResponseTimeHistogram} from './utils/metrics';
 
 dotenv.config();
