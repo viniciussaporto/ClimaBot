@@ -16,7 +16,7 @@ import {
 } from 'discord.js';
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
-import {getWeatherImage} from './utils/weatherImages';
+import {getWeatherImage} from './utils/weatherImages.js';
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
 import {
 	getCoordinates,
@@ -26,8 +26,8 @@ import {
 	getFormattedLocation,
 	type Location as WeatherLocation,
 } from './utils/weather.js';
-import './utils/metrics';
-import {apiRequestCounter, apiResponseTimeHistogram} from './utils/metrics';
+import './utils/metrics.js';
+import {apiRequestCounter, apiResponseTimeHistogram} from './utils/metrics.js';
 
 dotenv.config();
 
