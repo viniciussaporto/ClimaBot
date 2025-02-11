@@ -22,6 +22,18 @@ export type WeatherData = {
 	elevation: number;
 	hourly_units: HourlyUnits;
 	hourly: Hourly;
+
+	temperature?: number;
+	weatherDescription?: string;
+	windSpeed?: number;
+	windDirection?: number;
+	formattedLocation?: string;
+	relativeHumidity?: number;
+	relativePressure?: number;
+	cloudiness?: number;
+	weatherCode?: number;
+	trimmedLat?: string;
+	trimmedLng?: string;
 };
 
 export type Hourly = {
@@ -74,6 +86,18 @@ type GeocodingApiResponse = {
 			lng: number;
 		};
 	}>;
+};
+
+type WeatherResponse = WeatherData & {
+	temperature: number;
+	weatherDescription: string;
+	windSpeed: number;
+	windDirection: number;
+	formattedLocation: string;
+	relativeHumidity: number;
+	relativePressure: number;
+	cloudiness: number;
+	weatherCode: number;
 };
 
 async function withMetrics<T>(apiName: string, fn: () => Promise<T>): Promise<T> {
@@ -167,7 +191,7 @@ export async function getCoordinates(location?: string): Promise<Location> {
 	});
 }
 
-export async function getWeatherData(coordinates: Location): Promise<WeatherData> {
+export async function getWeatherData(coordinates: Location): Promise<WeatherResponse> {
 	return withMetrics('openmeteo_weather', async () => {
 		const {lat, lng, formattedLocation} = coordinates;
 		const trimmedLat = lat.toString().trim();

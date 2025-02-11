@@ -87,7 +87,7 @@ export function getAssignableRoles(guild: Guild): Role[] {
 			.catch(console.error);
 	}
 
-	return roles.sort((a, b) => b.position - a.position);
+	return roles.sort((a: Role, b: Role) => b.position - a.position);
 }
 // Unused old logic without role logging
 // return Array.from(guild.roles.cache.filter(role => {
