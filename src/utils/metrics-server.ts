@@ -13,6 +13,6 @@ app.get('/metrics', async (req: Request, res: Response) => {
 	}
 });
 
-app.listen(port, () => {
-	console.log(`Metrics server listening at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+	console.log(`Metrics server listening at http://0.0.0.0:${port}`);
 });
