@@ -105,6 +105,7 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 
 	const assignableRoles = getAssignableRoles(guild);
 	if (!role || !assignableRoles.find(r => r.id === roleId)) {
+		roleAssignmentCounter.labels('error', 'role').inc();
 		await interaction.reply({
 			content: 'This role is no longer available!',
 			ephemeral: true,
@@ -209,6 +210,7 @@ export async function handleRolePagination(interaction: ButtonInteraction) {
 	);
 
 	if (!menuData) {
+		roleAssignmentCounter.labels('error', 'role').inc();
 		await interaction.update({
 			content: 'No roles available!',
 			components: [],

@@ -195,6 +195,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	}	else if (commandName === 'roles') {
 		commandCounter.labels('roles', 'received').inc();
 		if (!interaction.inGuild()) {
+			commandCounter.labels('roles', 'error').inc();
 			await interaction.reply({
 				content: 'This command only works in server!',
 				ephemeral: true,
@@ -208,7 +209,6 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 		if (!menuData) {
 			commandCounter.labels('roles', 'error').inc();
-			weatherApiCounter.labels('current', 'error').inc();
 			await interaction.reply({
 				content: 'No assignable roles available in this server!',
 				ephemeral: true,
