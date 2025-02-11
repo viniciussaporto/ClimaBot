@@ -16,11 +16,12 @@ RUN apt-get update && \
 COPY package*.json ./
 COPY tsconfig*.json ./
 
-RUN npm ci --omit=optional  # Skip optional dependencies
+RUN npm ci --production
 
 COPY . .
 
 RUN npm run build
 
 EXPOSE 9464
-CMD ["node", "dist/index.js"]
+
+CMD ["npm", "start"]
