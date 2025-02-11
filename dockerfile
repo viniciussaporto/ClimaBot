@@ -1,21 +1,26 @@
-FROM node:18-alpine
+FROM node:18-bullseye-slim
 
-# set working directory
 WORKDIR /usr/src/app
 
-# package files first for better layer caching
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    python3 \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev
+
 COPY package*.json ./
 COPY tsconfig*.json ./
 
-# Install dependencies
-RUN npm ci
+RUN npm ci --omit=optional  # Skip optional dependencies
 
 COPY . .
 
 RUN npm run build
 
-# expose metrics port
 EXPOSE 9464
-
-# start bot
 CMD ["node", "dist/index.js"]
