@@ -22,6 +22,7 @@
     },
     "scripts": {
         "start": "npm run tsc && node dist/discordBot.js",
+        "build": "tsc",
         "tsc": "tsc",
         "lint:fix": "eslint --fix --ext .ts,.js ."
     }
