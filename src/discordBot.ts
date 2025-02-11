@@ -1,19 +1,21 @@
 import Discord, {type EmbedBuilder} from 'discord.js';
-import {Client, GatewayIntentBits, Partials, ButtonBuilder, ButtonStyle, ActionRowBuilder, type BaseInteraction, AttachmentBuilder} from 'discord.js';
+import {Client, GatewayIntentBits, Partials, /* ButtonBuilder, ButtonStyle, ActionRowBuilder, */ type BaseInteraction, AttachmentBuilder} from 'discord.js';
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
 import {getWeatherImage} from './utils/weatherImages';
-import type {
-	ButtonInteraction,
-	StringSelectMenuInteraction,
-	ChatInputCommandInteraction,
-} from 'discord.js';
+// Unused import type {
+// 	ButtonInteraction,
+// 	StringSelectMenuInteraction,
+// 	ChatInputCommandInteraction,
+// } from 'discord.js';
 
 import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/roles.js';
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
-import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
+import './utils/metrics-server.js';
+import {commandCounter, weatherApiCounter} from './utils/metrics';
+// Unused import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
 
 dotenv.config();
 
@@ -102,6 +104,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	const {commandName, options} = interaction;
 
 	if (commandName === 'weather') {
+		commandCounter.labels('weather', 'received').inc();
 		const location = options.getString('location');
 		if (!location) {
 			await interaction.reply('Please provide a location.');
@@ -109,6 +112,8 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		}
 
 		try {
+			commandCounter.labels('weather', 'success').inc();
+			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
 			const response = await getWeatherData(coordinates);
 
@@ -155,10 +160,13 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 			await interaction.reply({embeds: [embed], files: [attachment]});
 		} catch (error) {
+			commandCounter.labels('weather', 'error').inc();
+			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching weather data:', error);
 			await interaction.reply('Unable to retrieve weather information.');
 		}
 	}		else if (commandName === 'forecast') {
+		commandCounter.labels('weather', 'received').inc();
 		const location = options.getString('location');
 		if (!location) {
 			await interaction.reply('Please provide a location.');
@@ -166,6 +174,8 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		}
 
 		try {
+			commandCounter.labels('forecast', 'success').inc();
+			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
 			const forecastData = await getForecastData(coordinates);
 			const weatherRespornse = await getWeatherData(coordinates);
@@ -177,10 +187,13 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 
 			await interaction.reply({embeds: [forecastEmbed]});
 		} catch (error: any) {
+			commandCounter.labels('forecast', 'error').inc();
+			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching forecast data:', error);
 			await interaction.reply('Unable to retrieve forecast information.');
 		}
 	}	else if (commandName === 'roles') {
+		commandCounter.labels('roles', 'received').inc();
 		if (!interaction.inGuild()) {
 			await interaction.reply({
 				content: 'This command only works in server!',
@@ -189,11 +202,13 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			return;
 		}
 
-		const guild = interaction.guild!;
-		// Const roleMenu = createRoleSelectMenu(guild);
+		// Unused const guild = interaction.guild!;
+		// Unused const roleMenu = createRoleSelectMenu(guild);
 		const menuData = createRoleMenu(interaction.guild!);
 
 		if (!menuData) {
+			commandCounter.labels('roles', 'error').inc();
+			weatherApiCounter.labels('current', 'error').inc();
 			await interaction.reply({
 				content: 'No assignable roles available in this server!',
 				ephemeral: true,
@@ -202,6 +217,8 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		}
 
 		await interaction.reply(menuData);
+		commandCounter.labels('roles', 'success').inc();
+		weatherApiCounter.labels('current', 'success').inc();
 		// Await interaction.reply( {
 		// 	content: 'Choose a role to add/remove:',
 		// 	components: [roleMenu],
