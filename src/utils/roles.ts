@@ -8,10 +8,11 @@ import {
 	ActionRowBuilder,
 	ButtonBuilder,
 	ButtonStyle,
-	ComponentType,
+	// ComponentType,
 	PermissionFlagsBits,
 	type ButtonInteraction,
 } from 'discord.js';
+import {roleAssignmentCounter} from './metrics';
 
 const dangerousPermissions = [
 	PermissionFlagsBits.Administrator,
@@ -66,7 +67,7 @@ export function getAssignableRoles(guild: Guild): Role[] {
 		const isManaged = role.managed;
 		const isBotRole = role.id === guild.members.me?.roles.highest.id;
 		const isEveryone = role.id === guild.id;
-		const isEditable = role.editable;
+		// Unused const isEditable = role.editable;
 
 		if (hasDangerousPerms) {
 			excludedRoles.push(role);
@@ -115,12 +116,14 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 		const member = await guild.members.fetch(interaction.user.id);
 
 		if (member.roles.cache.has(roleId)) {
+			roleAssignmentCounter.labels('action', 'role').inc();
 			await member.roles.remove(roleId);
 			await interaction.reply({
 				content: `Removed **${role.name}** role!`,
 				ephemeral: true,
 			});
 		} else {
+			roleAssignmentCounter.labels('action', 'role').inc();
 			await member.roles.add(roleId);
 			await interaction.reply({
 				content: `Added **${role.name}** role!`,
@@ -128,6 +131,7 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 			});
 		}
 	} catch (error) {
+		roleAssignmentCounter.labels('error', 'role').inc();
 		console.error('Role management error:', error);
 		await interaction.reply({
 			content: 'Failed to update roles. Please check bot permissions!',
