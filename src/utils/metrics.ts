@@ -2,19 +2,19 @@ import {collectDefaultMetrics, Counter, Histogram, register} from 'prom-client';
 import express from 'express';
 
 const app = express();
-const metricsPort = 4000;
+const port = 4000;
 
 collectDefaultMetrics();
 
 export const apiRequestCounter = new Counter({
 	name: 'api_requests_total',
-	help: 'Total number of API requests',
+	help: 'Total API requests',
 	labelNames: ['api', 'status'],
 });
 
 export const apiResponseTimeHistogram = new Histogram({
 	name: 'api_response_time_seconds',
-	help: 'API response time in seconds',
+	help: 'API response times',
 	labelNames: ['api'],
 	buckets: [0.1, 0.5, 1, 2, 5],
 });
@@ -24,8 +24,8 @@ app.get('/metrics', async (req, res) => {
 	res.end(await register.metrics());
 });
 
-app.listen(metricsPort, () => {
-	console.log(`Metrics server running on port ${metricsPort}`);
+app.listen(port, () => {
+	console.log(`Metrics server running on port ${port}`);
 });
 // Unused old logic
 // import {collectDefaultMetrics, Counter, Histogram} from 'prom-client';

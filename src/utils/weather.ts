@@ -1,6 +1,6 @@
 import axios, {AxiosError} from 'axios';
 import dotenv from 'dotenv';
-import {apiRequestCounter, apiResponseTimeHistogram} from './metrics';
+import {apiRequestCounter, apiResponseTimeHistogram} from './metrics.js';
 
 dotenv.config();
 
@@ -191,15 +191,16 @@ export async function getCoordinates(location?: string): Promise<Location> {
 	});
 }
 
-export async function getWeatherData(coordinates: Location): Promise<WeatherResponse> {
+export async function getWeatherData(coordinates: Location): Promise<WeatherData> {
 	return withMetrics('openmeteo_weather', async () => {
 		const {lat, lng, formattedLocation} = coordinates;
 		const trimmedLat = lat.toString().trim();
 		const trimmedLng = lng.toString().trim();
 		const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+		const response = await axios.get<WeatherData>(weatherUrl);
 
 		try {
-			const response = await axios.get<WeatherData>(weatherUrl);
+			// Aconst response = await axios.get<WeatherData>(weatherUrl);
 			const {hourly, utcOffsetSeconds} = response.data;
 
 			if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
@@ -223,6 +224,7 @@ export async function getWeatherData(coordinates: Location): Promise<WeatherResp
 			const cloudiness = hourly.cloudcover[closestTimeIndex];
 
 			return {
+				...response.data,
 				temperature,
 				weatherDescription: getWeatherDescription(weatherCode),
 				windSpeed,
