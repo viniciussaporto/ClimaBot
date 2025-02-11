@@ -4,7 +4,6 @@
         "@discordjs/rest": "^1.7.1",
         "@napi-rs/canvas": "^0.1.66",
         "axios": "^1.7.9",
-        "canvas": "^2.11.2",
         "discord-api-types": "^0.37.119",
         "discord.js": "^14.17.3",
         "dotenv": "^16.4.7",
