@@ -3,4 +3,3 @@ node_modules/
 ClimaBot.code-workspace
 dist/
 package-lock.json
-package.json
