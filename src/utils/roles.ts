@@ -201,13 +201,26 @@ export async function handleRolePagination(interaction: ButtonInteraction) {
 		return;
 	}
 
-	const [action, page] = interaction.customId.split('_');
-	const newPage = parseInt(page, 10);
+	const [actionPart, pageStr] = interaction.customId.split('_');
+	const action = actionPart.replace('roles-', '');
 
-	const menuData = createRoleMenu(
-		interaction.guild!,
-		action === 'next' ? newPage + 1 : newPage - 1,
-	);
+	const currentPage = parseInt(pageStr, 10);
+	let targetPage = currentPage;
+
+	if (action === 'next') {
+		targetPage++;
+	} else if (action === 'prev') {
+		targetPage--;
+	} else {
+		console.error('Invalid pagination action:', action);
+		await interaction.reply({
+			content: 'Invalid pagination action.',
+			ephemeral: true,
+		});
+		return;
+	}
+
+	const menuData = createRoleMenu(interaction.guild!, targetPage);
 
 	if (!menuData) {
 		roleAssignmentCounter.labels('error', 'role').inc();
