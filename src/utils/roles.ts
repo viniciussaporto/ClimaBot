@@ -165,7 +165,7 @@ export function createRoleMenu(guild: Guild, page = 0) {
 		buttons.push(
 			new ButtonBuilder()
 				.setCustomId(`roles-prev_${page}`)
-				.setLabel('Previous')
+				.setLabel('Previous page')
 				.setStyle(ButtonStyle.Secondary),
 		);
 	}
@@ -174,7 +174,7 @@ export function createRoleMenu(guild: Guild, page = 0) {
 		buttons.push(
 			new ButtonBuilder()
 				.setCustomId(`roles-next_${page}`)
-				.setLabel('Next')
+				.setLabel('Next page')
 				.setStyle(ButtonStyle.Primary),
 		);
 	}
