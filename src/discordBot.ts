@@ -3,6 +3,7 @@ import {Client, GatewayIntentBits, Partials, /* ButtonBuilder, ButtonStyle, Acti
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
+import {performance} from 'perf_hooks';
 import {getWeatherImage} from './utils/weatherImages';
 // Unused import type {
 // 	ButtonInteraction,
@@ -14,7 +15,9 @@ import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/ro
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
 import './utils/metrics-server.js';
-import {commandCounter, weatherApiCounter} from './utils/metrics';
+import {commandCounter, responseTimeHistogram, weatherApiCounter} from './utils/metrics';
+import logger from './utils/logger';
+// Unused import {error, info} from 'winston';
 // Unused import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
 
 dotenv.config();
@@ -29,11 +32,13 @@ const client = new Client({
 
 client.on('ready', () => {
 	console.log(`Logged in as ${client.user!.tag}`);
+	logger.info(`Logged in as ${client.user!.tag}`);
 });
 
 async function registerSlashCommands() {
 	try {
 		console.log('Started refreshing global application (/) commands.');
+		logger.info('Started refreshing global application (/) commands.');
 
 		const commands = [
 			{
@@ -75,8 +80,10 @@ async function registerSlashCommands() {
 		);
 
 		console.log('Successfully registered global application (/) commands.');
+		logger.info('Successfully registered global application (/) commands.');
 	} catch (error: any) {
 		console.error('Error registering global application (/) commands:', error);
+		logger.error('Error registering global application (/) commands:');
 	}
 }
 
@@ -101,7 +108,9 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		return;
 	}
 
+	const startTime = performance.now();
 	const {commandName, options} = interaction;
+	let status: 'success' | 'error' = 'success';
 
 	if (commandName === 'weather') {
 		commandCounter.labels('weather', 'received').inc();
@@ -159,14 +168,23 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				.setImage('attachment://weather.png');
 
 			await interaction.reply({embeds: [embed], files: [attachment]});
+			commandCounter.labels('weather', 'success').inc();
 		} catch (error) {
+			status = 'error';
 			commandCounter.labels('weather', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching weather data:', error);
+			logger.error('Error fetching weather data:', {
+				duration: (performance.now() - startTime) / 1000,
+				command: 'weather',
+			});
 			await interaction.reply('Unable to retrieve weather information.');
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('weather', status).observe(duration);
 		}
 	}		else if (commandName === 'forecast') {
-		commandCounter.labels('weather', 'received').inc();
+		commandCounter.labels('forecast', 'received').inc();
 		const location = options.getString('location');
 		if (!location) {
 			await interaction.reply('Please provide a location.');
@@ -178,51 +196,59 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
 			const forecastData = await getForecastData(coordinates);
-			const weatherRespornse = await getWeatherData(coordinates);
+			const weatherResponse = await getWeatherData(coordinates);
 
 			const forecastEmbed = await generateForecastMessage(
 				forecastData,
-				weatherRespornse.formattedLocation,
+				weatherResponse.formattedLocation,
 			);
 
 			await interaction.reply({embeds: [forecastEmbed]});
 		} catch (error: any) {
+			status = 'error';
 			commandCounter.labels('forecast', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching forecast data:', error);
+			logger.error('Error fetching forecast data:', {
+				duration: (performance.now() - startTime) / 1000,
+				command: 'forecast',
+			});
 			await interaction.reply('Unable to retrieve forecast information.');
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('forecast', status).observe(duration);
 		}
 	}	else if (commandName === 'roles') {
-		commandCounter.labels('roles', 'received').inc();
-		if (!interaction.inGuild()) {
+		try {
+			commandCounter.labels('roles', 'received').inc();
+
+			if (!interaction.inGuild()) {
+				throw new Error('Command used outside guild');
+			}
+
+			const menuData = createRoleMenu(interaction.guild!);
+
+			if (!menuData) {
+				throw new Error('No assignable roles available');
+			}
+
+			await interaction.reply(menuData);
+			commandCounter.labels('roles', 'success').inc();
+		} catch (error) {
+			status = 'error';
 			commandCounter.labels('roles', 'error').inc();
+			logger.error('Roles command failed', {
+				error: error instanceof Error ? error.message : String(error),
+				userId: interaction.user.id,
+			});
 			await interaction.reply({
-				content: 'This command only works in server!',
+				content: 'Failed to process roles command',
 				ephemeral: true,
 			});
-			return;
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('roles', status).observe(duration);
 		}
-
-		// Unused const guild = interaction.guild!;
-		// Unused const roleMenu = createRoleSelectMenu(guild);
-		const menuData = createRoleMenu(interaction.guild!);
-
-		if (!menuData) {
-			commandCounter.labels('roles', 'error').inc();
-			await interaction.reply({
-				content: 'No assignable roles available in this server!',
-				ephemeral: true,
-			});
-			return;
-		}
-
-		await interaction.reply(menuData);
-		commandCounter.labels('roles', 'success').inc();
-		weatherApiCounter.labels('current', 'success').inc();
-		// Await interaction.reply( {
-		// 	content: 'Choose a role to add/remove:',
-		// 	components: [roleMenu],
-		// 	ephemeral:true;
 	}
 },
 );
