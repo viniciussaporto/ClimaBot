@@ -1,4 +1,4 @@
-import DailyRotateFile, {type DailyRotateFileTransportOptions} from 'winston-daily-rotate-file';
+import DailyRotateFile /*	{type DailyRotateFileTransportOptions}	*/ from 'winston-daily-rotate-file';
 import winston from 'winston';
 import LokiTransport from 'winston-loki';
 
@@ -29,8 +29,8 @@ const logger = winston.createLogger({
 			filename: '/var/log/discord-bot-%DATE%.log',
 			datePattern: 'YYYY-MM-DD',
 			maxFiles: '7d',
-		} as DailyRotateFileTransportOptions),
-		new LokiTransport(lokiConfig),
+		}) as unknown as winston.transport,
+		new LokiTransport(lokiConfig) as unknown as winston.transport,
 		new winston.transports.Console(),
 	],
 });
