@@ -33,12 +33,15 @@ const client = new Client({
 client.on('ready', () => {
 	console.log(`Logged in as ${client.user!.tag}`);
 	logger.info(`Logged in as ${client.user!.tag}`);
+	logger.debug('Client ready event triggered');
+	logger.silly(`Client user ID: ${client.user!.id}`);
 });
 
 async function registerSlashCommands() {
 	try {
 		console.log('Started refreshing global application (/) commands.');
-		logger.info('Started refreshing global application (/) commands.');
+		logger.verbose('Starting slash command registration');
+		logger.debug(`Registering commands for client ID: ${clientId}`);
 
 		const commands = [
 			{
@@ -81,13 +84,17 @@ async function registerSlashCommands() {
 
 		console.log('Successfully registered global application (/) commands.');
 		logger.info('Successfully registered global application (/) commands.');
+		logger.debug(`Registered ${commands.length} commands`);
 	} catch (error: any) {
 		console.error('Error registering global application (/) commands:', error);
-		logger.error('Error registering global application (/) commands:');
+		logger.error('Error registering global application (/) commands:', error);
+		logger.debug(`Error details: ${error.stack}`);
 	}
 }
 
 client.on('interactionCreate', async (interaction: BaseInteraction) => {
+	logger.silly(`Received interaction of type: ${interaction.type}`);
+	logger.verbose(`Interaction from user: ${interaction.user?.tag}`);
 	if (interaction.isStringSelectMenu()) {
 		if (interaction.customId === 'role-select') {
 			await handleRoleSelect(interaction);
@@ -113,6 +120,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 	let status: 'success' | 'error' = 'success';
 
 	if (commandName === 'weather') {
+		logger.debug('Processing weather command');
 		commandCounter.labels('weather', 'received').inc();
 		const location = options.getString('location');
 		if (!location) {
@@ -121,6 +129,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		}
 
 		try {
+			logger.verbose(`Fetching weather for location: ${location}`);
 			commandCounter.labels('weather', 'success').inc();
 			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
@@ -168,9 +177,10 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				.setImage('attachment://weather.png');
 
 			await interaction.reply({embeds: [embed], files: [attachment]});
-			commandCounter.labels('weather', 'success').inc();
+			logger.info('Successfully delivered weather information');
 		} catch (error) {
-			status = 'error';
+			logger.error('Error fetching weather data:', error);
+			logger.warn(`Weather command failed for location: ${location}`);
 			commandCounter.labels('weather', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching weather data:', error);
@@ -192,6 +202,7 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		}
 
 		try {
+			logger.verbose(`Fetching forecast for location: ${location}`);
 			commandCounter.labels('forecast', 'success').inc();
 			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
@@ -204,8 +215,10 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			);
 
 			await interaction.reply({embeds: [forecastEmbed]});
+			logger.info('Successfully delivered forecast information');
 		} catch (error: any) {
-			status = 'error';
+			logger.error('Error fetching weather data:', error);
+			logger.warn(`Weather command failed for location: ${location}`);
 			commandCounter.labels('forecast', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching forecast data:', error);
@@ -219,32 +232,45 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			responseTimeHistogram.labels('forecast', status).observe(duration);
 		}
 	}	else if (commandName === 'roles') {
-		try {
-			commandCounter.labels('roles', 'received').inc();
-
-			if (!interaction.inGuild()) {
-				throw new Error('Command used outside guild');
-			}
-
-			const menuData = createRoleMenu(interaction.guild!);
-
-			if (!menuData) {
-				throw new Error('No assignable roles available');
-			}
-
-			await interaction.reply(menuData);
-			commandCounter.labels('roles', 'success').inc();
-		} catch (error) {
-			status = 'error';
+		logger.verbose(`Assigning roles for user ${interaction.user?.tag}`);
+		commandCounter.labels('roles', 'received').inc();
+		if (!interaction.inGuild()) {
 			commandCounter.labels('roles', 'error').inc();
-			logger.error('Roles command failed', {
-				error: error instanceof Error ? error.message : String(error),
-				userId: interaction.user.id,
-			});
+			logger.error('Error assigning role:', Error);
+			logger.warn(`Roles command failed outside a server: ${interaction.user?.tag}`);
 			await interaction.reply({
 				content: 'Failed to process roles command',
 				ephemeral: true,
 			});
+			return;
+		}
+
+		try {
+			// Unused const guild = interaction.guild!;
+			// Unused const roleMenu = createRoleSelectMenu(guild);
+			const menuData = createRoleMenu(interaction.guild!);
+
+			if (!menuData) {
+				commandCounter.labels('roles', 'error').inc();
+				logger.error('Error assigning role:', Error);
+				logger.warn(`No available roles in this server: ${interaction.guild?.name}`);
+				await interaction.reply({
+					content: 'No assignable roles available in this server!',
+					ephemeral: true,
+				});
+				return;
+			}
+
+			await interaction.reply(menuData);
+			commandCounter.labels('roles', 'success').inc();
+			weatherApiCounter.labels('current', 'success').inc();
+			logger.info(`Successfully assigned role for ${interaction.user?.tag}`);
+			status = 'success';
+		} catch (error) {
+			commandCounter.labels('roles', 'error').inc();
+			logger.error('Error assigning role:', error);
+			logger.warn(`Roles command failed for user: ${interaction.user?.tag}`);
+			status = 'error';
 		} finally {
 			const duration = (performance.now() - startTime) / 1000;
 			responseTimeHistogram.labels('roles', status).observe(duration);
@@ -257,6 +283,8 @@ async function generateForecastMessage(
 	forecastData: ForecastData,
 	formattedLocation: string,
 ): Promise<EmbedBuilder> {
+	logger.debug('Generating forecast embed');
+	logger.silly(`Forecast data: ${JSON.stringify(forecastData.daily)}`);
 	const {daily} = forecastData;
 
 	const embed = new Discord.EmbedBuilder()
