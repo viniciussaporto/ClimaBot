@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import logger from './logger';
 
 dotenv.config();
 
@@ -98,6 +99,7 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 		const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
 
 		if (response.data.results.length === 0) {
+			logger.warn('Location not found');
 			throw new Error('Location not found');
 		}
 
@@ -105,6 +107,8 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 
 		return formatted;
 	} catch (error) {
+		logger.error('Error fetching coordinates from OpenCage Geocoding API:', error);
+		logger.warn('Error fetching coordinates from OpenCage Geocoding API:');
 		console.error('Error fetching coordinates from OpenCage Geocoding API:', error);
 		throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 	}
@@ -112,6 +116,8 @@ export async function getFormattedLocation(coordinates: Location): Promise<strin
 
 export async function getCoordinates(location?: string): Promise<Location> {
 	try {
+		logger.debug(`Geocoding location: ${location}`);
+		logger.verbose('Initiating OpenCage API request');
 		const geocodingUrl = `https://api.opencagedata.com/geocode/v1/json?key=${openCageApiKey}&q=${location}&pretty=1&no_annotations=1`;
 		const response = await axios.get<GeocodingApiResponse>(geocodingUrl);
 
@@ -122,8 +128,12 @@ export async function getCoordinates(location?: string): Promise<Location> {
 		const {lat, lng} = response.data.results[0].geometry;
 		const {formatted} = response.data.results[0];
 
+		logger.info(`Resolved coordinates for: ${formatted}`);
+		logger.silly(`Full geocoding response: ${JSON.stringify(response.data)}`);
 		return {lat, lng, formattedLocation: formatted};
 	} catch (error) {
+		logger.error('Geocoding API error:', error);
+		logger.warn(`Failed to resolve location: ${location}`);
 		throw new Error('Error fetching coordinates from OpenCage Geocoding API');
 	}
 }
@@ -133,12 +143,16 @@ export async function getWeatherData(coordinates: Location) {
 	const trimmedLat = lat.toString().trim();
 	const trimmedLng = lng.toString().trim();
 	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+	logger.verbose('Fetching weather data from Open-Meteo');
+	logger.debug(`Coordinates: ${coordinates.lat},${coordinates.lng}`);
 
 	try {
 		const response = await axios.get<WeatherData>(weatherUrl);
 		const {hourly, utcOffsetSeconds} = response.data;
 
 		if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
+			logger.error('Weather API error:', Error);
+			logger.warn(`Weather data not available for: lat:${trimmedLat} long:${trimmedLng}`);
 			throw new Error('Weather data not available');
 		}
 
@@ -147,6 +161,8 @@ export async function getWeatherData(coordinates: Location) {
 		const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
 
 		if (closestTimeIndex === -1) {
+			logger.error('Closest time index failed:', Error);
+			logger.warn('Failed to get closes time index');
 			throw new Error('Unable to determine closest time index');
 		}
 
@@ -158,6 +174,8 @@ export async function getWeatherData(coordinates: Location) {
 		const relativePressure = hourly.pressure_msl[closestTimeIndex];
 		const cloudiness = hourly.cloudcover[closestTimeIndex];
 
+		logger.info(`Weather data retrieved for ${coordinates.formattedLocation}`);
+		logger.silly(`Raw weather response: ${JSON.stringify(response.data)}`);
 		return {
 			temperature,
 			weatherDescription: getWeatherDescription(weatherCode),
@@ -172,6 +190,8 @@ export async function getWeatherData(coordinates: Location) {
 			trimmedLng,
 		};
 	} catch (error) {
+		logger.error('Weather API error:', error);
+		logger.warn(`Failed to resolve weather for: lat:${trimmedLat} long:${trimmedLng}`);
 		console.error('Error fetching weather data from Open-Meteo API:', error);
 		throw new Error('Error fetching weather data from Open-Meteo API');
 	}
