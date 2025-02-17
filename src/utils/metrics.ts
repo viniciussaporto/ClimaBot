@@ -1,4 +1,4 @@
-import {collectDefaultMetrics, Counter, Registry} from 'prom-client';
+import {collectDefaultMetrics, Counter, Histogram, Registry} from 'prom-client';
 
 const register = new Registry();
 collectDefaultMetrics({register});
@@ -22,6 +22,13 @@ export const weatherApiCounter = new Counter({
 	help: 'Count of weather API requests',
 	labelNames: ['type', 'status'] as const,
 	registers: [register],
+});
+
+export const responseTimeHistogram = new Histogram({
+	name: 'discord_command_response_time_seconds',
+	help: 'Response time for Discord commands',
+	labelNames: ['command', 'status'],
+	buckets: [0.1, 0.5, 1, 2.5, 5, 10],
 });
 
 export {register};

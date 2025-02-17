@@ -13,6 +13,9 @@ RUN apt-get update && \
     libgif-dev \
     librsvg2-dev
 
+RUN mkdir -p /var/log/climabot
+VOLUME /var/log/climabot
+
 COPY package*.json ./
 COPY tsconfig*.json ./
 
