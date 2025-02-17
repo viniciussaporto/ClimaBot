@@ -3,6 +3,7 @@ import {Client, GatewayIntentBits, Partials, /* ButtonBuilder, ButtonStyle, Acti
 import {REST} from '@discordjs/rest';
 import dotenv from 'dotenv';
 import {Routes} from 'discord-api-types/v9';
+import {performance} from 'perf_hooks';
 import {getWeatherImage} from './utils/weatherImages';
 // Unused import type {
 // 	ButtonInteraction,
@@ -14,9 +15,9 @@ import {createRoleMenu, handleRolePagination, handleRoleSelect} from './utils/ro
 import {getCoordinates, getWeatherData} from './utils/weather.js';
 import {getForecastData, type ForecastData} from './utils/weather.js';
 import './utils/metrics-server.js';
-import {commandCounter, weatherApiCounter} from './utils/metrics';
+import {commandCounter, responseTimeHistogram, weatherApiCounter} from './utils/metrics';
 import logger from './utils/logger';
-// Unused import info from 'console';
+// Unused import {error, info} from 'winston';
 // Unused import {getFormattedLocation, type Location as WeatherLocation} from './utils/weather.js';
 
 dotenv.config();
@@ -114,7 +115,9 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 		return;
 	}
 
+	const startTime = performance.now();
 	const {commandName, options} = interaction;
+	let status: 'success' | 'error' = 'success';
 
 	if (commandName === 'weather') {
 		logger.debug('Processing weather command');
@@ -181,10 +184,17 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			commandCounter.labels('weather', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching weather data:', error);
+			logger.error('Error fetching weather data:', {
+				duration: (performance.now() - startTime) / 1000,
+				command: 'weather',
+			});
 			await interaction.reply('Unable to retrieve weather information.');
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('weather', status).observe(duration);
 		}
 	}		else if (commandName === 'forecast') {
-		commandCounter.labels('weather', 'received').inc();
+		commandCounter.labels('forecast', 'received').inc();
 		const location = options.getString('location');
 		if (!location) {
 			await interaction.reply('Please provide a location.');
@@ -197,11 +207,11 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			weatherApiCounter.labels('current', 'success').inc();
 			const coordinates = await getCoordinates(location);
 			const forecastData = await getForecastData(coordinates);
-			const weatherRespornse = await getWeatherData(coordinates);
+			const weatherResponse = await getWeatherData(coordinates);
 
 			const forecastEmbed = await generateForecastMessage(
 				forecastData,
-				weatherRespornse.formattedLocation,
+				weatherResponse.formattedLocation,
 			);
 
 			await interaction.reply({embeds: [forecastEmbed]});
@@ -212,7 +222,14 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			commandCounter.labels('forecast', 'error').inc();
 			weatherApiCounter.labels('current', 'error').inc();
 			console.error('Error fetching forecast data:', error);
+			logger.error('Error fetching forecast data:', {
+				duration: (performance.now() - startTime) / 1000,
+				command: 'forecast',
+			});
 			await interaction.reply('Unable to retrieve forecast information.');
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('forecast', status).observe(duration);
 		}
 	}	else if (commandName === 'roles') {
 		logger.verbose(`Assigning roles for user ${interaction.user?.tag}`);
@@ -222,35 +239,42 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 			logger.error('Error assigning role:', Error);
 			logger.warn(`Roles command failed outside a server: ${interaction.user?.tag}`);
 			await interaction.reply({
-				content: 'This command only works in server!',
+				content: 'Failed to process roles command',
 				ephemeral: true,
 			});
 			return;
 		}
 
-		// Unused const guild = interaction.guild!;
-		// Unused const roleMenu = createRoleSelectMenu(guild);
-		const menuData = createRoleMenu(interaction.guild!);
+		try {
+			// Unused const guild = interaction.guild!;
+			// Unused const roleMenu = createRoleSelectMenu(guild);
+			const menuData = createRoleMenu(interaction.guild!);
 
-		if (!menuData) {
+			if (!menuData) {
+				commandCounter.labels('roles', 'error').inc();
+				logger.error('Error assigning role:', Error);
+				logger.warn(`No available roles in this server: ${interaction.guild?.name}`);
+				await interaction.reply({
+					content: 'No assignable roles available in this server!',
+					ephemeral: true,
+				});
+				return;
+			}
+
+			await interaction.reply(menuData);
+			commandCounter.labels('roles', 'success').inc();
+			weatherApiCounter.labels('current', 'success').inc();
+			logger.info(`Successfully assigned role for ${interaction.user?.tag}`);
+			status = 'success';
+		} catch (error) {
 			commandCounter.labels('roles', 'error').inc();
-			logger.error('Error assigning role:', Error);
-			logger.warn(`No available roles in this server: ${interaction.guild?.name}`);
-			await interaction.reply({
-				content: 'No assignable roles available in this server!',
-				ephemeral: true,
-			});
-			return;
+			logger.error('Error assigning role:', error);
+			logger.warn(`Roles command failed for user: ${interaction.user?.tag}`);
+			status = 'error';
+		} finally {
+			const duration = (performance.now() - startTime) / 1000;
+			responseTimeHistogram.labels('roles', status).observe(duration);
 		}
-
-		await interaction.reply(menuData);
-		commandCounter.labels('roles', 'success').inc();
-		weatherApiCounter.labels('current', 'success').inc();
-		logger.info(`Successfully assigned role for ${interaction.user?.tag}`);
-		// Await interaction.reply( {
-		// 	content: 'Choose a role to add/remove:',
-		// 	components: [roleMenu],
-		// 	ephemeral:true;
 	}
 },
 );

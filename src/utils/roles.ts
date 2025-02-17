@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+// Unused logging to file logic: import fs from 'fs/promises';
+// import path from 'path';
 import {
 	type Role,
 	type Guild,
@@ -14,6 +14,7 @@ import {
 } from 'discord.js';
 import {roleAssignmentCounter} from './metrics';
 import logger from './logger';
+// Unused import {error} from 'winston';
 
 const dangerousPermissions = [
 	PermissionFlagsBits.Administrator,
@@ -30,7 +31,7 @@ const dangerousPermissions = [
 	PermissionFlagsBits.MoveMembers,
 ];
 const rolesPerPage = 25;
-const logFilePath = path.join(process.cwd(), 'roleExclusions.log');
+// Unused const logFilePath = path.join(process.cwd(), 'roleExclusions.log');
 
 function getFlaggedPermissions(role: Role): string[] {
 	return dangerousPermissions
@@ -43,25 +44,18 @@ function getFlaggedPermissions(role: Role): string[] {
 }
 
 async function logExcludedRole(role: Role) {
-	const logEntry = {
-		timestamp: new Date().toISOString(),
-		roleId: role.id,
+	logger.warn('Excluded dangerous roles from assignment', {
+		roleUd: role.id,
 		roleName: role.name,
 		permissions: getFlaggedPermissions(role),
-	};
+	});
 
-	try {
-		logger.warn(`Excluding role with dangerous permissions: ${role.name}`);
-		logger.debug(`Role ID: ${role.id}, Permissions: ${JSON.stringify(logEntry.permissions)}`);
-		logger.silly(`Full role object: ${JSON.stringify(role.toJSON())}`);
-		await fs.appendFile(
-			logFilePath,
-			`${JSON.stringify(logEntry)}\n`,
-		);
-	} catch (error) {
-		console.error('Failed to write to role exclusion log:', error);
-		logger.error('Failed to write to role exclusion log:', error);
-	}
+	// Unused try {
+	// 	logger.warn('Excluded dangerous roles from assignment', logEntry);
+	// } catch (error) {
+	// 	console.error('Failed to write to role exclusion log:', error);
+	// 	logger.error('Failed to write to role exclusion log:');
+	// }
 }
 
 export function getAssignableRoles(guild: Guild): Role[] {
@@ -72,7 +66,7 @@ export function getAssignableRoles(guild: Guild): Role[] {
 		const isManaged = role.managed;
 		const isBotRole = role.id === guild.members.me?.roles.highest.id;
 		const isEveryone = role.id === guild.id;
-		// Unused const isEditable = role.editable;
+		const isEditable = role.editable;
 
 		if (hasDangerousPerms) {
 			excludedRoles.push(role);
@@ -82,12 +76,14 @@ export function getAssignableRoles(guild: Guild): Role[] {
 				&& !isManaged
 				&& !isBotRole
 				&& !isEveryone
-				&& role.editable;
+				&& isEditable;
 	}).values());
 
 	if (excludedRoles.length > 0) {
 		Promise.all(excludedRoles.map(logExcludedRole))
-			.catch(console.error);
+			.catch(error =>
+				logger.error('Error logging excluded roles', error),
+			);
 	}
 
 	return roles.sort((a, b) => b.position - a.position);
@@ -107,10 +103,8 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 	const roleId = interaction.values[0];
 	const guild = interaction.guild!;
 	const role = guild.roles.cache.get(roleId);
-	logger.info(`Role selection initiated by ${interaction.user.tag}`);
-	logger.verbose(`Selected role ID: ${roleId}`);
-
 	const assignableRoles = getAssignableRoles(guild);
+
 	if (!role || !assignableRoles.find(r => r.id === roleId)) {
 		roleAssignmentCounter.labels('error', 'role').inc();
 		await interaction.reply({
@@ -125,8 +119,6 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 
 		if (member.roles.cache.has(roleId)) {
 			roleAssignmentCounter.labels('action', 'role').inc();
-			logger.info(`Role removed: ${role.name} from ${interaction.user.tag}`);
-			logger.debug(`Role removal ID: ${roleId}`);
 			await member.roles.remove(roleId);
 			await interaction.reply({
 				content: `Removed **${role.name}** role!`,
@@ -134,8 +126,6 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 			});
 		} else {
 			roleAssignmentCounter.labels('action', 'role').inc();
-			logger.info(`Role added: ${role.name} to ${interaction.user.tag}`);
-			logger.debug(`Role addition ID: ${roleId}`);
 			await member.roles.add(roleId);
 			await interaction.reply({
 				content: `Added **${role.name}** role!`,
@@ -144,9 +134,12 @@ export async function handleRoleSelect(interaction: StringSelectMenuInteraction)
 		}
 	} catch (error) {
 		roleAssignmentCounter.labels('error', 'role').inc();
-		console.error('Role management error:', error);
-		logger.error('Role management error:', error);
-		logger.warn(`Failed role update for user: ${interaction.user.tag}`);
+		logger.error('Role management error:', {
+			error,
+			roleId,
+			userId: interaction.user.id,
+			guildId: interaction.guildId,
+		});
 		await interaction.reply({
 			content: 'Failed to update roles. Please check bot permissions!',
 			ephemeral: true,
@@ -159,8 +152,6 @@ export function createRoleMenu(guild: Guild, page = 0) {
 	const totalPages = Math.ceil(allRoles.length / rolesPerPage);
 	const startIdx = page * rolesPerPage;
 	const pageRoles = allRoles.slice(startIdx, startIdx + rolesPerPage);
-	logger.debug(`Creating role menu page ${page}`);
-	logger.silly(`Guild roles: ${JSON.stringify(guild.roles.cache.size)}`);
 
 	if (pageRoles.length === 0) {
 		return null;
@@ -180,7 +171,7 @@ export function createRoleMenu(guild: Guild, page = 0) {
 		buttons.push(
 			new ButtonBuilder()
 				.setCustomId(`roles-prev_${page}`)
-				.setLabel('Previous')
+				.setLabel('Previous page')
 				.setStyle(ButtonStyle.Secondary),
 		);
 	}
@@ -189,7 +180,7 @@ export function createRoleMenu(guild: Guild, page = 0) {
 		buttons.push(
 			new ButtonBuilder()
 				.setCustomId(`roles-next_${page}`)
-				.setLabel('Next')
+				.setLabel('Next page')
 				.setStyle(ButtonStyle.Primary),
 		);
 	}
@@ -227,7 +218,12 @@ export async function handleRolePagination(interaction: ButtonInteraction) {
 	} else if (action === 'prev') {
 		targetPage--;
 	} else {
-		console.error('Invalid pagination action:', action);
+		roleAssignmentCounter.labels('error', 'role').inc();
+		logger.error('Invalid pagination action:', {
+			actionType: 'navigation',
+			customId: interaction.customId,
+			userId: interaction.user.id,
+		});
 		await interaction.reply({
 			content: 'Invalid pagination action.',
 			ephemeral: true,
