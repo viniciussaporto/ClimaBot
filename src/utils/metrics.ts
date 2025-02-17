@@ -29,6 +29,7 @@ export const responseTimeHistogram = new Histogram({
 	help: 'Response time for Discord commands',
 	labelNames: ['command', 'status'],
 	buckets: [0.1, 0.5, 1, 2.5, 5, 10],
+	registers: [register],
 });
 
 export {register};
