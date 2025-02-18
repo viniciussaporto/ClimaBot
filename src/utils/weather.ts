@@ -13,16 +13,17 @@ export type Location = {
 };
 
 export type WeatherData = {
-	latitude: number;
-	longitude: number;
-	generationtime_ms: number;
-	utcOffsetSeconds: number;
-	timezone: string;
-	timezone_abbreviation: string;
-	elevation: number;
-	hourly_units: HourlyUnits;
-	hourly: Hourly;
-};
+	current: {
+		time: string;
+		interval: number;
+		temperature_2m: number;
+		relativehumidity_2m: number;
+		weathercode: number;
+		pressure_msl: number;
+		cloudcover: number;
+		windspeed_10m: number;
+		winddirection_10m: number;
+	};};
 
 export type Hourly = {
 	time: string[];
@@ -142,50 +143,33 @@ export async function getWeatherData(coordinates: Location) {
 	const {lat, lng, formattedLocation} = coordinates;
 	const trimmedLat = lat.toString().trim();
 	const trimmedLng = lng.toString().trim();
-	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&hourly=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
-	logger.verbose('Fetching weather data from Open-Meteo');
+	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&current=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+	logger.verbose('Fetching current weather data from Open-Meteo');
 	logger.debug(`Coordinates: ${coordinates.lat},${coordinates.lng}`);
 
 	try {
 		const response = await axios.get<WeatherData>(weatherUrl);
-		const {hourly, utcOffsetSeconds} = response.data;
+		const {current} = response.data;
 
-		if (!hourly?.temperature_2m || hourly.temperature_2m.length === 0) {
-			logger.error('Weather API error:', Error);
+		if (!current?.temperature_2m) {
+			logger.error('Weather API error: Missing current data');
 			logger.warn(`Weather data not available for: lat:${trimmedLat} long:${trimmedLng}`);
 			throw new Error('Weather data not available');
 		}
 
-		const currentDateTime = new Date();
-		const adjustedDateTime = new Date(currentDateTime.getTime() + (utcOffsetSeconds * 1000));
-		const closestTimeIndex = getClosestTimeIndex(hourly.time, adjustedDateTime.getTime());
-
-		if (closestTimeIndex === -1) {
-			logger.error('Closest time index failed:', Error);
-			logger.warn('Failed to get closes time index');
-			throw new Error('Unable to determine closest time index');
-		}
-
-		const temperature = hourly.temperature_2m[closestTimeIndex];
-		const weatherCode = hourly.weathercode[closestTimeIndex];
-		const windSpeed = hourly.windspeed_10m[closestTimeIndex];
-		const windDirection = hourly.winddirection_10m[closestTimeIndex];
-		const relativeHumidity = hourly.relativehumidity_2m[closestTimeIndex];
-		const relativePressure = hourly.pressure_msl[closestTimeIndex];
-		const cloudiness = hourly.cloudcover[closestTimeIndex];
-
 		logger.info(`Weather data retrieved for ${coordinates.formattedLocation}`);
 		logger.silly(`Raw weather response: ${JSON.stringify(response.data)}`);
+
 		return {
-			temperature,
-			weatherDescription: getWeatherDescription(weatherCode),
-			windSpeed,
-			windDirection,
+			temperature: current.temperature_2m,
+			weatherDescription: getWeatherDescription(current.weathercode),
+			windSpeed: current.windspeed_10m,
+			windDirection: current.winddirection_10m,
 			formattedLocation,
-			relativeHumidity,
-			relativePressure,
-			cloudiness,
-			weatherCode,
+			relativeHumidity: current.relativehumidity_2m,
+			relativePressure: current.pressure_msl,
+			cloudiness: current.cloudcover,
+			weatherCode: current.weathercode,
 			trimmedLat,
 			trimmedLng,
 		};
@@ -197,22 +181,22 @@ export async function getWeatherData(coordinates: Location) {
 	}
 }
 
-function getClosestTimeIndex(timeArray: string[], targetDateTime: number): number {
-	let minDiff = Infinity;
-	let closestIndex = 0;
+// Unesed logic that gives wrong weather data function getClosestTimeIndex(timeArray: string[], targetDateTime: number): number {
+// 	let minDiff = Infinity;
+// 	let closestIndex = 0;
 
-	for (let i = 0; i < timeArray.length; i++) {
-		const time = timeArray[i];
-		const diff = Math.abs(new Date(time).getTime() - targetDateTime);
+// 	for (let i = 0; i < timeArray.length; i++) {
+// 		const time = timeArray[i];
+// 		const diff = Math.abs(new Date(time).getTime() - targetDateTime);
 
-		if (diff < minDiff) {
-			minDiff = diff;
-			closestIndex = i;
-		}
-	}
+// 		if (diff < minDiff) {
+// 			minDiff = diff;
+// 			closestIndex = i;
+// 		}
+// 	}
 
-	return closestIndex;
-}
+// 	return closestIndex;
+// }
 
 const getWeatherDescription = (weatherCode: number): string => {
 	const weatherCodeMappings = new Map<number, string>([
