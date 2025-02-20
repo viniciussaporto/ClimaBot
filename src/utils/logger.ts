@@ -26,9 +26,12 @@ const logger = winston.createLogger({
 	),
 	transports: [
 		new DailyRotateFile({
-			filename: '/var/log/discord-bot-%DATE%.log',
+			filename: '/var/log/climabot.log',
 			datePattern: 'YYYY-MM-DD',
 			maxFiles: '7d',
+			zippedArchive: true,
+			maxSize: '20m',
+			auditFile: '/var/log/climabot-audit.json',
 		}) as unknown as winston.transport,
 		new LokiTransport(lokiConfig) as unknown as winston.transport,
 		new winston.transports.Console(),
