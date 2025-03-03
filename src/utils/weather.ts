@@ -23,6 +23,7 @@ export type WeatherData = {
 		cloudcover: number;
 		windspeed_10m: number;
 		winddirection_10m: number;
+		apparent_temperature: number;
 	};};
 
 export type Hourly = {
@@ -143,7 +144,7 @@ export async function getWeatherData(coordinates: Location) {
 	const {lat, lng, formattedLocation} = coordinates;
 	const trimmedLat = lat.toString().trim();
 	const trimmedLng = lng.toString().trim();
-	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&current=temperature_2m,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
+	const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${trimmedLat}&longitude=${trimmedLng}&current=temperature_2m,apparent_temperature,relativehumidity_2m,weathercode,pressure_msl,cloudcover,windspeed_10m,winddirection_10m&forecast_days=1&timezone=auto`;
 	logger.verbose('Fetching current weather data from Open-Meteo');
 	logger.debug(`Coordinates: ${coordinates.lat},${coordinates.lng}`);
 
@@ -162,6 +163,7 @@ export async function getWeatherData(coordinates: Location) {
 
 		return {
 			temperature: current.temperature_2m,
+			feelsLike: current.apparent_temperature,
 			weatherDescription: getWeatherDescription(current.weathercode),
 			windSpeed: current.windspeed_10m,
 			windDirection: current.winddirection_10m,
