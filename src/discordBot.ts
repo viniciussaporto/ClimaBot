@@ -155,9 +155,10 @@ client.on('interactionCreate', async (interaction: BaseInteraction) => {
 				.setDescription(`**${weatherDescription}**`)
 				.addFields(
 					{
-						name: '\u200b', // Zero-width space
+						name: '\u200b',
 						value: [
 							`🌡 **Temperature:** ${temperature}°C`,
+							`🌡️ **Feels Like:** ${response.feelsLike}°C`,
 							`💧 **Humidity:** ${relativeHumidity}%`,
 							`☁ **Clouds:** ${cloudiness}%`,
 						].join('\n'),
