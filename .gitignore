@@ -1,6 +1,3 @@
+.gitignore
+.env.old
 .env
-node_modules/
-ClimaBot.code-workspace
-dist/
-roleExclusions.log
-package-lock.json
