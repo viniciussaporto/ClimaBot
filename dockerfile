@@ -1,7 +1,5 @@
 # ─── Stage 1: builder ─────────────────────────────────────────
-# rust:1.83 ships with Cargo 1.83, which supports edition2024.
-# 1.79 was too old and caused: "feature `edition2024` is required"
-FROM rustlang/rust:nightly-slim-bookworm AS builder
+FROM rust:1.83-slim-bookworm AS builder
 
 WORKDIR /usr/src/climabot
 
@@ -13,17 +11,16 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Dependency caching layer ──────────────────────────────────
-# Copy only the manifest first so Docker reuses this layer whenever
-# Cargo.toml / Cargo.lock are unchanged.
+# Using wildcard Cargo.lock* ensures it builds even if you deleted the lockfile
 COPY Cargo.toml Cargo.lock* ./
+
+# Dummy build to cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
-    # cargo build --release && \
-    cargo -Zunstable-options build --release && \
+    cargo build --release && \
     rm -rf src
 
 # ── Application build ─────────────────────────────────────────
 COPY src ./src
-# Touch main.rs so cargo sees the real source as newer than the cached dummy
 RUN touch src/main.rs && cargo build --release
 
 # ─── Stage 2: runtime ─────────────────────────────────────────
@@ -36,6 +33,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* && \
     mkdir -p /var/log/climabot
 
+# Ensure we copy the binary from the correct path
 COPY --from=builder /usr/src/climabot/target/release/climabot /usr/local/bin/climabot
 
 VOLUME ["/var/log/climabot"]
