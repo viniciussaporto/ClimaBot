@@ -1,9 +1,10 @@
 # ─── Stage 1: builder ─────────────────────────────────────────
-FROM rust:1.83-slim-bookworm AS builder
+# Rust 1.85 is the first stable version to support Edition 2024
+FROM rust:1.85-slim-bookworm AS builder
 
 WORKDIR /usr/src/climabot
 
-# Build-time deps needed to compile openssl-sys and mongodb TLS
+# Build-time deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         pkg-config \
@@ -11,7 +12,6 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Dependency caching layer ──────────────────────────────────
-# Using wildcard Cargo.lock* ensures it builds even if you deleted the lockfile
 COPY Cargo.toml Cargo.lock* ./
 
 # Dummy build to cache dependencies
@@ -33,12 +33,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* && \
     mkdir -p /var/log/climabot
 
-# Ensure we copy the binary from the correct path
 COPY --from=builder /usr/src/climabot/target/release/climabot /usr/local/bin/climabot
 
 VOLUME ["/var/log/climabot"]
-
-# Prometheus metrics
 EXPOSE 9464
 
 CMD ["climabot"]
