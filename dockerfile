@@ -17,7 +17,8 @@ RUN apt-get update && \
 # Cargo.toml / Cargo.lock are unchanged.
 COPY Cargo.toml Cargo.lock* ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
+    # cargo build --release && \
+    cargo -Zunstable-options build --release && \
     rm -rf src
 
 # ── Application build ─────────────────────────────────────────
