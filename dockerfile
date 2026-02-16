@@ -1,7 +1,7 @@
 # ─── Stage 1: builder ─────────────────────────────────────────
 # rust:1.83 ships with Cargo 1.83, which supports edition2024.
 # 1.79 was too old and caused: "feature `edition2024` is required"
-FROM rust:1.83-slim-bookworm AS builder
+FROM rustlang/rust:nightly-slim AS builder
 
 WORKDIR /usr/src/climabot
 
@@ -15,7 +15,7 @@ RUN apt-get update && \
 # ── Dependency caching layer ──────────────────────────────────
 # Copy only the manifest first so Docker reuses this layer whenever
 # Cargo.toml / Cargo.lock are unchanged.
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock* ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
     rm -rf src
