@@ -4,6 +4,8 @@ FROM rust:1.85-slim-bookworm AS builder
 
 WORKDIR /usr/src/climabot
 
+RUN rustc --version && cargo --version
+
 # Build-time deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
