@@ -1,7 +1,7 @@
 # ─── Stage 1: builder ─────────────────────────────────────────
 # rust:1.83 ships with Cargo 1.83, which supports edition2024.
 # 1.79 was too old and caused: "feature `edition2024` is required"
-FROM rustlang/rust:nightly-slim AS builder
+FROM rustlang/rust:nightly-slim-bookworm AS builder
 
 WORKDIR /usr/src/climabot
 
