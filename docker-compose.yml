@@ -1,0 +1,35 @@
+services:
+
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      # Override the URI from .env so the bot finds the mongo container by name
+      MONGODB_URI: mongodb://mongo:27017
+    ports:
+      - "9464:9464"       # Prometheus /metrics
+    volumes:
+      - bot_logs:/var/log/climabot
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo_data:/data/db
+    # Keeps the port internal — only the bot container needs to reach it.
+    # Expose 27017 here if you also want host access (e.g. Compass).
+    # ports:
+    #   - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  bot_logs:
+  mongo_data:
