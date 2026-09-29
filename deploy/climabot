@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+# ClimaBot deployment helper: switches between the Rust and the JavaScript
+# (TypeScript) bot, and updates whichever one is running.
+#
+#   climabot start-rust        pull + rebuild the Rust bot, stop the JS bot, start Rust
+#   climabot start-javascript  pull + rebuild the JS bot, stop the Rust stack, start JS
+#   climabot update            pull + rebuild + restart whichever bot is running
+#   climabot stop              stop whichever bot(s) are running
+#   climabot status            show what is running
+#
+# Installed by deploy/install.sh, which also adds the aliases
+# climabot-start-rust, climabot-start-javascript, climabot-update and
+# climabot-stop. Paths and branches can be overridden through the
+# variables below (e.g. in /etc/default/climabot).
+
+set -euo pipefail
+
+[[ -r /etc/default/climabot ]] && . /etc/default/climabot
+
+RUST_DIR=${CLIMABOT_RUST_DIR:-/root/climabot-rust}         # git checkout (branch rust) + compose project
+RUST_BRANCH=${CLIMABOT_RUST_BRANCH:-rust}
+JS_SRC_DIR=${CLIMABOT_JS_SRC_DIR:-/root/ClimaBot}          # git checkout (branch DeployThis)
+JS_BRANCH=${CLIMABOT_JS_BRANCH:-DeployThis}
+JS_STACK_DIR=${CLIMABOT_JS_STACK_DIR:-/root/climabot-js}   # compose project for the JS bot
+MONITORING_NETWORK=${CLIMABOT_MONITORING_NETWORK:-climabot-monitoring}
+
+log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+rust_compose() { docker compose --project-directory "$RUST_DIR" -f "$RUST_DIR/docker-compose.yml" "$@"; }
+js_compose() { docker compose --project-directory "$JS_STACK_DIR" -f "$JS_STACK_DIR/docker-compose.yml" "$@"; }
+
+rust_running() { [[ -f "$RUST_DIR/docker-compose.yml" ]] && [[ -n "$(rust_compose ps -q --status running climabot 2>/dev/null)" ]]; }
+js_running() { [[ -f "$JS_STACK_DIR/docker-compose.yml" ]] && [[ -n "$(js_compose ps -q --status running climabot 2>/dev/null)" ]]; }
+
+git_pull() {
+    local dir=$1 branch=$2
+    [[ -d "$dir/.git" ]] || die "$dir is not a git checkout"
+    log "Pulling $branch in $dir"
+    git -C "$dir" fetch --prune origin "$branch"
+    git -C "$dir" checkout -q "$branch"
+    git -C "$dir" merge --ff-only "origin/$branch"
+    git -C "$dir" log --oneline -1
+}
+
+ensure_network() {
+    docker network inspect "$MONITORING_NETWORK" >/dev/null 2>&1 || {
+        log "Creating network $MONITORING_NETWORK"
+        docker network create "$MONITORING_NETWORK" >/dev/null
+    }
+}
+
+# Wait for the bot to log in to Discord (or give up after ~90 s).
+wait_for_login() {
+    local compose=$1 pattern=$2
+    log "Waiting for the bot to log in to Discord"
+    for _ in $(seq 1 45); do
+        if $compose logs --since 5m climabot 2>&1 | grep -q "$pattern"; then
+            log "Bot is online"
+            return 0
+        fi
+        sleep 2
+    done
+    $compose logs --tail 30 climabot || true
+    die "bot did not report a Discord login; see the logs above"
+}
+
+build_rust() {
+    git_pull "$RUST_DIR" "$RUST_BRANCH"
+    log "Pulling images (MongoDB, FlareSolverr, Byparr)"
+    rust_compose pull --ignore-buildable --quiet
+    log "Building the Rust bot"
+    rust_compose build climabot
+}
+
+build_js() {
+    git_pull "$JS_SRC_DIR" "$JS_BRANCH"
+    log "Building the JavaScript bot"
+    js_compose build climabot
+}
+
+up_rust() {
+    ensure_network
+    log "Starting the Rust stack"
+    rust_compose up -d --remove-orphans
+    wait_for_login rust_compose "Logged in to Discord"
+}
+
+up_js() {
+    ensure_network
+    log "Starting the JavaScript bot"
+    js_compose up -d --remove-orphans
+    wait_for_login js_compose "Logged in as"
+}
+
+stop_rust() {
+    if [[ -f "$RUST_DIR/docker-compose.yml" ]]; then
+        log "Stopping the Rust stack"
+        rust_compose stop
+    fi
+}
+
+stop_js() {
+    if [[ -f "$JS_STACK_DIR/docker-compose.yml" ]]; then
+        log "Stopping the JavaScript bot"
+        js_compose stop
+    fi
+}
+
+# Only one bot may run: both use the same Discord token and metrics port.
+cmd_start_rust() {
+    build_rust          # build first so the running bot stays up meanwhile
+    stop_js
+    up_rust
+}
+
+cmd_start_javascript() {
+    build_js
+    stop_rust
+    up_js
+}
+
+cmd_update() {
+    if rust_running; then
+        build_rust
+        up_rust
+    elif js_running; then
+        build_js
+        up_js
+    else
+        die "no bot is running; use 'climabot start-rust' or 'climabot start-javascript'"
+    fi
+}
+
+cmd_stop() {
+    local stopped=0
+    # Checks every service of the Rust stack, so MongoDB and the browsers
+    # are stopped too even if the bot itself already exited.
+    if [[ -f "$RUST_DIR/docker-compose.yml" && -n "$(rust_compose ps -q --status running 2>/dev/null)" ]]; then
+        stop_rust
+        stopped=1
+    fi
+    if js_running; then
+        stop_js
+        stopped=1
+    fi
+    if (( stopped )); then log "Stopped"; else log "No bot was running"; fi
+}
+
+cmd_status() {
+    if rust_running; then
+        echo "Rust bot: running ($(git -C "$RUST_DIR" log --oneline -1 2>/dev/null))"
+        rust_compose ps --format '  {{.Service}}: {{.Status}}'
+    else
+        echo "Rust bot: stopped"
+    fi
+    if js_running; then
+        echo "JavaScript bot: running ($(git -C "$JS_SRC_DIR" log --oneline -1 2>/dev/null))"
+    else
+        echo "JavaScript bot: stopped"
+    fi
+}
+
+case "${1:-}" in
+    start-rust) cmd_start_rust ;;
+    start-javascript | start-js) cmd_start_javascript ;;
+    update) cmd_update ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    *)
+        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+        exit 1
+        ;;
+esac

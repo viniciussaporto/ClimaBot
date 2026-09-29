@@ -105,6 +105,18 @@ docker compose exec climabot climabot selfcheck [product-url ...]
 
 For local development: `cargo test` and `cargo run` (reads `.env`).
 
+#### Managing the production server
+
+`deploy/install.sh` installs a `climabot` command (plus aliases) that switches between this Rust bot and the previous TypeScript bot, which stays available as a fallback. Only one runs at a time, since both use the same token and metrics port:
+
+| Alias | Command | What it does |
+| --- | --- | --- |
+| `climabot-start-rust` | `climabot start-rust` | `git pull` + rebuild the Rust bot (and pull MongoDB/browser images), stop the JS bot, start the Rust stack |
+| `climabot-start-javascript` | `climabot start-javascript` | `git pull` + rebuild the JS bot (`DeployThis` branch), stop the Rust stack, start the JS bot |
+| `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running |
+| `climabot-stop` | `climabot stop` | Stop whichever bot is running |
+| `climabot-status` | `climabot status` | Show what is running |
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
