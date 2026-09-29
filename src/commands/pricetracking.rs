@@ -38,7 +38,7 @@ pub fn register() -> CreateCommand {
         .required(true)
     };
     CreateCommand::new("pt")
-        .description("Track product prices (checked every hour)")
+        .description("Track product prices (checked about every hour)")
         .add_option(
             CreateCommandOption::new(CommandOptionType::SubCommand, "add", "Start tracking a product")
                 .add_sub_option(
@@ -123,7 +123,7 @@ async fn add(store: &Store, user_id: u64, raw_url: &str) -> Result<EditInteracti
                     .title(format!("✅ Now tracking: {}", product.name))
                     .url(&url)
                     .description(format!(
-                        "Current price: **{}**\nI'll check it every hour and DM you when it changes.",
+                        "Current price: **{}**\nI'll check it about every hour and DM you when it changes.",
                         format_price(product.price, product.currency.as_deref())
                     ))
                     .color(EMBED_COLOR),
@@ -191,7 +191,7 @@ async fn list(store: &Store, user_id: u64) -> Result<EditInteractionResponse> {
         CreateEmbed::new()
             .title(format!("📦 Tracked Products ({}/{MAX_PRODUCTS_PER_USER})", products.len()))
             .description(join_limited(entries, "\n\n", MAX_DESCRIPTION))
-            .footer(CreateEmbedFooter::new("Each product is re-checked every hour from when it was added"))
+            .footer(CreateEmbedFooter::new("Each product is re-checked about every hour, at a slightly random time"))
             .color(EMBED_COLOR),
     ))
 }
@@ -301,6 +301,7 @@ mod tests {
             created_at: DateTime::now(),
             last_checked: None,
             next_check_at: DateTime::now(),
+            slot_at: None,
             failures: 0,
             lease_until: None,
         }

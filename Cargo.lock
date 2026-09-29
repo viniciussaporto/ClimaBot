@@ -314,6 +314,7 @@ dependencies = [
  "axum",
  "chrono",
  "dotenvy",
+ "fastrand",
  "futures-util",
  "mongodb",
  "prometheus",

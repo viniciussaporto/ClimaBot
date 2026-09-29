@@ -40,6 +40,7 @@ dotenvy = "0.15"
 # Database for price tracking
 mongodb = "3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
+fastrand = "2"
 
 # Web scraping
 scraper = "0.27"
@@ -59,3 +60,6 @@ anyhow = "1"
 
 [profile.release]
 strip = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
