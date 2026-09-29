@@ -1,34 +1,93 @@
-services:
+# ClimaBot stack: the bot, its MongoDB, and two challenge-solving browsers
+# (FlareSolverr/Chrome and Byparr/Firefox) used to load shop pages behind bot
+# protection.
+#
+# Networks:
+#   default     – internet access for the bot (Discord, weather APIs, shops)
+#   db          – internal only: bot <-> MongoDB (Mongo has no other access)
+#   scraper     – bot <-> FlareSolverr/Byparr; the browsers get internet
+#                 access but cannot reach MongoDB or the monitoring stack
+#   monitoring  – shared with the monitoring stack (Prometheus scrapes
+#                 climabot:9464; Grafana, Mimir, Loki are reachable).
+#                 Create it once with: docker network create climabot-monitoring
+name: climabot
 
-  bot:
+services:
+  climabot:
+    image: climabot:rust
     build: .
     env_file: .env
     environment:
-      # Override the URI from .env so the bot finds the mongo container by name
       MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: climabot
+      FLARESOLVERR_URL: http://flaresolverr:8191
+      BYPARR_URL: http://byparr:8191
     ports:
-      - "9464:9464"       # Prometheus /metrics
+      - "127.0.0.1:${METRICS_HOST_PORT:-9465}:9464"   # Prometheus /metrics
     volumes:
-      - bot_logs:/var/log/climabot
+      # Set CLIMABOT_LOG_DIR in .env to a host path to keep logs outside Docker.
+      - ${CLIMABOT_LOG_DIR:-bot_logs}:/var/log/climabot
+    networks:
+      - default
+      - db
+      - scraper
+      - monitoring
     depends_on:
       mongo:
         condition: service_healthy
+      flaresolverr:
+        condition: service_started
+      byparr:
+        condition: service_started
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      LOG_LEVEL: info
+      TZ: UTC
+    networks:
+      - scraper
+    # Each page load runs a Chrome instance; keep it from starving the host.
+    mem_limit: ${FLARESOLVERR_MEM_LIMIT:-1g}
+    # Docker's default 64 MB /dev/shm crashes browsers on heavy pages.
+    shm_size: 512m
+    restart: unless-stopped
+
+  # Same API as FlareSolverr, but Firefox-based (Camoufox): passes Cloudflare
+  # challenges FlareSolverr times out on. Tried after FlareSolverr.
+  byparr:
+    image: ghcr.io/thephaseless/byparr:latest
+    networks:
+      - scraper
+    mem_limit: ${BYPARR_MEM_LIMIT:-1g}
+    shm_size: 512m
     restart: unless-stopped
 
   mongo:
-    image: mongo:7
+    image: mongo:8
+    # Cap the WiredTiger cache; the default is half of the host's RAM.
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-0.25}"]
     volumes:
       - mongo_data:/data/db
-    # Keeps the port internal — only the bot container needs to reach it.
-    # Expose 27017 here if you also want host access (e.g. Compass).
-    # ports:
-    #   - "27017:27017"
+    networks:
+      - db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
+
+networks:
+  default: {}
+  db:
+    internal: true
+  scraper: {}
+  monitoring:
+    name: ${MONITORING_NETWORK:-climabot-monitoring}
+    external: true
 
 volumes:
   bot_logs:

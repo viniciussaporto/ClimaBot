@@ -86,7 +86,24 @@
 </p>
 
 Well, to use it, it's as simple as clicking the `View Demo` button at the start of this page and adding it to your Discord server.
-If you want to self-host (which is what I recommend) you should clone this repository into your host, install node.js and npm, create a .env file with your Discord Bot Token(TOKEN), OpenCage API Key(OPENCAGEAPIKEY), Discord Bot Client ID(CLIENT_ID) and proceed to run it by typing first ```npm install```, and after ```npm start```.
+
+If you want to self-host (which is what I recommend), ClimaBot is written in Rust and ships as a Docker image:
+
+1. Create a bot at the [Discord Developer Portal](https://discord.com/developers/applications) and invite it with the `bot` and `applications.commands` scopes and the **Manage Roles** permission (needed for `/roles`). No privileged gateway intents are required.
+2. Get a free API key from [OpenCage](https://opencagedata.com).
+3. Copy `.env.example` to `.env` and fill in `DISCORD_TOKEN` and `OPENCAGEAPIKEY`.
+4. Create the network shared with your monitoring stack (once) with `docker network create climabot-monitoring`, and attach Prometheus to it.
+5. Run `docker compose up -d --build`. This starts the bot and a MongoDB instance on an internal network only the bot can reach.
+
+Prometheus scrapes `climabot:9464/metrics` over the shared network (it is also published on `127.0.0.1:9465`). Price-tracking data lives in MongoDB (`products` and `price_history` collections), and JSON logs rotate daily under `/var/log/climabot`.
+
+To verify a deployment (Discord credentials, registered commands, per-server role menus, weather APIs, database) run:
+
+```sh
+docker compose exec climabot climabot selfcheck [product-url ...]
+```
+
+For local development: `cargo test` and `cargo run` (reads `.env`).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -144,7 +161,20 @@ This is an example of how to list things you need to use the software and how to
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Simply type /weather and your desired location to get the climate for in your Discord Server chat.
+| Command | What it does |
+| --- | --- |
+| `/weather <location>` | Current conditions for a location |
+| `/forecast <location>` | 5-day forecast |
+| `/roles` | Menu to toggle self-assignable roles (roles with moderation/admin permissions, managed roles and roles above the bot are never offered) |
+| `/pt add <url>` | Track a product page's price in any currency; re-checked every hour from when it was added, with a DM when it changes |
+| `/pt list` / `/pt history <item>` / `/pt remove <item>` | Manage tracked products (`item` is the position from `/pt list` or the URL) |
+| `/help` | Command overview |
+
+Price tracking tries a direct request first, then two challenge-solving browsers that also render JavaScript: [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) (Chrome; handles Akamai and many Cloudflare pages) and [Byparr](https://github.com/ThePhaseless/Byparr) (Firefox; handles Cloudflare challenges FlareSolverr can't). The method that last worked for a shop is tried first on the next check. Prices are read from schema.org data, product meta tags, dedicated rules for Amazon and AliExpress, or common price markup, in any currency.
+
+Some shops block datacenter IPs outright, whatever the browser does (Mercado Livre's website, for example). For those, set `SCRAPER_PROXY` to a residential proxy, or, for Mercado Livre specifically, set `ML_CLIENT_ID`/`ML_CLIENT_SECRET` from a free [Mercado Livre developer app](https://developers.mercadolivre.com.br) to use their official API. Shops that adapt to the visitor's country (AliExpress) show prices for the server's or proxy's country.
+
+To debug a shop: save the page and run `climabot extract page.html <url>`.
 
 <!-- _For more examples, please refer to the [Documentation](https://example.com)_ -->
 
