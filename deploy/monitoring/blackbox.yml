@@ -1,0 +1,31 @@
+# Blackbox exporter modules used by Prometheus' `blackbox` job to probe the
+# public endpoints (installed to /root/monitoring/blackbox.yml by
+# deploy/grafana/install.sh). The user agent is explicit because Caddy
+# rejects requests without one, and it makes probes easy to filter out of
+# website statistics.
+modules:
+  # Any page that must answer 2xx (redirects followed, TLS verified).
+  http_2xx:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      fail_if_not_ssl: true
+      headers:
+        User-Agent: "vinisaporto-uptime (blackbox_exporter)"
+
+  # The status API: must also report every service as healthy.
+  http_status_ok:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      fail_if_not_ssl: true
+      fail_if_body_not_matches_regexp:
+        - '"ok":\s*true'
+      headers:
+        User-Agent: "vinisaporto-uptime (blackbox_exporter)"
