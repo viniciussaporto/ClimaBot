@@ -65,7 +65,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "4h"
+            "repeat_interval": "4h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -126,7 +129,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "4h"
+            "repeat_interval": "4h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         }
@@ -572,6 +578,23 @@
             "repeat_interval": "4h"
           },
           "isPaused": false
+        }
+      ]
+    }
+  ],
+  "muteTimes": [
+    {
+      "orgId": 1,
+      "name": "ClimaBot nightly update",
+      "time_intervals": [
+        {
+          "times": [
+            {
+              "start_time": "05:25",
+              "end_time": "06:15"
+            }
+          ],
+          "location": "UTC"
         }
       ]
     }

@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly ClimaBot update at 05:30 UTC (02:30 Brasília: no command usage 05:00-13:00 UTC)
+
+[Timer]
+# Grafana mutes the ClimaBot alerts 05:25-06:15 UTC for this (deploy/grafana/build_alerts.py).
+# Keep both in sync if this time changes.
+OnCalendar=*-*-* 05:30:00 UTC
+# Missed runs (server was off) are skipped rather than restarting the bot during the day.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

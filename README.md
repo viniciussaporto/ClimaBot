@@ -113,7 +113,7 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 | --- | --- | --- |
 | `climabot-start-rust` | `climabot start-rust` | `git pull` + rebuild the Rust bot (and pull MongoDB/browser images), stop the JS bot, start the Rust stack |
 | `climabot-start-javascript` | `climabot start-javascript` | `git pull` + rebuild the JS bot (`javascript` branch), stop the Rust stack, start the JS bot |
-| `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running |
+| `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running. Also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users); ClimaBot alerts are muted 05:25–06:15 UTC for it |
 | `climabot-stop` | `climabot stop` | Stop whichever bot is running |
 | `climabot-status` | `climabot status` | Show what is running |
 | `climabot-logs` | `climabot logs` | Follow the running bot's logs |
