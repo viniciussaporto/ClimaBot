@@ -232,7 +232,7 @@ async fn help_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
              `/pt list` — Your tracked products\n\
              `/pt history <item>` — Price history\n\
              `/pt remove <item>` — Stop tracking\n\
-             Each product is re-checked every hour from when it was added; \
+             Each product is re-checked about every hour, at a slightly random time; \
              I'll DM you when its price changes. Any currency is supported.",
             false,
         )

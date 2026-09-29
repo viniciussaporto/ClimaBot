@@ -1,7 +1,8 @@
 //! MongoDB persistence for tracked products and their price history.
 //!
-//! Each product is checked once an hour, on the anniversary of when it was
-//! added (`next_check_at`). Workers claim a due product with an atomic
+//! Each product has an hourly slot on the anniversary of when it was added
+//! (`slot_at`), and is checked at a random time within ±15 minutes of it
+//! (`next_check_at`), so checks don't follow a machine-regular pattern. Workers claim a due product with an atomic
 //! `findOneAndUpdate` that sets a short lease, so several workers (or bot
 //! replicas) never check the same product at the same time.
 
@@ -19,8 +20,15 @@ use std::time::Duration;
 /// Upper bound on products per user, to keep the hourly load bounded.
 pub const MAX_PRODUCTS_PER_USER: u64 = 25;
 
-/// Interval between checks of the same product.
+/// Interval between checks of the same product, on average.
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(3600);
+
+/// Each check happens at a random time within this much of its hourly slot,
+/// so the gap between two checks of a product varies from 30 to 90 minutes.
+pub const CHECK_JITTER: Duration = Duration::from_secs(15 * 60);
+
+/// A (jittered) check is never scheduled sooner than this from now.
+const MIN_LEAD: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackedProduct {
@@ -33,7 +41,12 @@ pub struct TrackedProduct {
     pub last_price: Option<f64>,
     pub created_at: DateTime,
     pub last_checked: Option<DateTime>,
+    /// When the next check runs: `slot_at` plus a random jitter.
     pub next_check_at: DateTime,
+    /// The hourly slot the next check belongs to (no jitter). Missing on
+    /// products saved before jitter existed; `next_check_at` stands in.
+    #[serde(default)]
+    pub slot_at: Option<DateTime>,
     /// Consecutive failed checks (reset on success).
     pub failures: i32,
     pub lease_until: Option<DateTime>,
@@ -74,6 +87,23 @@ pub fn next_slot(scheduled: DateTime, now: DateTime) -> DateTime {
     let now = now.timestamp_millis();
     let elapsed_slots = if now < scheduled { 0 } else { (now - scheduled) / interval + 1 };
     DateTime::from_millis(scheduled + elapsed_slots.max(1) * interval)
+}
+
+/// `slot` moved by `offset_ms`, but never earlier than `MIN_LEAD` from now.
+pub fn jittered(slot: DateTime, now: DateTime, offset_ms: i64) -> DateTime {
+    let earliest = now.timestamp_millis() + MIN_LEAD.as_millis() as i64;
+    DateTime::from_millis((slot.timestamp_millis() + offset_ms).max(earliest))
+}
+
+fn random_offset_ms() -> i64 {
+    let j = CHECK_JITTER.as_millis() as i64;
+    fastrand::i64(-j..=j)
+}
+
+/// The slot after this check, and the randomized time to run it.
+fn schedule_after(product: &TrackedProduct, now: DateTime) -> (DateTime, DateTime) {
+    let slot = next_slot(product.slot_at.unwrap_or(product.next_check_at), now);
+    (slot, jittered(slot, now, random_offset_ms()))
 }
 
 fn add(t: DateTime, d: Duration) -> DateTime {
@@ -174,7 +204,8 @@ impl Store {
             last_price: Some(price),
             created_at: now,
             last_checked: Some(now),
-            next_check_at: add(now, CHECK_INTERVAL),
+            next_check_at: jittered(add(now, CHECK_INTERVAL), now, random_offset_ms()),
+            slot_at: Some(add(now, CHECK_INTERVAL)),
             failures: 0,
             lease_until: None,
         };
@@ -243,6 +274,7 @@ impl Store {
         currency: Option<&str>,
     ) -> Result<Option<f64>> {
         let now = DateTime::now();
+        let (slot, next) = schedule_after(product, now);
         let currency = currency.or(product.currency.as_deref());
         let updated = self
             .products
@@ -254,7 +286,8 @@ impl Store {
                         "currency": currency,
                         "last_price": price,
                         "last_checked": now,
-                        "next_check_at": next_slot(product.next_check_at, now),
+                        "next_check_at": next,
+                        "slot_at": slot,
                         "failures": 0,
                     },
                     "$unset": { "lease_until": "" },
@@ -285,6 +318,7 @@ impl Store {
     /// consecutive failure count.
     pub async fn record_failure(&self, product: &TrackedProduct) -> Result<i32> {
         let now = DateTime::now();
+        let (slot, next) = schedule_after(product, now);
         let updated = self
             .products
             .find_one_and_update(
@@ -293,7 +327,8 @@ impl Store {
                     "$inc": { "failures": 1 },
                     "$set": {
                         "last_checked": now,
-                        "next_check_at": next_slot(product.next_check_at, now),
+                        "next_check_at": next,
+                        "slot_at": slot,
                     },
                     "$unset": { "lease_until": "" },
                 },
@@ -329,6 +364,43 @@ mod tests {
         // Early (clock skew): still one interval ahead.
         let early = DateTime::from_millis(t0.timestamp_millis() - 1_000);
         assert_eq!(next_slot(t0, early).timestamp_millis(), t0.timestamp_millis() + H);
+    }
+
+    #[test]
+    fn jitter_stays_around_the_slot() {
+        let now = DateTime::from_millis(100 * H);
+        let slot = DateTime::from_millis(100 * H + H);
+        let j = CHECK_JITTER.as_millis() as i64;
+        assert_eq!(jittered(slot, now, -j).timestamp_millis(), slot.timestamp_millis() - j);
+        assert_eq!(jittered(slot, now, j).timestamp_millis(), slot.timestamp_millis() + j);
+        // Never scheduled in the past, even with a large negative offset.
+        let soon = DateTime::from_millis(100 * H + 60_000);
+        assert_eq!(jittered(soon, now, -j).timestamp_millis(), now.timestamp_millis() + 60_000);
+        for _ in 0..1000 {
+            let o = random_offset_ms();
+            assert!((-j..=j).contains(&o));
+        }
+    }
+
+    #[test]
+    fn schedule_keeps_the_hourly_anchor() {
+        let t0 = DateTime::from_millis(10 * H + 17 * 60_000); // slot 10:17
+        let mut p = TrackedProduct {
+            id: ObjectId::new(), user_id: 1, url: "u".into(), name: "n".into(), currency: None,
+            last_price: None, created_at: t0, last_checked: None, next_check_at: t0, slot_at: Some(t0),
+            failures: 0, lease_until: None,
+        };
+        // Checked 12 minutes early (negative jitter): the next slot is still 11:17.
+        let (slot, next) = schedule_after(&p, DateTime::from_millis(t0.timestamp_millis() - 12 * 60_000));
+        assert_eq!(slot.timestamp_millis(), t0.timestamp_millis() + H);
+        assert!((next.timestamp_millis() - slot.timestamp_millis()).abs() <= CHECK_JITTER.as_millis() as i64);
+        // Checked 14 minutes late: also 11:17, no drift.
+        let (slot, _) = schedule_after(&p, DateTime::from_millis(t0.timestamp_millis() + 14 * 60_000));
+        assert_eq!(slot.timestamp_millis(), t0.timestamp_millis() + H);
+        // Products saved before jitter existed fall back to next_check_at.
+        p.slot_at = None;
+        let (slot, _) = schedule_after(&p, DateTime::from_millis(t0.timestamp_millis() + 60_000));
+        assert_eq!(slot.timestamp_millis(), t0.timestamp_millis() + H);
     }
 
     #[test]

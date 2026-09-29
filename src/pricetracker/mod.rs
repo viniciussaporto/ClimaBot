@@ -7,9 +7,15 @@ pub mod store;
 
 use crate::metrics;
 use serenity::all::{CreateEmbed, CreateMessage, Http, UserId};
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
+// tokio's clock (identical in production) so tests can run on virtual time.
+use tokio::time::Instant;
 use store::{Store, TrackedProduct};
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 use tracing::{debug, error, info, warn};
 
 pub use currency::format as format_price;
@@ -24,11 +30,57 @@ const MAX_CONCURRENT_CHECKS: usize = 4;
 /// the worker holding it died mid-check.
 const LEASE: Duration = Duration::from_secs(10 * 60);
 
+/// Random pause between two scheduled fetches from the same shop, so several
+/// products on one site don't hit it in a burst.
+const SAME_SITE_GAP_SECS: std::ops::RangeInclusive<u64> = 15..=45;
+
+/// Earliest time each site may be fetched again by the scheduler.
+static NEXT_ALLOWED: LazyLock<Mutex<HashMap<String, Instant>>> = LazyLock::new(Default::default);
+
+/// The site a URL belongs to: its registrable domain, roughly
+/// (`produto.mercadolivre.com.br` and `www.mercadolivre.com.br` are one site).
+fn site_of(url: &str) -> Option<String> {
+    let host = url::Url::parse(url).ok()?.host_str()?.to_ascii_lowercase();
+    let labels: Vec<&str> = host.split('.').collect();
+    let n = labels.len();
+    if n < 3 || host.parse::<std::net::IpAddr>().is_ok() {
+        return Some(host);
+    }
+    // Country domains with a second level: example.com.br, example.co.uk, …
+    let second_level = labels[n - 1].len() == 2
+        && matches!(labels[n - 2], "com" | "co" | "net" | "org" | "gov" | "edu" | "ac" | "gob" | "or" | "ne");
+    let keep = if second_level { 3 } else { 2 };
+    Some(labels[n - keep..].join("."))
+}
+
+/// Wait until the scheduler may fetch from this URL's site again, and book the
+/// next slot for it.
+async fn wait_for_site(url: &str) {
+    let Some(site) = site_of(url) else { return };
+    loop {
+        let wait = {
+            let mut next_allowed = NEXT_ALLOWED.lock().await;
+            let now = Instant::now();
+            match next_allowed.get(&site) {
+                Some(&at) if at > now => at - now,
+                _ => {
+                    let gap = Duration::from_secs(fastrand::u64(SAME_SITE_GAP_SECS));
+                    next_allowed.insert(site, now + gap);
+                    return;
+                }
+            }
+        };
+        debug!(site = %site, wait_secs = wait.as_secs(), "Spacing out requests to the same site");
+        tokio::time::sleep(wait).await;
+    }
+}
+
 /// Warn the owner once after this many consecutive failed hourly checks.
 const FAILURE_NOTIFY_THRESHOLD: i32 = 24;
 
-/// Check every product once an hour, counted from when it was added, so the
-/// checks are spread across the hour instead of all running at once.
+/// Check every product about once an hour: at a random time within ±15 minutes
+/// of its hourly slot (counted from when it was added), with random gaps
+/// between requests to the same site, so the traffic doesn't look scheduled.
 pub async fn run_scheduler(store: Store, http: Arc<Http>) {
     let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_CHECKS));
     loop {
@@ -69,7 +121,8 @@ async fn update_gauges(store: &Store) {
 }
 
 async fn check_one(store: &Store, http: &Http, product: &TrackedProduct) {
-    let started = std::time::Instant::now();
+    wait_for_site(&product.url).await;
+    let started = Instant::now();
     let ok = check_and_record(store, http, product).await;
     metrics::PRICE_CHECK_DURATION
         .with_label_values(&[if ok { "success" } else { "error" }])
@@ -158,5 +211,34 @@ async fn send_dm(http: &Http, user_id: u64, embed: CreateEmbed) {
     if let Err(e) = result {
         // Usually the user has DMs from server members disabled.
         warn!(error = %e, user = user_id, "Could not DM price notification");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sites() {
+        assert_eq!(site_of("https://www.kabum.com.br/produto/1").as_deref(), Some("kabum.com.br"));
+        assert_eq!(site_of("https://produto.mercadolivre.com.br/MLB-1").as_deref(), Some("mercadolivre.com.br"));
+        assert_eq!(site_of("https://www.amazon.co.uk/dp/X").as_deref(), Some("amazon.co.uk"));
+        assert_eq!(site_of("https://pt.aliexpress.com/item/1.html").as_deref(), Some("aliexpress.com"));
+        assert_eq!(site_of("https://shop.example.de/p").as_deref(), Some("example.de"));
+        assert_eq!(site_of("https://example.com/").as_deref(), Some("example.com"));
+        assert_eq!(site_of("not a url"), None);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn same_site_requests_are_spaced() {
+        let start = Instant::now();
+        wait_for_site("https://a.example-shop.com/1").await;
+        wait_for_site("https://b.example-shop.com/2").await;
+        let waited = start.elapsed();
+        assert!(waited >= Duration::from_secs(15) && waited <= Duration::from_secs(46), "{waited:?}");
+        // A different site doesn't wait.
+        let t = Instant::now();
+        wait_for_site("https://other-shop.org/x").await;
+        assert!(t.elapsed() < Duration::from_secs(1));
     }
 }
