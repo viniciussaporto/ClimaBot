@@ -141,6 +141,13 @@ impl Store {
         Ok(self.products.count_documents(doc! {}).await?)
     }
 
+    /// Products whose scheduled check is more than `grace` late: a sign the
+    /// scheduler can't keep up.
+    pub async fn count_overdue(&self, grace: Duration) -> Result<u64> {
+        let cutoff = DateTime::from_millis(DateTime::now().timestamp_millis() - grace.as_millis() as i64);
+        Ok(self.products.count_documents(doc! { "next_check_at": { "$lt": cutoff } }).await?)
+    }
+
     pub async fn add_product(
         &self,
         user_id: u64,
