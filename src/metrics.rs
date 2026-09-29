@@ -4,7 +4,8 @@ use axum::{
     routing::get,
 };
 use prometheus::{
-    CounterVec, Encoder, HistogramVec, TextEncoder, register_counter_vec, register_histogram_vec,
+    CounterVec, Encoder, Gauge, HistogramVec, IntGauge, TextEncoder, register_counter_vec, register_gauge,
+    register_histogram_vec, register_int_gauge,
 };
 use std::sync::LazyLock;
 use tracing::{error, info};
@@ -77,6 +78,47 @@ pub static SCRAPE_FETCH_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
     .expect("failed to register price_scrape_fetches_total")
 });
 
+/// Servers (guilds) the bot is in
+pub static GUILDS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge!("discord_guilds", "Number of Discord servers the bot is in")
+        .expect("failed to register discord_guilds")
+});
+
+/// Heartbeat round trip to Discord's gateway
+pub static GATEWAY_LATENCY: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
+        "discord_gateway_latency_seconds",
+        "Heartbeat latency of the Discord gateway connection"
+    )
+    .expect("failed to register discord_gateway_latency_seconds")
+});
+
+/// Products currently tracked, across all users
+pub static TRACKED_PRODUCTS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge!("price_tracked_products", "Number of products being price-tracked")
+        .expect("failed to register price_tracked_products")
+});
+
+/// Products whose hourly check is more than 5 minutes late
+pub static OVERDUE_CHECKS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge!(
+        "price_checks_overdue",
+        "Products whose scheduled price check is more than 5 minutes late"
+    )
+    .expect("failed to register price_checks_overdue")
+});
+
+/// Time to check one product (all fetch attempts included)
+pub static PRICE_CHECK_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec!(
+        "price_check_duration_seconds",
+        "Time to check one product's price, including every fetch method tried",
+        &["result"],
+        vec![1.0, 2.5, 5.0, 10.0, 20.0, 40.0, 60.0, 120.0, 240.0]
+    )
+    .expect("failed to register price_check_duration_seconds")
+});
+
 // ─────────────────────────────────────────────
 //  HTTP server
 // ─────────────────────────────────────────────
@@ -91,6 +133,11 @@ pub fn start_metrics_server(port: u16) {
     LazyLock::force(&RESPONSE_TIME);
     LazyLock::force(&PRICE_CHECK_COUNTER);
     LazyLock::force(&SCRAPE_FETCH_COUNTER);
+    LazyLock::force(&GUILDS);
+    LazyLock::force(&GATEWAY_LATENCY);
+    LazyLock::force(&TRACKED_PRODUCTS);
+    LazyLock::force(&OVERDUE_CHECKS);
+    LazyLock::force(&PRICE_CHECK_DURATION);
 
     tokio::spawn(async move {
         let app = Router::new().route("/metrics", get(metrics_handler));

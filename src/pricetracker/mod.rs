@@ -32,6 +32,7 @@ const FAILURE_NOTIFY_THRESHOLD: i32 = 24;
 pub async fn run_scheduler(store: Store, http: Arc<Http>) {
     let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_CHECKS));
     loop {
+        update_gauges(&store).await;
         loop {
             let Ok(permit) = permits.clone().acquire_owned().await else {
                 return;
@@ -54,7 +55,29 @@ pub async fn run_scheduler(store: Store, http: Arc<Http>) {
     }
 }
 
+/// Checks later than this count as overdue in the metrics.
+const OVERDUE_GRACE: Duration = Duration::from_secs(5 * 60);
+
+async fn update_gauges(store: &Store) {
+    match tokio::try_join!(store.count_products(), store.count_overdue(OVERDUE_GRACE)) {
+        Ok((total, overdue)) => {
+            metrics::TRACKED_PRODUCTS.set(total as i64);
+            metrics::OVERDUE_CHECKS.set(overdue as i64);
+        }
+        Err(e) => warn!(error = %e, "Could not count tracked products"),
+    }
+}
+
 async fn check_one(store: &Store, http: &Http, product: &TrackedProduct) {
+    let started = std::time::Instant::now();
+    let ok = check_and_record(store, http, product).await;
+    metrics::PRICE_CHECK_DURATION
+        .with_label_values(&[if ok { "success" } else { "error" }])
+        .observe(started.elapsed().as_secs_f64());
+}
+
+/// Returns whether the price could be read.
+async fn check_and_record(store: &Store, http: &Http, product: &TrackedProduct) -> bool {
     debug!(url = %product.url, "Checking price");
     match scrape::fetch_product(&product.url).await {
         Ok(found) => {
@@ -74,6 +97,7 @@ async fn check_one(store: &Store, http: &Http, product: &TrackedProduct) {
                 }
                 Err(e) => error!(error = %e, url = %product.url, "Price check: save failed"),
             }
+            true
         }
         Err(e) => {
             metrics::PRICE_CHECK_COUNTER.with_label_values(&["error"]).inc();
@@ -93,6 +117,7 @@ async fn check_one(store: &Store, http: &Http, product: &TrackedProduct) {
                 Ok(_) => {}
                 Err(e) => error!(error = %e, url = %product.url, "Price check: save failed"),
             }
+            false
         }
     }
 }

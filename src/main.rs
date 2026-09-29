@@ -7,18 +7,36 @@ mod selfcheck;
 use anyhow::{Context as _, Result, anyhow};
 use pricetracker::store::Store;
 use serenity::{
-    all::{Command, Context, EventHandler, GatewayIntents, Interaction, Ready},
+    all::{
+        Command, Context, EventHandler, GatewayIntents, Guild, GuildId, Interaction, Ready, ShardManager,
+        UnavailableGuild,
+    },
     async_trait, Client,
 };
 use std::{
+    collections::HashSet,
     env,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 use tracing::{error, info, warn};
 
 struct Handler {
     store: Store,
     price_job_started: AtomicBool,
+    /// Servers the bot is in, for the `discord_guilds` metric.
+    guilds: Mutex<HashSet<GuildId>>,
+}
+
+impl Handler {
+    fn update_guilds(&self, change: impl FnOnce(&mut HashSet<GuildId>)) {
+        let mut guilds = self.guilds.lock().unwrap_or_else(|p| p.into_inner());
+        change(&mut guilds);
+        metrics::GUILDS.set(guilds.len() as i64);
+    }
 }
 
 #[async_trait]
@@ -30,6 +48,10 @@ impl EventHandler for Handler {
             "Logged in to Discord"
         );
         commands::set_bot_user_id(ready.user.id);
+        self.update_guilds(|g| {
+            g.clear();
+            g.extend(ready.guilds.iter().map(|u| u.id));
+        });
 
         // Ready fires again after every gateway reconnect; overwriting the
         // global commands is idempotent, so this is safe.
@@ -41,6 +63,21 @@ impl EventHandler for Handler {
         if !self.price_job_started.swap(true, Ordering::SeqCst) {
             tokio::spawn(pricetracker::run_scheduler(self.store.clone(), ctx.http.clone()));
             info!("Price-check scheduler started");
+        }
+    }
+
+    async fn guild_create(&self, _ctx: Context, guild: Guild, _is_new: Option<bool>) {
+        self.update_guilds(|g| {
+            g.insert(guild.id);
+        });
+    }
+
+    async fn guild_delete(&self, _ctx: Context, incomplete: UnavailableGuild, _full: Option<Guild>) {
+        // `unavailable` means a Discord outage, not that the bot was removed.
+        if !incomplete.unavailable {
+            self.update_guilds(|g| {
+                g.remove(&incomplete.id);
+            });
         }
     }
 
@@ -119,9 +156,12 @@ async fn main() -> Result<()> {
         .event_handler(Handler {
             store,
             price_job_started: AtomicBool::new(false),
+            guilds: Mutex::new(HashSet::new()),
         })
         .await
         .context("creating Discord client")?;
+
+    tokio::spawn(sample_gateway_latency(client.shard_manager.clone()));
 
     let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {
@@ -135,16 +175,28 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Export the gateway heartbeat latency every 30 seconds.
+async fn sample_gateway_latency(shard_manager: Arc<ShardManager>) {
+    let mut interval = tokio::time::interval(Duration::from_secs(30));
+    loop {
+        interval.tick().await;
+        let runners = shard_manager.runners.lock().await;
+        if let Some(latency) = runners.values().filter_map(|r| r.latency).max() {
+            metrics::GATEWAY_LATENCY.set(latency.as_secs_f64());
+        }
+    }
+}
+
 /// MongoDB may still be starting when the bot boots; keep retrying.
 async fn connect_with_retry(mongo: &MongoConfig) -> Store {
-    let mut delay = std::time::Duration::from_secs(2);
+    let mut delay = Duration::from_secs(2);
     loop {
         match Store::connect(&mongo.uri, &mongo.database).await {
             Ok(store) => return store,
             Err(e) => {
                 warn!(error = format!("{e:#}"), retry_in = ?delay, "MongoDB not available yet");
                 tokio::time::sleep(delay).await;
-                delay = (delay * 2).min(std::time::Duration::from_secs(30));
+                delay = (delay * 2).min(Duration::from_secs(30));
             }
         }
     }
