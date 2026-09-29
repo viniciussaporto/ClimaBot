@@ -24,6 +24,8 @@ if [[ ! -f "$JS_STACK_DIR/.env" ]]; then
 fi
 echo "Installed $JS_STACK_DIR/docker-compose.yml"
 
+"$here/grafana/install.sh"
+
 marker="# climabot aliases"
 if ! grep -qF "$marker" "$RC" 2>/dev/null; then
     cat >>"$RC" <<'EOF'

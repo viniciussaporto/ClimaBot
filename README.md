@@ -117,6 +117,8 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 | `climabot-stop` | `climabot stop` | Stop whichever bot is running |
 | `climabot-status` | `climabot status` | Show what is running |
 
+Grafana dashboards live in `deploy/grafana/` as code: edit `build_dashboards.py`, run it to regenerate the JSON, and commit. `climabot update` provisions them into the monitoring stack (folders **ClimaBot** and **Infrastructure Metrics**). Container and host metrics come from cAdvisor in the monitoring stack.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
