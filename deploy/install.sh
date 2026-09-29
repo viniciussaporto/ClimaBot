@@ -26,6 +26,16 @@ echo "Installed $JS_STACK_DIR/docker-compose.yml"
 
 "$here/grafana/install.sh"
 
+# Nightly update timer (05:30 UTC).
+if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
+    install -m 0644 "$here/systemd/climabot-update.service" "$here/systemd/climabot-update.timer" /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable --quiet climabot-update.timer
+    # Start the timer, but don't restart it while its own update is running.
+    systemctl is-active --quiet climabot-update.timer || systemctl start climabot-update.timer
+    echo "Installed climabot-update.timer (next: $(systemctl show climabot-update.timer -p NextElapseUSecRealtime --value))"
+fi
+
 # Shell shortcuts (climabot-*) and the SSH login banner.
 install -m 0644 "$here/shell/climabot.sh" /etc/profile.d/.climabot.sh.new
 mv -f /etc/profile.d/.climabot.sh.new /etc/profile.d/climabot.sh

@@ -8,6 +8,7 @@
 #   climabot stop              stop whichever bot(s) are running
 #   climabot status            show what is running
 #   climabot logs              follow the running bot's logs
+#   climabot nightly           update if a bot is running (run daily by climabot-update.timer)
 #
 # Installed by deploy/install.sh, which also installs the climabot-* shell
 # shortcuts and SSH login banner (/etc/profile.d/climabot.sh). Paths and branches can be overridden through the
@@ -158,6 +159,17 @@ cmd_stop() {
     if (( stopped )); then log "Stopped"; else log "No bot was running"; fi
 }
 
+# Scheduled by climabot-update.timer. A bot that was stopped on purpose
+# stays stopped.
+cmd_nightly() {
+    log "Nightly update ($(date -u '+%F %T UTC'))"
+    if rust_running || js_running; then
+        cmd_update
+    else
+        log "No bot is running; nothing to update"
+    fi
+}
+
 cmd_logs() {
     if rust_running; then
         rust_compose logs -f --tail 100 climabot
@@ -180,6 +192,10 @@ cmd_status() {
     else
         echo "JavaScript bot: stopped"
     fi
+    local next
+    next=$(systemctl show climabot-update.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)
+    [[ -n "$next" && "$next" != "n/a" ]] && echo "Next nightly update: $next"
+    return 0
 }
 
 case "${1:-}" in
@@ -189,8 +205,9 @@ case "${1:-}" in
     stop) cmd_stop ;;
     status) cmd_status ;;
     logs) cmd_logs ;;
+    nightly) cmd_nightly ;;
     *)
-        sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
         exit 1
         ;;
 esac

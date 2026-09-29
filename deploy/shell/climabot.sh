@@ -11,7 +11,7 @@ CB_PROFILE_DONE=1
 CB_CMDS=(
   "climabot-status|Which bot is running (Rust or JavaScript) and its containers|climabot status"
   "climabot-logs|Follow the running bot's logs|climabot logs"
-  "climabot-update|Pull, rebuild and restart the running bot (+ dashboards, alerts)|climabot update"
+  "climabot-update|Pull, rebuild and restart the running bot (also nightly at 05:30 UTC)|climabot update"
   "climabot-start-rust|Switch to the Rust bot: pull, rebuild, stop the JS bot, start|climabot start-rust"
   "climabot-start-javascript|Switch to the JS bot: pull, rebuild, stop the Rust stack, start|climabot start-javascript"
   "climabot-stop|Stop whichever bot is running|climabot stop"

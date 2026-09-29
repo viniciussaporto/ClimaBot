@@ -65,7 +65,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -126,7 +129,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -187,7 +193,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -248,7 +257,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -309,7 +321,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -370,7 +385,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -431,7 +449,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         },
@@ -492,7 +513,10 @@
               "alertname",
               "grafana_folder"
             ],
-            "repeat_interval": "24h"
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
           },
           "isPaused": false
         }
