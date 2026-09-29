@@ -26,16 +26,15 @@ echo "Installed $JS_STACK_DIR/docker-compose.yml"
 
 "$here/grafana/install.sh"
 
-marker="# climabot aliases"
-if ! grep -qF "$marker" "$RC" 2>/dev/null; then
-    cat >>"$RC" <<'EOF'
-
-# climabot aliases
-alias climabot-start-rust='climabot start-rust'
-alias climabot-start-javascript='climabot start-javascript'
-alias climabot-update='climabot update'
-alias climabot-stop='climabot stop'
-alias climabot-status='climabot status'
-EOF
-    echo "Added aliases to $RC (open a new shell or run: . $RC)"
+# Shell shortcuts (climabot-*) and the SSH login banner.
+install -m 0644 "$here/shell/climabot.sh" /etc/profile.d/.climabot.sh.new
+mv -f /etc/profile.d/.climabot.sh.new /etc/profile.d/climabot.sh
+# Non-login interactive shells (e.g. `bash -i`, tmux panes) read /etc/bash.bashrc instead.
+line='[ -r /etc/profile.d/climabot.sh ] && . /etc/profile.d/climabot.sh'
+grep -qxF "$line" /etc/bash.bashrc || echo "$line" >>/etc/bash.bashrc
+# Earlier versions put the aliases in $RC; they now live in the profile script.
+if grep -q '^# climabot aliases$' "$RC" 2>/dev/null; then
+    sed -i '/^# climabot aliases$/,/^alias climabot-status=/d' "$RC"
+    echo "Moved the climabot aliases from $RC to /etc/profile.d/climabot.sh"
 fi
+echo "Installed /etc/profile.d/climabot.sh (shortcuts + login banner)"
