@@ -227,14 +227,18 @@ def info_groups():
              threshold=0.8, for_="1h",
              summary="A disk is over 80% full",
              description="`docker builder prune` and `docker image prune` free space."),
-        info("srv-container-restarting", "Container restarting",
-             'max by (name) (changes(container_start_time_seconds{name!=""}[15m]))',
+        # Single restarts are normal (deploys, `vs-update` reloading CrowdSec/GeoIP, config
+        # changes) and cAdvisor can't tell them from crashes, so only loops and OOM kills alert.
+        info("srv-container-restarting", "Container crash-looping",
+             'max by (name) (changes(container_start_time_seconds{name!=""}[15m]))', threshold=2,
              for_="0s",
-             summary="{{ $labels.name }} restarted",
-             description="It exited and was restarted: a crash, running out of memory, or a manual "
-                         "`docker restart` (several in a row = crash loop). Check `docker logs "
-                         "{{ $labels.name }}`. Recreating a container (e.g. `climabot update`) doesn't "
-                         "trigger this."),
+             summary="{{ $labels.name }} restarted 3+ times in 15 minutes",
+             description="It keeps exiting and being restarted. Check `docker logs {{ $labels.name }}`."),
+        info("srv-container-oom", "Container ran out of memory",
+             'sum by (name) (increase(container_oom_events_total{name!=""}[15m]))', for_="0s",
+             summary="{{ $labels.name }} was killed for running out of memory",
+             description="The kernel OOM-killed a process in it (it may have restarted fine). If it "
+                         "repeats, raise its memory limit or look for a leak on 'Docker Host & Containers'."),
         info("srv-monitoring-down", "Monitoring component down",
              'up{job=~"cadvisor|blackbox"} < 1 or ' + missing(["monitoring-cadvisor-1", "monitoring-blackbox-1"]),
              op="gt", threshold=-1, for_="10m",
