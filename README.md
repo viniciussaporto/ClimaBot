@@ -112,7 +112,7 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 | Alias | Command | What it does |
 | --- | --- | --- |
 | `climabot-start-rust` | `climabot start-rust` | `git pull` + rebuild the Rust bot (and pull MongoDB/browser images), stop the JS bot, start the Rust stack |
-| `climabot-start-javascript` | `climabot start-javascript` | `git pull` + rebuild the JS bot (`DeployThis` branch), stop the Rust stack, start the JS bot |
+| `climabot-start-javascript` | `climabot start-javascript` | `git pull` + rebuild the JS bot (`javascript` branch), stop the Rust stack, start the JS bot |
 | `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running |
 | `climabot-stop` | `climabot stop` | Stop whichever bot is running |
 | `climabot-status` | `climabot status` | Show what is running |
