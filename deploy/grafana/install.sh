@@ -48,7 +48,13 @@ EOF
 ALERTING="$PROV/alerting"
 SECRETS=${CLIMABOT_MONITORING_SECRETS:-/root/monitoring/secrets}
 install -d -m 0755 "$ALERTING"
-before=$(cat "$ALERTING"/climabot-*.yaml 2>/dev/null | sha256sum)
+alerting_checksum() {
+    local f
+    for f in "$ALERTING"/climabot-*.yaml; do
+        [[ -f "$f" ]] && cat "$f"
+    done | sha256sum
+}
+before=$(alerting_checksum)
 
 install -m 0644 "$here/alerting/urgent.yaml" "$ALERTING/climabot-urgent.yaml"
 webhook_file="$SECRETS/discord-webhook-url"
@@ -80,7 +86,7 @@ else
     echo "Informational alerts disabled: put a Discord webhook URL in $webhook_file"
 fi
 
-after=$(cat "$ALERTING"/climabot-*.yaml 2>/dev/null | sha256sum)
+after=$(alerting_checksum)
 if [[ "$before" != "$after" ]]; then
     # Grafana reads alerting provisioning only at startup.
     grafana=$(docker ps -q --filter "label=com.docker.compose.service=grafana" --filter "label=com.docker.compose.project=monitoring")
