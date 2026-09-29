@@ -19,8 +19,8 @@ set -euo pipefail
 
 RUST_DIR=${CLIMABOT_RUST_DIR:-/root/climabot-rust}         # git checkout (branch rust) + compose project
 RUST_BRANCH=${CLIMABOT_RUST_BRANCH:-rust}
-JS_SRC_DIR=${CLIMABOT_JS_SRC_DIR:-/root/ClimaBot}          # git checkout (branch DeployThis)
-JS_BRANCH=${CLIMABOT_JS_BRANCH:-DeployThis}
+JS_SRC_DIR=${CLIMABOT_JS_SRC_DIR:-/root/ClimaBot}          # git checkout (branch javascript)
+JS_BRANCH=${CLIMABOT_JS_BRANCH:-javascript}
 JS_STACK_DIR=${CLIMABOT_JS_STACK_DIR:-/root/climabot-js}   # compose project for the JS bot
 MONITORING_NETWORK=${CLIMABOT_MONITORING_NETWORK:-climabot-monitoring}
 
