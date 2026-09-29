@@ -51,7 +51,7 @@ install -d -m 0755 "$ALERTING"
 alerting_checksum() {
     local f
     for f in "$ALERTING"/climabot-*.yaml; do
-        [[ -f "$f" ]] && cat "$f"
+        if [[ -f "$f" ]]; then cat "$f"; fi
     done | sha256sum
 }
 before=$(alerting_checksum)
