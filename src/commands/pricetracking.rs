@@ -14,6 +14,20 @@ const EMBED_COLOR: u32 = 0x0099ff;
 const MAX_DESCRIPTION: usize = 4000;
 const HISTORY_ENTRIES_SHOWN: usize = 25;
 
+// TEMPORARY: shown under every /pt reply until more shops have been tested.
+// Remove this constant and its use in `handle` to drop the notice.
+const TESTED_SITES_NOTICE: &str = "\
+Price tracking has been tested and works on: **KaBuM**, **Amazon Brasil**, **Magazine Luiza**, \
+**Pichau**, **Terabyte** and **AliExpress**.\n\
+**Mercado Livre** isn't supported yet. Other shops may work, but that isn't guaranteed.";
+
+fn tested_sites_notice() -> CreateEmbed {
+    CreateEmbed::new()
+        .title("ℹ️ Supported shops")
+        .description(TESTED_SITES_NOTICE)
+        .color(0x95a5a6)
+}
+
 pub fn register() -> CreateCommand {
     let item = || {
         CreateCommandOption::new(
@@ -72,7 +86,7 @@ pub async fn handle(ctx: &Context, cmd: &CommandInteraction, store: &Store) -> R
         _ => EditInteractionResponse::new().content("Unknown subcommand."),
     };
 
-    cmd.edit_response(&ctx.http, reply).await?;
+    cmd.edit_response(&ctx.http, reply.add_embed(tested_sites_notice())).await?;
     Ok(())
 }
 
