@@ -1,410 +1,322 @@
-use anyhow::Result;
-use chrono::{DateTime, Utc};
-use futures_util::StreamExt;
-use mongodb::{
-    bson::doc,
-    options::ReplaceOptions,
-    Collection, Database,
+use crate::pricetracker::{
+    format_price,
+    scrape::{self, ScrapeError},
+    store::{AddOutcome, MAX_PRODUCTS_PER_USER, Store, TrackedProduct},
 };
-use reqwest::Client as HttpClient;
-use scraper::{Html, Selector};
-use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use anyhow::Result;
+use serenity::all::{
+    CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateEmbed,
+    CreateEmbedFooter, EditInteractionResponse, ResolvedOption, ResolvedValue,
+};
+use tracing::info;
 
-// ─────────────────────────────────────────────
-//  Domain types  (equiv. to Mongoose schemas)
-// ─────────────────────────────────────────────
+const EMBED_COLOR: u32 = 0x0099ff;
+const MAX_DESCRIPTION: usize = 4000;
+const HISTORY_ENTRIES_SHOWN: usize = 25;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PriceEntry {
-    pub price: f64,
-    pub timestamp: DateTime<Utc>,
+pub fn register() -> CreateCommand {
+    let item = || {
+        CreateCommandOption::new(
+            CommandOptionType::String,
+            "item",
+            "Position shown in /pt list, or the product URL",
+        )
+        .required(true)
+    };
+    CreateCommand::new("pt")
+        .description("Track product prices (checked every hour)")
+        .add_option(
+            CreateCommandOption::new(CommandOptionType::SubCommand, "add", "Start tracking a product")
+                .add_sub_option(
+                    CreateCommandOption::new(CommandOptionType::String, "url", "Product page URL")
+                        .required(true),
+                ),
+        )
+        .add_option(
+            CreateCommandOption::new(CommandOptionType::SubCommand, "remove", "Stop tracking a product")
+                .add_sub_option(item()),
+        )
+        .add_option(CreateCommandOption::new(
+            CommandOptionType::SubCommand,
+            "list",
+            "View your tracked products",
+        ))
+        .add_option(
+            CreateCommandOption::new(CommandOptionType::SubCommand, "history", "View a product's price history")
+                .add_sub_option(item()),
+        )
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TrackedProduct {
-    pub url: String,
-    pub name: String,
-    pub price_history: Vec<PriceEntry>,
-    pub last_checked: DateTime<Utc>,
-    pub valid: bool,
+pub async fn handle(ctx: &Context, cmd: &CommandInteraction, store: &Store) -> Result<()> {
+    // Scraping can take a while; Discord needs an answer within 3 seconds.
+    cmd.defer_ephemeral(&ctx.http).await?;
+
+    let user_id = cmd.user.id.get();
+    let options = cmd.data.options();
+    let (sub, args) = match options.first() {
+        Some(ResolvedOption { name, value: ResolvedValue::SubCommand(args), .. }) => (*name, args.as_slice()),
+        _ => ("", &[][..]),
+    };
+    let arg = |key: &str| {
+        args.iter().find_map(|o| match (o.name == key, &o.value) {
+            (true, ResolvedValue::String(s)) => Some(s.trim()),
+            _ => None,
+        })
+    };
+
+    let reply = match sub {
+        "add" => add(store, user_id, arg("url").unwrap_or_default()).await?,
+        "remove" => remove(store, user_id, arg("item").unwrap_or_default()).await?,
+        "list" => list(store, user_id).await?,
+        "history" => history(store, user_id, arg("item").unwrap_or_default()).await?,
+        _ => EditInteractionResponse::new().content("Unknown subcommand."),
+    };
+
+    cmd.edit_response(&ctx.http, reply).await?;
+    Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UserTrack {
-    pub user_id: String,
-    pub product_links: Vec<TrackedProduct>,
+fn text(s: impl Into<String>) -> EditInteractionResponse {
+    EditInteractionResponse::new().content(s)
 }
 
-// ─────────────────────────────────────────────
-//  Scraper  (replaces cheerio)
-// ─────────────────────────────────────────────
+async fn add(store: &Store, user_id: u64, raw_url: &str) -> Result<EditInteractionResponse> {
+    let url = match scrape::parse_url(raw_url) {
+        Ok(u) => u.to_string(),
+        Err(e) => return Ok(text(format!("❌ {e}"))),
+    };
 
-/// Attempt to scrape the page title and first recognisable price.
-/// Returns `None` if the URL is unreachable or no price is found.
-pub async fn scrape_product(url: &str) -> Option<(String, f64)> {
-    let client = HttpClient::builder()
-        .user_agent("Mozilla/5.0 (compatible; ClimaBot/1.0; +https://github.com/viniciussaporto/ClimaBot)")
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .ok()?;
+    let product = match scrape::fetch_product(&url).await {
+        Ok(p) => p,
+        Err(e @ ScrapeError::NoPrice) => {
+            return Ok(text(format!(
+                "❌ Failed to retrieve a price from that URL ({e}).\n\
+                 The page may be unsupported, require login, or load its price with JavaScript."
+            )));
+        }
+        Err(e) => return Ok(text(format!("❌ Failed to retrieve a price from that URL: {e}."))),
+    };
 
-    let html = client.get(url).send().await.ok()?.text().await.ok()?;
-    let document = Html::parse_document(&html);
+    let outcome = store
+        .add_product(user_id, url.clone(), product.name.clone(), product.price, product.currency.clone())
+        .await?;
 
-    // Page title as product name
-    let name = Selector::parse("title")
-        .ok()
-        .and_then(|sel| document.select(&sel).next())
-        .map(|el| el.inner_html().trim().to_string())
-        .unwrap_or_else(|| url.to_string());
+    Ok(match outcome {
+        AddOutcome::Added => {
+            info!(user_id, url, price = product.price, "Added tracked product");
+            EditInteractionResponse::new().embed(
+                CreateEmbed::new()
+                    .title(format!("✅ Now tracking: {}", product.name))
+                    .url(&url)
+                    .description(format!(
+                        "Current price: **{}**\nI'll check it every hour and DM you when it changes.",
+                        format_price(product.price, product.currency.as_deref())
+                    ))
+                    .color(EMBED_COLOR),
+            )
+        }
+        AddOutcome::AlreadyTracked => text("⚠️ You're already tracking this URL."),
+        AddOutcome::LimitReached => text(format!(
+            "❌ You can track at most {MAX_PRODUCTS_PER_USER} products. Remove one with `/pt remove` first."
+        )),
+    })
+}
 
-    // Try price selectors from most to least specific
-    let price_selectors = [
-        "[itemprop='price']",
-        "[data-price]",
-        "[class*='price']",
-        ".price",
-        "#price",
-    ];
+/// Find a product by 1-based position or exact URL.
+fn find<'a>(products: &'a [TrackedProduct], item: &str) -> Option<(usize, &'a TrackedProduct)> {
+    if let Ok(n) = item.parse::<usize>() {
+        return n.checked_sub(1).and_then(|i| products.get(i)).map(|p| (n, p));
+    }
+    let normalised = scrape::parse_url(item).map(|u| u.to_string()).ok();
+    products
+        .iter()
+        .enumerate()
+        .find(|(_, p)| p.url == item || Some(&p.url) == normalised.as_ref())
+        .map(|(i, p)| (i + 1, p))
+}
 
-    for sel_str in &price_selectors {
-        let Ok(selector) = Selector::parse(sel_str) else {
-            continue;
+async fn remove(store: &Store, user_id: u64, item: &str) -> Result<EditInteractionResponse> {
+    let products = store.list_products(user_id).await?;
+    if products.is_empty() {
+        return Ok(text("❌ You have no tracked products."));
+    }
+    let Some((_, product)) = find(&products, item) else {
+        return Ok(text("❌ Product not found. Use `/pt list` to see positions."));
+    };
+    store.remove_product(user_id, product.id).await?;
+    info!(user_id, url = %product.url, "Removed tracked product");
+    Ok(text(format!("🗑️ Removed **{}**.", product.name)))
+}
+
+async fn list(store: &Store, user_id: u64) -> Result<EditInteractionResponse> {
+    let products = store.list_products(user_id).await?;
+    if products.is_empty() {
+        return Ok(text("📭 You have no tracked products yet. Use `/pt add <url>` to start."));
+    }
+
+    let entries = products.iter().enumerate().map(|(i, p)| {
+        let price = p
+            .last_price
+            .map(|v| format_price(v, p.currency.as_deref()))
+            .unwrap_or_else(|| "–".into());
+        let mut entry = format!(
+            "**{}.** [{}]({})\n{} · next check <t:{}:R>",
+            i + 1,
+            escape_link_text(&truncate(&p.name, 80)),
+            p.url,
+            price,
+            unix(p.next_check_at)
+        );
+        if p.failures > 0 {
+            entry.push_str(&format!(" · ⚠️ last {} check(s) failed", p.failures));
+        }
+        entry
+    });
+
+    Ok(EditInteractionResponse::new().embed(
+        CreateEmbed::new()
+            .title(format!("📦 Tracked Products ({}/{MAX_PRODUCTS_PER_USER})", products.len()))
+            .description(join_limited(entries, "\n\n", MAX_DESCRIPTION))
+            .footer(CreateEmbedFooter::new("Each product is re-checked every hour from when it was added"))
+            .color(EMBED_COLOR),
+    ))
+}
+
+async fn history(store: &Store, user_id: u64, item: &str) -> Result<EditInteractionResponse> {
+    let products = store.list_products(user_id).await?;
+    if products.is_empty() {
+        return Ok(text("❌ You have no tracked products."));
+    }
+    let Some((_, product)) = find(&products, item) else {
+        return Ok(text("❌ Product not found. Use `/pt list` to see positions."));
+    };
+
+    let entries = store.history(product.id).await?;
+    let currency = product.currency.as_deref();
+    let skipped = entries.len().saturating_sub(HISTORY_ENTRIES_SHOWN);
+
+    let mut prev: Option<f64> = skipped.checked_sub(1).map(|i| entries[i].price);
+    let mut lines = Vec::new();
+    if skipped > 0 {
+        lines.push(format!("*… {skipped} older entries*"));
+    }
+    for e in &entries[skipped..] {
+        let arrow = match prev {
+            Some(p) if e.price < p => "📉",
+            Some(p) if e.price > p => "📈",
+            _ => "•",
         };
-        for element in document.select(&selector) {
-            // Try content / data-price attribute first, then inner text
-            let raw = element
-                .value()
-                .attr("content")
-                .or_else(|| element.value().attr("data-price"))
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| element.text().collect::<String>());
-
-            let digits: String = raw
-                .chars()
-                .filter(|c| c.is_ascii_digit() || *c == '.' || *c == ',')
-                .collect();
-
-            if digits.is_empty() {
-                continue;
-            }
-
-            // Handle European decimal separator (comma)
-            let normalised = if digits.matches(',').count() == 1 && !digits.contains('.') {
-                digits.replace(',', ".")
-            } else {
-                digits.replace(',', "")
-            };
-
-            if let Ok(price) = normalised.parse::<f64>() {
-                if price > 0.0 && price.is_finite() {
-                    return Some((name, price));
-                }
-            }
-        }
+        lines.push(format!("{arrow} **{}** — <t:{}:f>", format_price(e.price, currency), unix(e.observed_at)));
+        prev = Some(e.price);
     }
 
-    None
-}
-
-// ─────────────────────────────────────────────
-//  Command dispatcher
-// ─────────────────────────────────────────────
-
-pub async fn handle_pricetracking(
-    db: &Database,
-    channel_id: &str,
-    user_id: &str,
-    args: &[&str],
-    revolt_client: &crate::revolt::RevoltClient,
-) -> Result<()> {
-    let col: Collection<UserTrack> = db.collection("usertrack");
-
-    match args.first().copied() {
-        Some("add") => {
-            let url = args.get(1).copied().unwrap_or("");
-            cmd_add(&col, channel_id, user_id, url, revolt_client).await?;
-        }
-        Some("remove") | Some("rm") => {
-            let target = args.get(1).copied().unwrap_or("");
-            cmd_remove(&col, channel_id, user_id, target, revolt_client).await?;
-        }
-        Some("list") | Some("track") | Some("ls") => {
-            cmd_list(&col, channel_id, user_id, revolt_client).await?;
-        }
-        Some("history") | Some("hist") => {
-            let target = args.get(1).copied().unwrap_or("");
-            cmd_history(&col, channel_id, user_id, target, revolt_client).await?;
-        }
-        _ => {
-            revolt_client
-                .send_message(
-                    channel_id,
-                    "## 📦 Price Tracking\n\n\
-                    `!pt add <url>` — start tracking a product\n\
-                    `!pt remove <number|url>` — stop tracking\n\
-                    `!pt list` — view all tracked products\n\
-                    `!pt history <number|url>` — view price history",
-                )
-                .await?;
-        }
-    }
-    Ok(())
-}
-
-// ─────────────────────────────────────────────
-//  Sub-commands
-// ─────────────────────────────────────────────
-
-async fn cmd_add(
-    col: &Collection<UserTrack>,
-    channel_id: &str,
-    user_id: &str,
-    url: &str,
-    client: &crate::revolt::RevoltClient,
-) -> Result<()> {
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        client
-            .send_message(channel_id, "❌ Please provide a valid URL starting with `http://` or `https://`.")
-            .await?;
-        return Ok(());
-    }
-
-    client.send_message(channel_id, "⏳ Fetching product info…").await?;
-
-    match scrape_product(url).await {
-        None => {
-            client
-                .send_message(
-                    channel_id,
-                    "❌ Failed to retrieve a price from that URL.\n\
-                     The page may be unsupported, require login, or have no detectable price.",
-                )
-                .await?;
-        }
-        Some((name, price)) => {
-            let mut doc = get_or_create(col, user_id).await?;
-
-            if doc.product_links.iter().any(|p| p.url == url) {
-                client.send_message(channel_id, "⚠️ Already tracking this URL.").await?;
-                return Ok(());
-            }
-
-            doc.product_links.push(TrackedProduct {
-                url: url.to_string(),
-                name: name.clone(),
-                price_history: vec![PriceEntry { price, timestamp: Utc::now() }],
-                last_checked: Utc::now(),
-                valid: true,
-            });
-
-            save(col, &doc).await?;
-            info!(user_id, url, price, "Added tracked product");
-
-            client
-                .send_message(
-                    channel_id,
-                    &format!("✅ Now tracking **{name}** — current price: **{price:.2}**"),
-                )
-                .await?;
-        }
-    }
-
-    Ok(())
-}
-
-async fn cmd_remove(
-    col: &Collection<UserTrack>,
-    channel_id: &str,
-    user_id: &str,
-    target: &str,
-    client: &crate::revolt::RevoltClient,
-) -> Result<()> {
-    let mut doc = get_or_create(col, user_id).await?;
-
-    if doc.product_links.is_empty() {
-        client.send_message(channel_id, "❌ You have no tracked products.").await?;
-        return Ok(());
-    }
-
-    let maybe_pos = if let Ok(n) = target.parse::<usize>() {
-        if n >= 1 && n <= doc.product_links.len() {
-            Some(n - 1)
-        } else {
-            None
-        }
+    let lowest = entries.iter().map(|e| e.price).fold(f64::INFINITY, f64::min);
+    let highest = entries.iter().map(|e| e.price).fold(f64::NEG_INFINITY, f64::max);
+    let footer = if entries.is_empty() {
+        "No history yet".to_string()
     } else {
-        doc.product_links.iter().position(|p| p.url == target)
+        format!(
+            "Lowest {} · Highest {} · {} change(s)",
+            format_price(lowest, currency),
+            format_price(highest, currency),
+            entries.len() - 1
+        )
     };
 
-    match maybe_pos {
-        None => {
-            client.send_message(channel_id, "❌ Product not found. Use `!pt list` to see positions.").await?;
-        }
-        Some(i) => {
-            let removed = doc.product_links.remove(i);
-            save(col, &doc).await?;
-            client
-                .send_message(channel_id, &format!("🗑️ Removed **{}**.", removed.name))
-                .await?;
-        }
-    }
-
-    Ok(())
+    Ok(EditInteractionResponse::new().embed(
+        CreateEmbed::new()
+            .title(format!("📈 Price History — {}", truncate(&product.name, 200)))
+            .url(&product.url)
+            .description(join_limited(lines.into_iter(), "\n", MAX_DESCRIPTION))
+            .footer(CreateEmbedFooter::new(footer))
+            .color(EMBED_COLOR),
+    ))
 }
 
-async fn cmd_list(
-    col: &Collection<UserTrack>,
-    channel_id: &str,
-    user_id: &str,
-    client: &crate::revolt::RevoltClient,
-) -> Result<()> {
-    let doc = get_or_create(col, user_id).await?;
-
-    if doc.product_links.is_empty() {
-        client.send_message(channel_id, "📭 You have no tracked products yet. Use `!pt add <url>` to start.").await?;
-        return Ok(());
-    }
-
-    let mut msg = format!("## 📦 Tracked Products ({} total)\n\n", doc.product_links.len());
-
-    for (i, p) in doc.product_links.iter().enumerate() {
-        let last = p.price_history.last();
-        let price_str = last.map(|e| format!("{:.2}", e.price)).unwrap_or_else(|| "–".into());
-        let date_str = last
-            .map(|e| e.timestamp.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| "unknown".into());
-
-        msg.push_str(&format!(
-            "**{}**. {}\n{}\nLast price: **{}** on {}\n\n",
-            i + 1, p.name, p.url, price_str, date_str
-        ));
-    }
-
-    client.send_message(channel_id, &msg).await?;
-    Ok(())
+/// Seconds since the epoch, for Discord's `<t:…>` timestamp markup.
+fn unix(t: mongodb::bson::DateTime) -> i64 {
+    t.timestamp_millis() / 1000
 }
 
-async fn cmd_history(
-    col: &Collection<UserTrack>,
-    channel_id: &str,
-    user_id: &str,
-    target: &str,
-    client: &crate::revolt::RevoltClient,
-) -> Result<()> {
-    let doc = get_or_create(col, user_id).await?;
-
-    if doc.product_links.is_empty() {
-        client.send_message(channel_id, "❌ You have no tracked products.").await?;
-        return Ok(());
+fn truncate(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        return s.to_string();
     }
-
-    let product = if let Ok(n) = target.parse::<usize>() {
-        doc.product_links.get(n.saturating_sub(1))
-    } else {
-        doc.product_links.iter().find(|p| p.url == target)
-    };
-
-    match product {
-        None => {
-            client.send_message(channel_id, "❌ Product not found.").await?;
-        }
-        Some(p) => {
-            let mut msg = format!("## 📈 Price History — {}\n\n", p.name);
-
-            for entry in &p.price_history {
-                msg.push_str(&format!(
-                    "• **{:.2}** — {}\n",
-                    entry.price,
-                    entry.timestamp.format("%Y-%m-%d %H:%M UTC")
-                ));
-            }
-
-            client.send_message(channel_id, &msg).await?;
-        }
-    }
-
-    Ok(())
+    let mut out: String = s.chars().take(max_chars - 1).collect();
+    out.push('…');
+    out
 }
 
-// ─────────────────────────────────────────────
-//  DB helpers
-// ─────────────────────────────────────────────
+fn escape_link_text(s: &str) -> String {
+    s.replace('[', "(").replace(']', ")")
+}
 
-async fn get_or_create(col: &Collection<UserTrack>, user_id: &str) -> Result<UserTrack> {
-    match col.find_one(doc! { "user_id": user_id }, None).await? {
-        Some(d) => Ok(d),
-        None => Ok(UserTrack {
-            user_id: user_id.to_string(),
-            product_links: vec![],
-        }),
+/// Join entries until the next one would exceed `limit` characters.
+fn join_limited(entries: impl Iterator<Item = String>, sep: &str, limit: usize) -> String {
+    let mut out = String::new();
+    let mut total = 0;
+    let entries: Vec<String> = entries.collect();
+    for (shown, entry) in entries.iter().enumerate() {
+        let add = entry.chars().count() + if out.is_empty() { 0 } else { sep.len() };
+        if total + add > limit - 40 {
+            out.push_str(&format!("{sep}*… and {} more*", entries.len() - shown));
+            break;
+        }
+        if !out.is_empty() {
+            out.push_str(sep);
+        }
+        out.push_str(entry);
+        total += add;
     }
+    out
 }
 
-async fn save(col: &Collection<UserTrack>, user: &UserTrack) -> Result<()> {
-    let opts = ReplaceOptions::builder().upsert(true).build();
-    col.replace_one(doc! { "user_id": &user.user_id }, user, opts).await?;
-    Ok(())
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::{DateTime, oid::ObjectId};
 
-// ─────────────────────────────────────────────
-//  Hourly cron job  (equiv. node-cron)
-// ─────────────────────────────────────────────
-
-/// Called once per hour by the scheduler in main.
-/// Iterates every tracked product and updates its price history.
-pub async fn run_price_check_cron(db: Database) {
-    let col: Collection<UserTrack> = db.collection("usertrack");
-
-    let mut cursor = match col.find(None, None).await {
-        Ok(c) => c,
-        Err(e) => {
-            error!(error = %e, "Cron: failed to query usertrack collection");
-            return;
+    fn product(id: u8, url: &str) -> TrackedProduct {
+        TrackedProduct {
+            id: ObjectId::from_bytes([id; 12]),
+            user_id: 1,
+            url: url.into(),
+            name: format!("P{id}"),
+            currency: None,
+            last_price: Some(1.0),
+            created_at: DateTime::now(),
+            last_checked: None,
+            next_check_at: DateTime::now(),
+            failures: 0,
+            lease_until: None,
         }
-    };
+    }
 
-    while let Some(res) = cursor.next().await {
-        let mut user = match res {
-            Ok(u) => u,
-            Err(e) => {
-                error!(error = %e, "Cron: cursor error");
-                continue;
-            }
-        };
+    #[test]
+    fn find_by_position_or_url() {
+        let ps = vec![product(10, "https://a.com/x"), product(11, "https://b.com/")];
+        assert_eq!(find(&ps, "1").map(|(_, p)| p.url.as_str()), Some("https://a.com/x"));
+        assert_eq!(find(&ps, "2").map(|(_, p)| p.url.as_str()), Some("https://b.com/"));
+        assert!(find(&ps, "0").is_none());
+        assert!(find(&ps, "3").is_none());
+        assert_eq!(find(&ps, "https://b.com/").map(|(n, _)| n), Some(2));
+        // Normalised the same way as on insert.
+        assert_eq!(find(&ps, "https://b.com").map(|(n, _)| n), Some(2));
+        assert!(find(&ps, "https://c.com/").is_none());
+    }
 
-        let mut changed = false;
+    #[test]
+    fn limited_join() {
+        let entries = (0..100).map(|i| format!("entry number {i}"));
+        let s = join_limited(entries, "\n", 200);
+        assert!(s.chars().count() <= 200);
+        assert!(s.ends_with("more*"));
+        assert_eq!(join_limited(["a".to_string()].into_iter(), "\n", 200), "a");
+    }
 
-        for product in &mut user.product_links {
-            if !product.valid {
-                continue;
-            }
-
-            match scrape_product(&product.url).await {
-                None => {
-                    error!(url = %product.url, "Cron: scrape failed — marking invalid");
-                    product.valid = false;
-                    changed = true;
-                }
-                Some((name, price)) => {
-                    let last = product.price_history.last().map(|e| e.price);
-                    if last != Some(price) {
-                        info!(url = %product.url, old_price = ?last, new_price = price, "Price change detected");
-                        product.price_history.push(PriceEntry { price, timestamp: Utc::now() });
-                        changed = true;
-                    }
-                    product.name = name;
-                    product.last_checked = Utc::now();
-                    product.valid = true;
-                }
-            }
-        }
-
-        if changed {
-            if let Err(e) = save(&col, &user).await {
-                error!(error = %e, user_id = %user.user_id, "Cron: save failed");
-            }
-        }
+    #[test]
+    fn truncation() {
+        assert_eq!(truncate("abc", 5), "abc");
+        assert_eq!(truncate("abcdef", 4), "abc…");
     }
 }

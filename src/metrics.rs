@@ -1,47 +1,80 @@
 use axum::{
-    http::{header, HeaderValue, StatusCode},
-    routing::get,
     Router,
+    http::{HeaderValue, StatusCode, header},
+    routing::get,
 };
-use once_cell::sync::Lazy;
 use prometheus::{
-    register_counter_vec, register_histogram_vec, CounterVec, Encoder, HistogramVec, TextEncoder,
+    CounterVec, Encoder, HistogramVec, TextEncoder, register_counter_vec, register_histogram_vec,
 };
+use std::sync::LazyLock;
 use tracing::{error, info};
 
 // ─────────────────────────────────────────────
 //  Global metric instances
+//
+//  Names and labels match the previous TypeScript bot so the existing
+//  Prometheus alert rules and Grafana dashboards keep working.
 // ─────────────────────────────────────────────
 
 /// Number of commands received / completed / failed
-pub static COMMAND_COUNTER: Lazy<CounterVec> = Lazy::new(|| {
+pub static COMMAND_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
     register_counter_vec!(
-        "revolt_command_total",
-        "Number of bot commands executed, by command name and status",
+        "discord_command_total",
+        "Count of Discord commands executed",
         &["command", "status"]
     )
-    .expect("failed to register revolt_command_total")
+    .expect("failed to register discord_command_total")
 });
 
-/// Number of outbound weather API calls
-pub static WEATHER_API_COUNTER: Lazy<CounterVec> = Lazy::new(|| {
+/// Number of self-assigned role changes
+pub static ROLE_ASSIGNMENT_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "discord_role_assignments_total",
+        "Count of role assignments",
+        &["action", "role"]
+    )
+    .expect("failed to register discord_role_assignments_total")
+});
+
+/// Number of outbound weather / geocoding API calls
+pub static WEATHER_API_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
     register_counter_vec!(
         "weather_api_requests_total",
-        "Number of requests made to weather or geocoding APIs",
+        "Count of weather API requests",
         &["type", "status"]
     )
     .expect("failed to register weather_api_requests_total")
 });
 
 /// End-to-end command latency
-pub static RESPONSE_TIME: Lazy<HistogramVec> = Lazy::new(|| {
+pub static RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec!(
-        "revolt_command_response_time_seconds",
-        "Latency for handling a bot command, in seconds",
+        "discord_command_response_time_seconds",
+        "Response time for Discord commands",
         &["command", "status"],
-        vec![0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+        vec![0.1, 0.5, 1.0, 2.5, 5.0, 10.0]
     )
-    .expect("failed to register revolt_command_response_time_seconds")
+    .expect("failed to register discord_command_response_time_seconds")
+});
+
+/// Number of product price checks performed by the hourly job
+pub static PRICE_CHECK_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "price_checks_total",
+        "Count of product price checks, by outcome",
+        &["status"]
+    )
+    .expect("failed to register price_checks_total")
+});
+
+/// Page fetches by the price scraper, by method and outcome
+pub static SCRAPE_FETCH_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "price_scrape_fetches_total",
+        "Count of price-scraper page fetches, by method (direct, flaresolverr, byparr, mercadolivre_api) and result",
+        &["method", "result"]
+    )
+    .expect("failed to register price_scrape_fetches_total")
 });
 
 // ─────────────────────────────────────────────
@@ -52,16 +85,17 @@ pub static RESPONSE_TIME: Lazy<HistogramVec> = Lazy::new(|| {
 pub fn start_metrics_server(port: u16) {
     // Force static initialisation so all metrics are registered before the
     // first scrape (avoids "metric not found" errors in Prometheus).
-    let _ = &*COMMAND_COUNTER;
-    let _ = &*WEATHER_API_COUNTER;
-    let _ = &*RESPONSE_TIME;
+    LazyLock::force(&COMMAND_COUNTER);
+    LazyLock::force(&ROLE_ASSIGNMENT_COUNTER);
+    LazyLock::force(&WEATHER_API_COUNTER);
+    LazyLock::force(&RESPONSE_TIME);
+    LazyLock::force(&PRICE_CHECK_COUNTER);
+    LazyLock::force(&SCRAPE_FETCH_COUNTER);
 
     tokio::spawn(async move {
         let app = Router::new().route("/metrics", get(metrics_handler));
 
         let addr = format!("0.0.0.0:{port}");
-        info!("Metrics server listening at http://{addr}/metrics");
-
         let listener = match tokio::net::TcpListener::bind(&addr).await {
             Ok(l) => l,
             Err(e) => {
@@ -69,6 +103,7 @@ pub fn start_metrics_server(port: u16) {
                 return;
             }
         };
+        info!("Metrics server listening at http://{addr}/metrics");
 
         if let Err(e) = axum::serve(listener, app).await {
             error!(error = %e, "Metrics server error");
@@ -97,9 +132,5 @@ async fn metrics_handler() -> impl axum::response::IntoResponse {
     let content_type = HeaderValue::from_str(encoder.format_type())
         .unwrap_or_else(|_| HeaderValue::from_static("text/plain; version=0.0.4"));
 
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, content_type)],
-        buf,
-    )
+    (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], buf)
 }
