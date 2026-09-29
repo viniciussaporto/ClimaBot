@@ -965,7 +965,7 @@
         },
         {
           "uid": "srv-container-restarting",
-          "title": "Container restarting",
+          "title": "Container crash-looping",
           "condition": "C",
           "data": [
             {
@@ -978,6 +978,67 @@
               "model": {
                 "refId": "A",
                 "expr": "max by (name) (changes(container_start_time_seconds{name!=\"\"}[15m]))",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        2
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "{{ $labels.name }} restarted 3+ times in 15 minutes",
+            "description": "It keeps exiting and being restarted. Check `docker logs {{ $labels.name }}`."
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "srv-container-oom",
+          "title": "Container ran out of memory",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "sum by (name) (increase(container_oom_events_total{name!=\"\"}[15m]))",
                 "instant": true,
                 "range": false,
                 "intervalMs": 15000,
@@ -1011,8 +1072,8 @@
             "severity": "info"
           },
           "annotations": {
-            "summary": "{{ $labels.name }} restarted",
-            "description": "It exited and was restarted: a crash, running out of memory, or a manual `docker restart` (several in a row = crash loop). Check `docker logs {{ $labels.name }}`. Recreating a container (e.g. `climabot update`) doesn't trigger this."
+            "summary": "{{ $labels.name }} was killed for running out of memory",
+            "description": "The kernel OOM-killed a process in it (it may have restarted fine). If it repeats, raise its memory limit or look for a leak on 'Docker Host & Containers'."
           },
           "notification_settings": {
             "receiver": "Discord (info)",
