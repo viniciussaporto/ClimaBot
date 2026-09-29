@@ -9,11 +9,15 @@ here=$(cd "$(dirname "$0")" && pwd)
 JS_STACK_DIR=${CLIMABOT_JS_STACK_DIR:-/root/climabot-js}
 RC=${CLIMABOT_ALIAS_FILE:-/root/.bashrc}
 
-install -m 0755 "$here/climabot" /usr/local/bin/climabot
+# Copy then rename, so a `climabot` process that is running this very
+# update keeps reading its old file.
+install -m 0755 "$here/climabot" /usr/local/bin/.climabot.new
+mv -f /usr/local/bin/.climabot.new /usr/local/bin/climabot
 echo "Installed /usr/local/bin/climabot"
 
 install -d -m 0755 "$JS_STACK_DIR"
-install -m 0644 "$here/javascript/docker-compose.yml" "$JS_STACK_DIR/docker-compose.yml"
+install -m 0644 "$here/javascript/docker-compose.yml" "$JS_STACK_DIR/.docker-compose.yml.new"
+mv -f "$JS_STACK_DIR/.docker-compose.yml.new" "$JS_STACK_DIR/docker-compose.yml"
 if [[ ! -f "$JS_STACK_DIR/.env" ]]; then
     install -m 0600 /dev/null "$JS_STACK_DIR/.env"
     echo "Created $JS_STACK_DIR/.env: fill in TOKEN, CLIENT_ID and OPENCAGEAPIKEY"

@@ -68,6 +68,9 @@ wait_for_login() {
 
 build_rust() {
     git_pull "$RUST_DIR" "$RUST_BRANCH"
+    # The pulled checkout may carry a newer version of this tooling.
+    log "Refreshing the climabot command"
+    "$RUST_DIR/deploy/install.sh" >/dev/null
     log "Pulling images (MongoDB, FlareSolverr, Byparr)"
     rust_compose pull --ignore-buildable --quiet
     log "Building the Rust bot"
