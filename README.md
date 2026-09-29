@@ -107,7 +107,7 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 
 #### Managing the production server
 
-`deploy/install.sh` installs a `climabot` command, `climabot-*` shortcuts and an SSH login banner (`/etc/profile.d/climabot.sh`) that switches between this Rust bot and the previous TypeScript bot, which stays available as a fallback. Only one runs at a time, since both use the same token and metrics port:
+`deploy/install.sh` installs a `climabot` command that switches between this Rust bot and the previous TypeScript bot (kept as a fallback), plus `climabot-*` shortcuts and an SSH login banner listing them (`/etc/profile.d/climabot.sh`). Only one runs at a time, since both use the same token and metrics port:
 
 | Alias | Command | What it does |
 | --- | --- | --- |
