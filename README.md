@@ -119,6 +119,8 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 
 Grafana dashboards live in `deploy/grafana/` as code: edit `build_dashboards.py`, run it to regenerate the JSON, and commit. `climabot update` provisions them into the monitoring stack (folders **ClimaBot** and **Infrastructure Metrics**). Container and host metrics come from cAdvisor in the monitoring stack.
 
+Alerts are also code: `deploy/grafana/build_alerts.py` generates `alerting/urgent.yaml` (bot, website, API, status page, certificates, disk/memory: sent to the **Telegram** contact point) and `alerting/info.yaml` (restarts, error rates, price checks, slow site, resources: sent to **Discord**). The Discord contact point is created from a webhook URL stored in `/root/monitoring/secrets/discord-webhook-url`; without it only the urgent alerts are installed. Website uptime and TLS expiry are probed by the blackbox exporter (`deploy/monitoring/blackbox.yml`).
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 

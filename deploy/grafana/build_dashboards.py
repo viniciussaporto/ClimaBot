@@ -368,10 +368,12 @@ def climabot():
                 desc="Whole server, working set."), 8, 6)
     L.add(gauge("Fullest disk", f"max(container_fs_usage_bytes{{{DISKS}}} / container_fs_limit_bytes{{{DISKS}}})",
                 desc="Most-used real disk on the server."), 8, 6)
-    L.add(text("Logs", "Logs are not shipped to Loki. On the server:\n\n"
-                       "* live: `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`\n"
-                       "* JSON files (7 days): `/var/log/climabot/climabot.log.YYYY-MM-DD`\n"
-                       "* status / switch bots: `climabot status`"), 24, 4)
+    L.add(text("Where are the logs?",
+               "The bot's logs can't be viewed in Grafana yet (they aren't sent to a log database). "
+               "To read them, SSH into the server and run:\n\n"
+               "* `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`: live output\n"
+               "* `less /var/log/climabot/climabot.log.$(date +%F)`: today's log file (JSON, 7 days kept)\n"
+               "* `climabot status`: which bot is running and its containers"), 24, 4)
 
     return dashboard(
         "ded6lbvrb7lkwc", "ClimaBot", L.panels, [datasource_var()],

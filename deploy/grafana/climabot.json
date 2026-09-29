@@ -2691,10 +2691,10 @@
     },
     {
       "type": "text",
-      "title": "Logs",
+      "title": "Where are the logs?",
       "options": {
         "mode": "markdown",
-        "content": "Logs are not shipped to Loki. On the server:\n\n* live: `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`\n* JSON files (7 days): `/var/log/climabot/climabot.log.YYYY-MM-DD`\n* status / switch bots: `climabot status`"
+        "content": "The bot's logs can't be viewed in Grafana yet (they aren't sent to a log database). To read them, SSH into the server and run:\n\n* `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`: live output\n* `less /var/log/climabot/climabot.log.$(date +%F)`: today's log file (JSON, 7 days kept)\n* `climabot status`: which bot is running and its containers"
       },
       "id": 40,
       "gridPos": {

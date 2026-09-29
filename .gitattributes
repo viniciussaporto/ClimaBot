@@ -4,3 +4,5 @@ deploy/climabot text eol=lf
 *.yml text eol=lf
 Dockerfile text eol=lf
 *.py text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
