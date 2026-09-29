@@ -7,10 +7,10 @@
 #   climabot update            pull + rebuild + restart whichever bot is running
 #   climabot stop              stop whichever bot(s) are running
 #   climabot status            show what is running
+#   climabot logs              follow the running bot's logs
 #
-# Installed by deploy/install.sh, which also adds the aliases
-# climabot-start-rust, climabot-start-javascript, climabot-update and
-# climabot-stop. Paths and branches can be overridden through the
+# Installed by deploy/install.sh, which also installs the climabot-* shell
+# shortcuts and SSH login banner (/etc/profile.d/climabot.sh). Paths and branches can be overridden through the
 # variables below (e.g. in /etc/default/climabot).
 
 set -euo pipefail
@@ -158,6 +158,16 @@ cmd_stop() {
     if (( stopped )); then log "Stopped"; else log "No bot was running"; fi
 }
 
+cmd_logs() {
+    if rust_running; then
+        rust_compose logs -f --tail 100 climabot
+    elif js_running; then
+        js_compose logs -f --tail 100 climabot
+    else
+        die "no bot is running"
+    fi
+}
+
 cmd_status() {
     if rust_running; then
         echo "Rust bot: running ($(git -C "$RUST_DIR" log --oneline -1 2>/dev/null))"
@@ -178,8 +188,9 @@ case "${1:-}" in
     update) cmd_update ;;
     stop) cmd_stop ;;
     status) cmd_status ;;
+    logs) cmd_logs ;;
     *)
-        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
         exit 1
         ;;
 esac

@@ -107,7 +107,7 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 
 #### Managing the production server
 
-`deploy/install.sh` installs a `climabot` command (plus aliases) that switches between this Rust bot and the previous TypeScript bot, which stays available as a fallback. Only one runs at a time, since both use the same token and metrics port:
+`deploy/install.sh` installs a `climabot` command, `climabot-*` shortcuts and an SSH login banner (`/etc/profile.d/climabot.sh`) that switches between this Rust bot and the previous TypeScript bot, which stays available as a fallback. Only one runs at a time, since both use the same token and metrics port:
 
 | Alias | Command | What it does |
 | --- | --- | --- |
@@ -116,6 +116,8 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 | `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running |
 | `climabot-stop` | `climabot stop` | Stop whichever bot is running |
 | `climabot-status` | `climabot status` | Show what is running |
+| `climabot-logs` | `climabot logs` | Follow the running bot's logs |
+| `climabot-help` | | Show the command list (also printed on every SSH login, with which bot is running) |
 
 Grafana dashboards live in `deploy/grafana/` as code: edit `build_dashboards.py`, run it to regenerate the JSON, and commit. `climabot update` provisions them into the monitoring stack (folders **ClimaBot** and **Infrastructure Metrics**). Container and host metrics come from cAdvisor in the monitoring stack.
 
