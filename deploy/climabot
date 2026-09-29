@@ -50,12 +50,13 @@ ensure_network() {
     }
 }
 
-# Wait for the bot to log in to Discord (or give up after ~90 s).
+# Wait for the bot to log in to Discord (or give up after ~90 s). Only log
+# lines written after `since` count, so an earlier login can't fool it.
 wait_for_login() {
-    local compose=$1 pattern=$2
+    local compose=$1 pattern=$2 since=$3
     log "Waiting for the bot to log in to Discord"
     for _ in $(seq 1 45); do
-        if $compose logs --since 5m climabot 2>&1 | grep -q "$pattern"; then
+        if $compose logs --since "$since" climabot 2>&1 | grep -q "$pattern"; then
             log "Bot is online"
             return 0
         fi
@@ -79,18 +80,25 @@ build_js() {
     js_compose build climabot
 }
 
+# Start the stack, then always recreate the bot container so it restarts
+# even when nothing changed (MongoDB and the browsers are left alone).
 up_rust() {
     ensure_network
     log "Starting the Rust stack"
+    local since
+    since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     rust_compose up -d --remove-orphans
-    wait_for_login rust_compose "Logged in to Discord"
+    rust_compose up -d --no-deps --force-recreate climabot
+    wait_for_login rust_compose "Logged in to Discord" "$since"
 }
 
 up_js() {
     ensure_network
     log "Starting the JavaScript bot"
-    js_compose up -d --remove-orphans
-    wait_for_login js_compose "Logged in as"
+    local since
+    since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    js_compose up -d --remove-orphans --force-recreate
+    wait_for_login js_compose "Logged in as" "$since"
 }
 
 stop_rust() {
