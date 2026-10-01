@@ -11,6 +11,10 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
 DS = {"type": "prometheus", "uid": "${datasource}"}
+# The website stack's Loki (fixed uid from its install-grafana.sh); its Alloy
+# ships the bot's JSON log files there as {job="climabot", level=...}.
+LOKI = {"type": "loki", "uid": "vsite-loki"}
+LOGS = '{job="climabot"}'
 BOT = 'job="climabot"'
 STACK = 'container_label_com_docker_compose_project="climabot"'
 SVC = "container_label_com_docker_compose_service"
@@ -153,6 +157,20 @@ def table(title, queries, rename, desc="", units=None, sort_by=None):
                                      "noValue": "–"}, "overrides": overrides},
         "options": {"showHeader": True, "cellHeight": "sm",
                     "sortBy": [{"displayName": sort_by, "desc": True}] if sort_by else []},
+    }
+
+
+def loki_target(expr, legend="", ref="A"):
+    return {"datasource": LOKI, "expr": expr, "legendFormat": legend, "refId": ref, "queryType": "range"}
+
+
+def logs(title, expr, desc=""):
+    return {
+        "type": "logs", "title": title, "description": desc, "datasource": LOKI,
+        "targets": [loki_target(expr)],
+        "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True,
+                    "sortOrder": "Descending", "dedupStrategy": "none", "showLabels": False,
+                    "showCommonLabels": False, "prettifyLogMessage": False},
     }
 
 
@@ -368,12 +386,26 @@ def climabot():
                 desc="Whole server, working set."), 8, 6)
     L.add(gauge("Fullest disk", f"max(container_fs_usage_bytes{{{DISKS}}} / container_fs_limit_bytes{{{DISKS}}})",
                 desc="Most-used real disk on the server."), 8, 6)
-    L.add(text("Where are the logs?",
-               "The bot's logs can't be viewed in Grafana yet (they aren't sent to a log database). "
-               "To read them, SSH into the server and run:\n\n"
-               "* `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`: live output\n"
-               "* `less /var/log/climabot/climabot.log.$(date +%F)`: today's log file (JSON, 7 days kept)\n"
-               "* `climabot status`: which bot is running and its containers"), 24, 4)
+    # ── Logs (Loki) ───────────────────────────
+    L.row("Logs")
+    # The message becomes the log line; the other fields (url, error, …) show
+    # in each line's details.
+    message = '| json | line_format "{{.fields_message}}"'
+    volume = timeseries("Log lines by level",
+                        [loki_target(f"sum by (level) (count_over_time({LOGS} [$__interval]))", "{{level}}")],
+                        bars=True, stack=True, legend_calcs=("sum",),
+                        desc="Spikes of warn/error lines usually explain an alert.",
+                        overrides=[{"matcher": {"id": "byName", "options": n},
+                                    "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]}
+                                   for n, c in (("info", "green"), ("warn", "orange"), ("error", "red"),
+                                                ("debug", "blue"))])
+    volume["datasource"] = LOKI
+    L.add(volume, 24, 6)
+    L.add(logs("Warnings and errors", f'{{job="climabot", level=~"warn|error"}} {message}',
+               desc="Newest first. Expand a line for its fields."), 24, 10)
+    L.add(logs("All logs", f"{LOGS} {message}",
+               desc="Everything the bot logged (info and above). On the server the same JSON is in "
+                    "/var/log/climabot/climabot.log.YYYY-MM-DD (7 days kept); Loki keeps 30 days."), 24, 12)
 
     return dashboard(
         "ded6lbvrb7lkwc", "ClimaBot", L.panels, [datasource_var()],

@@ -57,6 +57,18 @@ ensure_network() {
     }
 }
 
+# The bot runs as uid 10001 and writes its logs to a host directory (shipped
+# to Loki from there). Docker creates a missing bind-mount source owned by
+# root, and so might the website stack's Alloy mount: fix the owner each time.
+ensure_log_dir() {
+    local dir
+    dir=$(sed -n 's/^CLIMABOT_LOG_DIR=//p' "$RUST_DIR/.env" 2>/dev/null | tail -n 1)
+    dir=${dir//[\"\']/}
+    dir=${dir:-/var/log/climabot}
+    install -d -m 0755 "$dir"
+    chown 10001:10001 "$dir"
+}
+
 # Wait for the bot to log in to Discord (or give up after ~90 s). Only log
 # lines written after `since` count, so an earlier login can't fool it.
 wait_for_login() {
@@ -94,6 +106,7 @@ build_js() {
 # even when nothing changed (MongoDB and the browsers are left alone).
 up_rust() {
     ensure_network
+    ensure_log_dir
     log "Starting the Rust stack"
     local since
     since=$(date -u +%Y-%m-%dT%H:%M:%SZ)

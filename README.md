@@ -95,7 +95,7 @@ If you want to self-host (which is what I recommend), ClimaBot is written in Rus
 4. Create the network shared with your monitoring stack (once) with `docker network create climabot-monitoring`, and attach Prometheus to it.
 5. Run `docker compose up -d --build`. This starts the bot and a MongoDB instance on an internal network only the bot can reach.
 
-Prometheus scrapes `climabot:9464/metrics` over the shared network (it is also published on `127.0.0.1:9465`). Price-tracking data lives in MongoDB (`products` and `price_history` collections), and JSON logs rotate daily under `/var/log/climabot`.
+Prometheus scrapes `climabot:9464/metrics` over the shared network (it is also published on `127.0.0.1:9465`). The same port serves `/status`, a small JSON health report for uptime monitors (see below). Price-tracking data lives in MongoDB (`products`, `price_history` and `fetch_methods` collections), and JSON logs rotate daily under `/var/log/climabot` on the host (7 days kept).
 
 To verify a deployment (Discord credentials, registered commands, per-server role menus, weather APIs, database) run:
 
@@ -122,6 +122,19 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 Grafana dashboards live in `deploy/grafana/` as code: edit `build_dashboards.py`, run it to regenerate the JSON, and commit. `climabot update` provisions them into the monitoring stack (folders **ClimaBot** and **Infrastructure Metrics**). Container and host metrics come from cAdvisor in the monitoring stack.
 
 Alerts are also code: `deploy/grafana/build_alerts.py` generates `alerting/urgent.yaml` (bot, website, API, status page, certificates, disk/memory: sent to the **Telegram** contact point) and `alerting/info.yaml` (restarts, error rates, price checks, slow site, resources: sent to **Discord**). The Discord contact point is created from a webhook URL stored in `/root/monitoring/secrets/discord-webhook-url`; without it only the urgent alerts are installed. Website uptime and TLS expiry are probed by the blackbox exporter (`deploy/monitoring/blackbox.yml`).
+
+**Logs** are in Grafana too: the website stack's Alloy tails `/var/log/climabot/climabot.log.*` and ships it to its Loki as `{job="climabot", level="info|warn|error"}` (30 days kept). The ClimaBot dashboard's **Logs** row shows log volume by level, warnings/errors and everything else; in Explore, query e.g. `{job="climabot", level="error"} | json`. The pipeline lives in the website repo (`deploy/alloy/config.alloy`).
+
+#### Alerts when Grafana is down
+
+Every alert above is sent by Grafana, so if Grafana (or the whole server) dies, nothing is sent. Two monitors on an external uptime service (UptimeRobot, Better Stack or similar; free plans are enough) cover that, notifying the same Telegram chat as the urgent alerts:
+
+| Monitor | URL | Healthy when |
+| --- | --- | --- |
+| ClimaBot | `https://vinisaporto.de/api/climabot/status` | HTTP 200 and the body contains `"ok":true` |
+| Grafana | `https://grafana.vinisaporto.de/api/health` | HTTP 200 and the body contains `"database": "ok"` |
+
+`/status` answers `{"ok":true,"discord":true,"database":true,"version":"…"}` when a shard is connected to Discord's gateway and MongoDB answers, and HTTP 503 with `"ok":false` otherwise (also for a minute or so after a start). Caddy forwards only that path to the bot (website repo, `deploy/caddy/vinisaporto.caddy`); `/metrics` stays private. Check every 5 minutes, alert after 2 failures, and add a maintenance window for the nightly update (05:25–06:15 UTC) if the service supports it. The fallback JavaScript bot has no `/status`, so this monitor reports it as down.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -188,7 +201,7 @@ This is an example of how to list things you need to use the software and how to
 | `/pt list` / `/pt history <item>` / `/pt remove <item>` | Manage tracked products (`item` is the position from `/pt list` or the URL) |
 | `/help` | Command overview |
 
-Price tracking tries a direct request first, then two challenge-solving browsers that also render JavaScript: [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) (Chrome; handles Akamai and many Cloudflare pages) and [Byparr](https://github.com/ThePhaseless/Byparr) (Firefox; handles Cloudflare challenges FlareSolverr can't). The method that last worked for a shop is tried first on the next check. Prices are read from schema.org data, product meta tags, dedicated rules for Amazon and AliExpress, or common price markup, in any currency.
+Price tracking tries a direct request first, then two challenge-solving browsers that also render JavaScript: [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) (Chrome; handles Akamai and many Cloudflare pages) and [Byparr](https://github.com/ThePhaseless/Byparr) (Firefox; handles Cloudflare challenges FlareSolverr can't). The method that last worked for a shop is tried first on the next check, and is remembered in MongoDB across restarts. Prices are read from schema.org data, product meta tags, dedicated rules for Amazon and AliExpress, or common price markup, in any currency.
 
 Some shops block datacenter IPs outright, whatever the browser does (Mercado Livre's website, for example). For those, set `SCRAPER_PROXY` to a residential proxy, or, for Mercado Livre specifically, set `ML_CLIENT_ID`/`ML_CLIENT_SECRET` from a free [Mercado Livre developer app](https://developers.mercadolivre.com.br) to use their official API. Shops that adapt to the visitor's country (AliExpress) show prices for the server's or proxy's country.
 

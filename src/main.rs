@@ -3,6 +3,7 @@ mod logger;
 mod metrics;
 mod pricetracker;
 mod selfcheck;
+mod status;
 
 use anyhow::{Context as _, Result, anyhow};
 use pricetracker::store::Store;
@@ -150,11 +151,12 @@ async fn main() -> Result<()> {
     let mongo = mongo_config();
     let store = connect_with_retry(&mongo).await;
     info!(database = %mongo.database, "Connected to MongoDB");
+    pricetracker::remember_fetch_methods(store.clone()).await;
 
     // Slash commands and components need no privileged intents.
     let mut client = Client::builder(&token, GatewayIntents::GUILDS)
         .event_handler(Handler {
-            store,
+            store: store.clone(),
             price_job_started: AtomicBool::new(false),
             guilds: Mutex::new(HashSet::new()),
         })
@@ -162,6 +164,7 @@ async fn main() -> Result<()> {
         .context("creating Discord client")?;
 
     tokio::spawn(sample_gateway_latency(client.shard_manager.clone()));
+    tokio::spawn(status::run_probes(store, client.shard_manager.clone()));
 
     let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {

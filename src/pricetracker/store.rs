@@ -5,6 +5,10 @@
 //! (`next_check_at`), so checks don't follow a machine-regular pattern. Workers claim a due product with an atomic
 //! `findOneAndUpdate` that sets a short lease, so several workers (or bot
 //! replicas) never check the same product at the same time.
+//!
+//! It also remembers which fetch method last worked for each shop
+//! (`fetch_methods`), so a restart doesn't make every shop's first check try
+//! every method again.
 
 use anyhow::{Context as _, Result};
 use futures_util::TryStreamExt;
@@ -66,6 +70,15 @@ pub struct PriceEntry {
     pub observed_at: DateTime,
 }
 
+/// The fetch method that last worked for a host (see `scrape`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchMethod {
+    #[serde(rename = "_id")]
+    pub host: String,
+    pub method: String,
+    pub updated_at: DateTime,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AddOutcome {
     Added,
@@ -77,6 +90,7 @@ pub enum AddOutcome {
 pub struct Store {
     products: Collection<TrackedProduct>,
     history: Collection<PriceEntry>,
+    fetch_methods: Collection<FetchMethod>,
 }
 
 /// Next hourly slot after `now`, keeping the product's phase: a product
@@ -125,9 +139,17 @@ impl Store {
         let store = Self {
             products: db.collection("products"),
             history: db.collection("price_history"),
+            fetch_methods: db.collection("fetch_methods"),
         };
         store.create_indexes().await?;
         Ok(store)
+    }
+
+    /// Whether MongoDB answers (for the health status).
+    pub async fn ping(&self) -> Result<()> {
+        let db = self.products.client().database(self.products.namespace().db.as_str());
+        db.run_command(doc! { "ping": 1 }).await?;
+        Ok(())
     }
 
     async fn create_indexes(&self) -> Result<()> {
@@ -312,6 +334,24 @@ impl Store {
             })
             .await?;
         Ok(product.last_price)
+    }
+
+    /// Every remembered fetch method, as (host, method label) pairs.
+    pub async fn fetch_methods(&self) -> Result<Vec<(String, String)>> {
+        let all: Vec<FetchMethod> = self.fetch_methods.find(doc! {}).await?.try_collect().await?;
+        Ok(all.into_iter().map(|m| (m.host, m.method)).collect())
+    }
+
+    /// Remember the fetch method that just worked for `host`.
+    pub async fn save_fetch_method(&self, host: &str, method: &str) -> Result<()> {
+        self.fetch_methods
+            .update_one(
+                doc! { "_id": host },
+                doc! { "$set": { "method": method, "updated_at": DateTime::now() } },
+            )
+            .upsert(true)
+            .await?;
+        Ok(())
     }
 
     /// Record a failed check and schedule the next one; returns the new
