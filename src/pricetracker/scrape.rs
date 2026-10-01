@@ -7,7 +7,8 @@
 //!    each retried once with extra wait time when it returns a challenge page
 //!    that may still be solving itself.
 //!
-//! The method that worked last for a shop is tried first next time.
+//! The method that worked last for a shop is tried first next time; the
+//! choice is saved in MongoDB so it survives restarts.
 //!
 //! Users supply arbitrary URLs, so every URL (including each redirect hop and
 //! the browser's final URL) must resolve only to public IP addresses on the
@@ -23,9 +24,10 @@ use std::{
     collections::HashMap,
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, OnceLock},
     time::Duration,
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use url::{Host, Url};
 
@@ -112,11 +114,42 @@ impl Method {
             Method::Solver(i) => solver::SOLVERS[i].name.to_ascii_lowercase(),
         }
     }
+
+    /// The method with this label, if it is still available (a browser may
+    /// have been unconfigured since it was saved).
+    fn from_label(label: &str) -> Option<Method> {
+        if label == "direct" {
+            return Some(Method::Direct);
+        }
+        solver::SOLVERS.iter().position(|s| s.name.eq_ignore_ascii_case(label)).map(Method::Solver)
+    }
 }
 
 /// The method that last worked for each host, tried first next time so hourly
 /// checks don't repeat attempts that are known to fail.
 static PREFERRED: LazyLock<Mutex<HashMap<String, Method>>> = LazyLock::new(Default::default);
+
+/// Where (host, method label) goes when a host's preferred method changes, to
+/// be saved. Unset (e.g. in `selfcheck`) means nothing is saved.
+static PREFERRED_CHANGES: OnceLock<UnboundedSender<(String, String)>> = OnceLock::new();
+
+/// Load saved preferred methods (host, method label); returns how many apply.
+pub fn restore_preferred(saved: impl IntoIterator<Item = (String, String)>) -> usize {
+    let mut preferred = PREFERRED.lock().unwrap_or_else(|p| p.into_inner());
+    let mut restored = 0;
+    for (host, label) in saved {
+        if let Some(method) = Method::from_label(&label) {
+            preferred.insert(host, method);
+            restored += 1;
+        }
+    }
+    restored
+}
+
+/// Send every future change of a host's preferred method to `tx`.
+pub fn report_preferred_changes(tx: UnboundedSender<(String, String)>) {
+    let _ = PREFERRED_CHANGES.set(tx);
+}
 
 fn methods_for(host: &str) -> Vec<Method> {
     let mut methods: Vec<Method> = std::iter::once(Method::Direct)
@@ -207,7 +240,12 @@ pub async fn fetch_product(raw_url: &str) -> Result<Product, ScrapeError> {
 
         match result {
             Ok(p) => {
-                PREFERRED.lock().unwrap_or_else(|p| p.into_inner()).insert(host, method);
+                let previous = PREFERRED.lock().unwrap_or_else(|p| p.into_inner()).insert(host.clone(), method);
+                if previous != Some(method)
+                    && let Some(tx) = PREFERRED_CHANGES.get()
+                {
+                    let _ = tx.send((host, method.label()));
+                }
                 return Ok(p);
             }
             // Refusing a URL is final, whichever method found out.
@@ -623,6 +661,18 @@ fn single_separator(token: &str, sep: char, minor_digits: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restores_only_available_methods() {
+        let saved = [
+            ("restore-test-a.example".to_string(), "direct".to_string()),
+            ("restore-test-b.example".to_string(), "no-such-browser".to_string()),
+        ];
+        assert_eq!(restore_preferred(saved), 1);
+        assert_eq!(methods_for("restore-test-a.example")[0], Method::Direct);
+        let preferred = PREFERRED.lock().unwrap();
+        assert!(!preferred.contains_key("restore-test-b.example"));
+    }
 
     #[test]
     fn parses_human_prices() {

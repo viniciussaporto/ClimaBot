@@ -123,7 +123,8 @@ pub static PRICE_CHECK_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
 //  HTTP server
 // ─────────────────────────────────────────────
 
-/// Spawn an Axum HTTP server that serves Prometheus metrics at `/metrics`.
+/// Spawn an Axum HTTP server that serves Prometheus metrics at `/metrics` and
+/// the public health status at `/status`.
 pub fn start_metrics_server(port: u16) {
     // Force static initialisation so all metrics are registered before the
     // first scrape (avoids "metric not found" errors in Prometheus).
@@ -140,7 +141,9 @@ pub fn start_metrics_server(port: u16) {
     LazyLock::force(&PRICE_CHECK_DURATION);
 
     tokio::spawn(async move {
-        let app = Router::new().route("/metrics", get(metrics_handler));
+        let app = Router::new()
+            .route("/metrics", get(metrics_handler))
+            .route("/status", get(crate::status::handler));
 
         let addr = format!("0.0.0.0:{port}");
         let listener = match tokio::net::TcpListener::bind(&addr).await {

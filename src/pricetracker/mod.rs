@@ -75,6 +75,29 @@ async fn wait_for_site(url: &str) {
     }
 }
 
+/// Load the fetch methods saved by earlier runs, and save every change from
+/// now on, so a restart doesn't make each shop's first check try every method.
+pub async fn remember_fetch_methods(store: Store) {
+    match store.fetch_methods().await {
+        Ok(saved) => {
+            let restored = scrape::restore_preferred(saved);
+            info!(shops = restored, "Restored remembered fetch methods");
+        }
+        Err(e) => warn!(error = %e, "Could not load remembered fetch methods"),
+    }
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, String)>();
+    scrape::report_preferred_changes(tx);
+    tokio::spawn(async move {
+        while let Some((host, method)) = rx.recv().await {
+            match store.save_fetch_method(&host, &method).await {
+                Ok(()) => debug!(host = %host, method = %method, "Saved fetch method"),
+                Err(e) => warn!(error = %e, host = %host, "Could not save fetch method"),
+            }
+        }
+    });
+}
+
 /// Warn the owner once after this many consecutive failed hourly checks.
 const FAILURE_NOTIFY_THRESHOLD: i32 = 24;
 

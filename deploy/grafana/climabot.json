@@ -2690,18 +2690,218 @@
       }
     },
     {
-      "type": "text",
-      "title": "Where are the logs?",
-      "options": {
-        "mode": "markdown",
-        "content": "The bot's logs can't be viewed in Grafana yet (they aren't sent to a log database). To read them, SSH into the server and run:\n\n* `docker compose -f /root/climabot-rust/docker-compose.yml logs -f climabot`: live output\n* `less /var/log/climabot/climabot.log.$(date +%F)`: today's log file (JSON, 7 days kept)\n* `climabot status`: which bot is running and its containers"
-      },
+      "type": "row",
+      "title": "Logs",
+      "collapsed": false,
+      "panels": [],
       "id": 40,
       "gridPos": {
         "x": 0,
         "y": 82,
         "w": 24,
-        "h": 4
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Log lines by level",
+      "description": "Spikes of warn/error lines usually explain an alert.",
+      "datasource": {
+        "type": "loki",
+        "uid": "vsite-loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "vsite-loki"
+          },
+          "expr": "sum by (level) (count_over_time({job=\"climabot\"} [$__interval]))",
+          "legendFormat": "{{level}}",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "info"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warn"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "debug"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 41,
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 24,
+        "h": 6
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Warnings and errors",
+      "description": "Newest first. Expand a line for its fields.",
+      "datasource": {
+        "type": "loki",
+        "uid": "vsite-loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "vsite-loki"
+          },
+          "expr": "{job=\"climabot\", level=~\"warn|error\"} | json | line_format \"{{.fields_message}}\"",
+          "legendFormat": "",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showCommonLabels": false,
+        "prettifyLogMessage": false
+      },
+      "id": 42,
+      "gridPos": {
+        "x": 0,
+        "y": 89,
+        "w": 24,
+        "h": 10
+      }
+    },
+    {
+      "type": "logs",
+      "title": "All logs",
+      "description": "Everything the bot logged (info and above). On the server the same JSON is in /var/log/climabot/climabot.log.YYYY-MM-DD (7 days kept); Loki keeps 30 days.",
+      "datasource": {
+        "type": "loki",
+        "uid": "vsite-loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "vsite-loki"
+          },
+          "expr": "{job=\"climabot\"} | json | line_format \"{{.fields_message}}\"",
+          "legendFormat": "",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showCommonLabels": false,
+        "prettifyLogMessage": false
+      },
+      "id": 43,
+      "gridPos": {
+        "x": 0,
+        "y": 99,
+        "w": 24,
+        "h": 12
       }
     }
   ],
