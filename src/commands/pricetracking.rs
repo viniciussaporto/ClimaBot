@@ -1,12 +1,15 @@
 use crate::pricetracker::{
-    format_price,
+    STOP_BUTTON_PREFIX, format_price,
     scrape::{self, ScrapeError},
     store::{AddOutcome, MAX_PRODUCTS_PER_USER, Store, TrackedProduct},
 };
 use anyhow::Result;
+use mongodb::bson::oid::ObjectId;
 use serenity::all::{
-    CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateEmbed,
-    CreateEmbedFooter, EditInteractionResponse, ResolvedOption, ResolvedValue,
+    ButtonStyle, CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateActionRow,
+    CreateButton, CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter,
+    CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse, ResolvedOption,
+    ResolvedValue,
 };
 use tracing::info;
 
@@ -160,6 +163,38 @@ async fn remove(store: &Store, user_id: u64, item: &str) -> Result<EditInteracti
     store.remove_product(user_id, product.id).await?;
     info!(user_id, url = %product.url, "Removed tracked product");
     Ok(text(format!("🗑️ Removed **{}**.", product.name)))
+}
+
+/// The product ID carried by a "Stop tracking" button.
+fn stop_button_product(custom_id: &str) -> Option<ObjectId> {
+    custom_id.strip_prefix(STOP_BUTTON_PREFIX).and_then(|hex| ObjectId::parse_str(hex).ok())
+}
+
+/// "Stop tracking" pressed under a price DM: remove the product (only the
+/// owner's, since `remove_product` filters by user) and grey out the button.
+pub async fn handle_stop_button(ctx: &Context, comp: &ComponentInteraction, store: &Store) -> Result<()> {
+    let user_id = comp.user.id.get();
+    let removed = match stop_button_product(&comp.data.custom_id) {
+        Some(id) => store.remove_product(user_id, id).await?,
+        None => false,
+    };
+    let note = if removed {
+        info!(user_id, custom_id = %comp.data.custom_id, "Stopped tracking from DM button");
+        "🗑️ Stopped tracking this product."
+    } else {
+        "This product is no longer being tracked."
+    };
+
+    let done = CreateButton::new("pt-stop-done")
+        .label("Stopped tracking")
+        .emoji('🗑')
+        .style(ButtonStyle::Secondary)
+        .disabled(true);
+    let update = CreateInteractionResponseMessage::new()
+        .content(note)
+        .components(vec![CreateActionRow::Buttons(vec![done])]);
+    comp.create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(update)).await?;
+    Ok(())
 }
 
 async fn list(store: &Store, user_id: u64) -> Result<EditInteractionResponse> {
@@ -327,6 +362,18 @@ mod tests {
         assert!(s.chars().count() <= 200);
         assert!(s.ends_with("more*"));
         assert_eq!(join_limited(["a".to_string()].into_iter(), "\n", 200), "a");
+    }
+
+    #[test]
+    fn stop_button_round_trip() {
+        let p = product(7, "https://a.com/x");
+        let row = crate::pricetracker::stop_tracking_row(&p);
+        let json = serde_json::to_value(&row).unwrap();
+        let custom_id = json["components"][0]["custom_id"].as_str().unwrap();
+        assert!(custom_id.len() <= 100, "Discord limits custom IDs to 100 characters");
+        assert_eq!(stop_button_product(custom_id), Some(p.id));
+        assert_eq!(stop_button_product("pt-stop:not-hex"), None);
+        assert_eq!(stop_button_product("role-select_0"), None);
     }
 
     #[test]

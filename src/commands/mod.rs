@@ -2,7 +2,10 @@ pub mod pricetracking;
 pub mod roles;
 pub mod weather;
 
-use crate::{metrics, pricetracker::store::Store};
+use crate::{
+    metrics,
+    pricetracker::{STOP_BUTTON_PREFIX, store::Store},
+};
 use anyhow::{Result, anyhow};
 use serenity::all::{
     CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateCommand,
@@ -135,8 +138,26 @@ async fn reply_error(ctx: &Context, cmd: &CommandInteraction, message: &str) {
     }
 }
 
-pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction) {
+pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction, store: &Store) {
     let id = comp.data.custom_id.as_str();
+
+    if id.starts_with(STOP_BUTTON_PREFIX) {
+        let status = match pricetracking::handle_stop_button(ctx, comp, store).await {
+            Ok(()) => "success",
+            Err(e) => {
+                error!(error = format!("{e:#}"), custom_id = id, user = %comp.user.id, "Stop-tracking button failed");
+                let reply = CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("⚠️ Couldn't stop tracking that product. Try `/pt remove` instead."),
+                );
+                let _ = comp.create_response(&ctx.http, reply).await;
+                "error"
+            }
+        };
+        metrics::COMMAND_COUNTER.with_label_values(&["pt_stop_button", status]).inc();
+        return;
+    }
+
     let result = if id.starts_with(roles::SELECT_ID) {
         roles::handle_select(ctx, comp).await
     } else if id.starts_with(roles::PAGE_PREFIX) {
