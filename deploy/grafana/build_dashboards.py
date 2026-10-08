@@ -361,7 +361,7 @@ def climabot():
                    f"sum by ({SVC}) (container_spec_memory_limit_bytes{{{STACK}}} > 0)",
                    f"{{{{{SVC}}}}}", unit="percentunit", max_=1,
                    steps=(("green", None), ("orange", 0.75), ("red", 0.9)),
-                   desc="Containers with a memory limit (the browsers, 1 GB each). Near 100% they get "
+                   desc="Containers with a memory limit (the browsers: FlareSolverr 1.5 GB, Byparr 2 GB). Near 100% they get "
                         "OOM-killed and restarted."), 8, 8)
     L.add(timeseries("Network by container", [
         target(f"sum by ({SVC}) ({rate('container_network_receive_bytes_total', STACK)})",

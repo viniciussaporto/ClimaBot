@@ -51,9 +51,12 @@ services:
     networks:
       - scraper
     # Each page load runs a Chrome instance; keep it from starving the host.
-    mem_limit: ${FLARESOLVERR_MEM_LIMIT:-1g}
+    # /dev/shm counts against this limit too, so it must cover browser + shm.
+    mem_limit: ${FLARESOLVERR_MEM_LIMIT:-1536m}
     # Docker's default 64 MB /dev/shm crashes browsers on heavy pages.
     shm_size: 512m
+    # Reap leftover browser processes so they don't pile up between requests.
+    init: true
     restart: unless-stopped
 
   # Same API as FlareSolverr, but Firefox-based (Camoufox): passes Cloudflare
@@ -62,8 +65,13 @@ services:
     image: ghcr.io/thephaseless/byparr:latest
     networks:
       - scraper
-    mem_limit: ${BYPARR_MEM_LIMIT:-1g}
+    # Camoufox (Firefox) needs more than Chrome: one process per page plus the
+    # parent, and Cloudflare challenge pages are heavy. Below ~2 GB the kernel
+    # kills content processes, which Byparr reports as 502 "Target page,
+    # context or browser has been closed".
+    mem_limit: ${BYPARR_MEM_LIMIT:-2g}
     shm_size: 512m
+    init: true
     restart: unless-stopped
 
   mongo:

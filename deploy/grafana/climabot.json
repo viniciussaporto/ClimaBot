@@ -2169,7 +2169,7 @@
     {
       "type": "bargauge",
       "title": "Memory vs limit",
-      "description": "Containers with a memory limit (the browsers, 1 GB each). Near 100% they get OOM-killed and restarted.",
+      "description": "Containers with a memory limit (the browsers: FlareSolverr 1.5 GB, Byparr 2 GB). Near 100% they get OOM-killed and restarted.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
