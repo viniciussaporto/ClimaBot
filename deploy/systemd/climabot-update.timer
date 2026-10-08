@@ -7,6 +7,10 @@ Description=Nightly ClimaBot update at 05:30 UTC (02:30 Brasília: no command us
 OnCalendar=*-*-* 05:30:00 UTC
 # Missed runs (server was off) are skipped rather than restarting the bot during the day.
 Persistent=false
+# Also update a few minutes after every boot, so a restarted server always runs
+# the latest main (the bot is restarting then anyway). Docker has brought the
+# stack back up by then; a bot that was stopped on purpose stays stopped.
+OnBootSec=3min
 
 [Install]
 WantedBy=timers.target
