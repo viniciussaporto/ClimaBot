@@ -6,7 +6,7 @@ mod sites;
 pub mod store;
 
 use crate::metrics;
-use serenity::all::{CreateEmbed, CreateMessage, Http, UserId};
+use serenity::all::{ButtonStyle, CreateActionRow, CreateButton, CreateEmbed, CreateMessage, Http, UserId};
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock},
@@ -19,6 +19,20 @@ use tokio::sync::{Mutex, Semaphore};
 use tracing::{debug, error, info, warn};
 
 pub use currency::format as format_price;
+
+/// Custom ID prefix of the "Stop tracking" button on price DMs; the product's
+/// ObjectId (hex) follows it.
+pub const STOP_BUTTON_PREFIX: &str = "pt-stop:";
+
+/// The "❌ Stop tracking" button sent under every price DM.
+pub fn stop_tracking_row(product: &TrackedProduct) -> CreateActionRow {
+    CreateActionRow::Buttons(vec![
+        CreateButton::new(format!("{STOP_BUTTON_PREFIX}{}", product.id.to_hex()))
+            .label("Stop tracking")
+            .emoji('❌')
+            .style(ButtonStyle::Danger),
+    ])
+}
 
 /// How often the scheduler looks for products whose hourly check is due.
 const POLL_INTERVAL: Duration = Duration::from_secs(15);
@@ -184,11 +198,11 @@ async fn check_and_record(store: &Store, http: &Http, product: &TrackedProduct) 
                         .title("⚠️ Price tracking problem")
                         .description(format!(
                             "I haven't been able to read the price of **{}** for {n} hours ({e}).\n{}\n\n\
-                             I'll keep trying. Use `/pt remove` if the product is gone.",
+                             I'll keep trying. Press **Stop tracking** if the product is gone.",
                             product.name, product.url
                         ))
                         .color(0xf1c40f);
-                    send_dm(http, product.owner(), embed).await;
+                    send_dm(http, product, embed).await;
                 }
                 Ok(_) => {}
                 Err(e) => error!(error = %e, url = %product.url, "Price check: save failed"),
@@ -221,14 +235,17 @@ async fn notify_change(
             format_price(new, currency)
         ))
         .color(color);
-    send_dm(http, product.owner(), embed).await;
+    send_dm(http, product, embed).await;
 }
 
-async fn send_dm(http: &Http, user_id: u64, embed: CreateEmbed) {
+/// DM the product's owner, with a button to stop tracking it.
+async fn send_dm(http: &Http, product: &TrackedProduct, embed: CreateEmbed) {
+    let user_id = product.owner();
     let user = UserId::new(user_id);
+    let message = CreateMessage::new().embed(embed).components(vec![stop_tracking_row(product)]);
     let result = async {
         let channel = user.create_dm_channel(http).await?;
-        channel.send_message(http, CreateMessage::new().embed(embed)).await
+        channel.send_message(http, message).await
     }
     .await;
     if let Err(e) = result {

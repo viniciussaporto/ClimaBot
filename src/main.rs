@@ -85,7 +85,7 @@ impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
             Interaction::Command(cmd) => commands::handle_command(&ctx, &cmd, &self.store).await,
-            Interaction::Component(comp) => commands::handle_component(&ctx, &comp).await,
+            Interaction::Component(comp) => commands::handle_component(&ctx, &comp, &self.store).await,
             _ => {}
         }
     }

@@ -190,11 +190,55 @@ pub async fn get_forecast(loc: &Location) -> Result<ForecastDaily> {
 }
 
 // ─────────────────────────────────────────────
+//  Units
+// ─────────────────────────────────────────────
+
+/// Units the results are shown in. Open-Meteo always answers in metric;
+/// imperial values are converted here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Units {
+    #[default]
+    Metric,
+    Imperial,
+}
+
+impl Units {
+    /// Parse the `units` command option; anything but `imperial` is metric.
+    pub fn from_option(value: Option<&str>) -> Self {
+        match value {
+            Some("imperial") => Units::Imperial,
+            _ => Units::Metric,
+        }
+    }
+
+    fn temperature(self, celsius: f64) -> String {
+        match self {
+            Units::Metric => format!("{celsius:.1}°C"),
+            Units::Imperial => format!("{:.1}°F", celsius * 9.0 / 5.0 + 32.0),
+        }
+    }
+
+    fn speed(self, kmh: f64) -> String {
+        match self {
+            Units::Metric => format!("{kmh:.1} km/h"),
+            Units::Imperial => format!("{:.1} mph", kmh / 1.609_344),
+        }
+    }
+
+    fn pressure(self, hpa: f64) -> String {
+        match self {
+            Units::Metric => format!("{hpa:.0} hPa"),
+            Units::Imperial => format!("{:.2} inHg", hpa / 33.863_886),
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
 //  Discord message builders
 // ─────────────────────────────────────────────
 
 /// Build the `/weather` embed and its weather-icon attachment.
-pub fn weather_embed(loc: &Location, c: &CurrentWeather) -> (CreateEmbed, CreateAttachment) {
+pub fn weather_embed(loc: &Location, c: &CurrentWeather, units: Units) -> (CreateEmbed, CreateAttachment) {
     if c.temperature_2m == 0.0 && c.weathercode == 0 {
         warn!(location = %loc.formatted, "Suspicious weather data");
     }
@@ -207,24 +251,27 @@ pub fn weather_embed(loc: &Location, c: &CurrentWeather) -> (CreateEmbed, Create
         .field(
             "\u{200b}",
             format!(
-                "🌡 **Temperature:** {:.1}°C\n\
-                 🌡️ **Feels Like:** {:.1}°C\n\
+                "🌡 **Temperature:** {}\n\
+                 🌡️ **Feels Like:** {}\n\
                  💧 **Humidity:** {:.0}%\n\
                  ☁ **Clouds:** {:.0}%",
-                c.temperature_2m, c.apparent_temperature, c.relativehumidity_2m, c.cloudcover,
+                units.temperature(c.temperature_2m),
+                units.temperature(c.apparent_temperature),
+                c.relativehumidity_2m,
+                c.cloudcover,
             ),
             true,
         )
         .field(
             "\u{200b}",
             format!(
-                "🌬 **Wind:** {:.1} km/h\n\
+                "🌬 **Wind:** {}\n\
                  🧭 **Direction:** {:.0}° {}\n\
-                 📊 **Pressure:** {:.0} hPa",
-                c.windspeed_10m,
+                 📊 **Pressure:** {}",
+                units.speed(c.windspeed_10m),
                 c.winddirection_10m,
                 compass_point(c.winddirection_10m),
-                c.pressure_msl,
+                units.pressure(c.pressure_msl),
             ),
             true,
         )
@@ -236,13 +283,13 @@ pub fn weather_embed(loc: &Location, c: &CurrentWeather) -> (CreateEmbed, Create
 }
 
 /// Build the `/forecast` embed.
-pub fn forecast_embed(loc: &Location, d: &ForecastDaily) -> CreateEmbed {
+pub fn forecast_embed(loc: &Location, d: &ForecastDaily, units: Units) -> CreateEmbed {
     let mut embed = CreateEmbed::new()
-        .title(format!("🌦 Previsão para 5 dias - {}", loc.formatted))
+        .title(format!("🌦 5-day forecast for {}", loc.formatted))
         .color(EMBED_COLOR);
 
     let fmt_temp = |v: Option<&Option<f64>>| match v.copied().flatten() {
-        Some(t) => format!("{t:.1}°C"),
+        Some(t) => units.temperature(t),
         None => "–".into(),
     };
 
@@ -252,9 +299,9 @@ pub fn forecast_embed(loc: &Location, d: &ForecastDaily) -> CreateEmbed {
             None => "–".into(),
         };
         embed = embed.field(
-            format!("📅 {}", format_date_pt_br(day)),
+            format!("📅 {}", format_date(day)),
             format!(
-                "⬆ {} ⬇ {}\n💧 Prob. Chuva: {rain}",
+                "⬆ {} ⬇ {}\n💧 Chance of rain: {rain}",
                 fmt_temp(d.temperature_2m_max.get(i)),
                 fmt_temp(d.temperature_2m_min.get(i)),
             ),
@@ -265,20 +312,20 @@ pub fn forecast_embed(loc: &Location, d: &ForecastDaily) -> CreateEmbed {
     embed
 }
 
-/// Format an ISO date like `2026-09-29` as `ter., 29/09`, matching the
-/// `pt-BR` `toLocaleDateString` output of the previous bot.
-fn format_date_pt_br(iso: &str) -> String {
+/// Format an ISO date like `2026-09-29` as `Tue, 29/09`: English weekday,
+/// day before month.
+fn format_date(iso: &str) -> String {
     let Ok(date) = NaiveDate::parse_from_str(iso, "%Y-%m-%d") else {
         return iso.to_string();
     };
     let weekday = match date.weekday() {
-        Weekday::Mon => "seg.",
-        Weekday::Tue => "ter.",
-        Weekday::Wed => "qua.",
-        Weekday::Thu => "qui.",
-        Weekday::Fri => "sex.",
-        Weekday::Sat => "sáb.",
-        Weekday::Sun => "dom.",
+        Weekday::Mon => "Mon",
+        Weekday::Tue => "Tue",
+        Weekday::Wed => "Wed",
+        Weekday::Thu => "Thu",
+        Weekday::Fri => "Fri",
+        Weekday::Sat => "Sat",
+        Weekday::Sun => "Sun",
     };
     format!("{weekday}, {}", date.format("%d/%m"))
 }
@@ -375,10 +422,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pt_br_dates() {
-        assert_eq!(format_date_pt_br("2026-09-29"), "ter., 29/09");
-        assert_eq!(format_date_pt_br("2026-10-04"), "dom., 04/10");
-        assert_eq!(format_date_pt_br("garbage"), "garbage");
+    fn dates() {
+        assert_eq!(format_date("2026-09-29"), "Tue, 29/09");
+        assert_eq!(format_date("2026-10-04"), "Sun, 04/10");
+        assert_eq!(format_date("garbage"), "garbage");
+    }
+
+    #[test]
+    fn units() {
+        assert_eq!(Units::from_option(None), Units::Metric);
+        assert_eq!(Units::from_option(Some("metric")), Units::Metric);
+        assert_eq!(Units::from_option(Some("imperial")), Units::Imperial);
+
+        assert_eq!(Units::Metric.temperature(21.5), "21.5°C");
+        assert_eq!(Units::Imperial.temperature(0.0), "32.0°F");
+        assert_eq!(Units::Imperial.temperature(-40.0), "-40.0°F");
+        assert_eq!(Units::Metric.speed(16.1), "16.1 km/h");
+        assert_eq!(Units::Imperial.speed(16.09344), "10.0 mph");
+        assert_eq!(Units::Metric.pressure(1013.25), "1013 hPa");
+        assert_eq!(Units::Imperial.pressure(1013.25), "29.92 inHg");
     }
 
     #[test]
@@ -409,7 +471,7 @@ mod tests {
             "temperature_2m_min":[12.5],"precipitation_probability_max":[null]}}"#;
         let r: ForecastResponse = serde_json::from_str(json).unwrap();
         let loc = Location { lat: 0.0, lng: 0.0, formatted: "X".into() };
-        let _ = forecast_embed(&loc, &r.daily);
+        let _ = forecast_embed(&loc, &r.daily, Units::Imperial);
         assert_eq!(r.daily.temperature_2m_min[0], Some(12.5));
     }
 }
