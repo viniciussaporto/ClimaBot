@@ -5,6 +5,11 @@ FROM rust:1.93-slim-bookworm AS builder
 ARG CARGO_BUILD_JOBS=2
 ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 
+# OpenSSL headers for native-tls
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/climabot
 
 # ── Dependency caching layer ──────────────────────────────────
@@ -22,7 +27,7 @@ RUN cargo build --release --locked
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin climabot && \
     mkdir -p /var/log/climabot && \
