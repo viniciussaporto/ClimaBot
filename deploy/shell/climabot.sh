@@ -9,12 +9,11 @@ CB_PROFILE_DONE=1
 
 # Single source of truth: name | description | command
 CB_CMDS=(
-  "climabot-status|Which bot is running (Rust or JavaScript) and its containers|climabot status"
-  "climabot-logs|Follow the running bot's logs|climabot logs"
-  "climabot-update|Pull, rebuild and restart the running bot (also nightly at 05:30 UTC)|climabot update"
-  "climabot-start-rust|Switch to the Rust bot: pull, rebuild, stop the JS bot, start|climabot start-rust"
-  "climabot-start-javascript|Switch to the JS bot: pull, rebuild, stop the Rust stack, start|climabot start-javascript"
-  "climabot-stop|Stop whichever bot is running|climabot stop"
+  "climabot-status|Whether the bot is running, and its containers|climabot status"
+  "climabot-logs|Follow the bot's logs|climabot logs"
+  "climabot-update|Pull, rebuild and restart the bot (also nightly at 05:30 UTC)|climabot update"
+  "climabot-start|Pull, rebuild and start the bot|climabot start"
+  "climabot-stop|Stop the bot and its stack|climabot stop"
   "climabot-help|Show this list|cb_banner"
 )
 
@@ -22,9 +21,9 @@ cb_state() {
   local running
   running=$(docker ps --format '{{.Names}}' 2>/dev/null)
   if grep -qx 'climabot-climabot-1' <<< "$running"; then
-    printf '\033[1;32mRust bot running\033[0m (%s)' "$(git -C /root/climabot-rust log -1 --format=%h 2>/dev/null || echo '?')"
-  elif grep -qx 'climabot-js-climabot-1' <<< "$running"; then
-    printf '\033[1;33mJavaScript bot running\033[0m (%s)' "$(git -C /root/ClimaBot log -1 --format=%h 2>/dev/null || echo '?')"
+    printf '\033[1;32mbot running\033[0m (%s %s)' \
+      "$(git -C /root/climabot-rust rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')" \
+      "$(git -C /root/climabot-rust log -1 --format=%h 2>/dev/null || echo '?')"
   else
     printf '\033[1;31mno bot running\033[0m'
   fi

@@ -107,14 +107,13 @@ For local development: `cargo test` and `cargo run` (reads `.env`).
 
 #### Managing the production server
 
-`deploy/install.sh` installs a `climabot` command that switches between this Rust bot and the previous TypeScript bot (kept as a fallback), plus `climabot-*` shortcuts and an SSH login banner listing them (`/etc/profile.d/climabot.sh`). Only one runs at a time, since both use the same token and metrics port:
+`deploy/install.sh` installs a `climabot` command, plus `climabot-*` shortcuts and an SSH login banner listing them (`/etc/profile.d/climabot.sh`). The server's checkout (`/root/climabot-rust`) follows the `main` branch; changes land on `preprod` first and are merged into `main` to deploy them:
 
 | Alias | Command | What it does |
 | --- | --- | --- |
-| `climabot-start-rust` | `climabot start-rust` | `git pull` + rebuild the Rust bot (and pull MongoDB/browser images), stop the JS bot, start the Rust stack |
-| `climabot-start-javascript` | `climabot start-javascript` | `git pull` + rebuild the JS bot (`javascript` branch), stop the Rust stack, start the JS bot |
-| `climabot-update` | `climabot update` | `git pull` + rebuild + restart whichever bot is running. Also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users); ClimaBot alerts are muted 05:25–06:15 UTC for it |
-| `climabot-stop` | `climabot stop` | Stop whichever bot is running |
+| `climabot-start` | `climabot start` | `git pull` + rebuild the bot (and pull MongoDB/browser images), start the stack |
+| `climabot-update` | `climabot update` | `git pull` + rebuild + restart the running bot. Also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users); ClimaBot alerts are muted 05:25–06:15 UTC for it |
+| `climabot-stop` | `climabot stop` | Stop the bot and its stack |
 | `climabot-status` | `climabot status` | Show what is running |
 | `climabot-logs` | `climabot logs` | Follow the running bot's logs |
 | `climabot-help` | | Show the command list (also printed on every SSH login, with which bot is running) |
@@ -134,8 +133,7 @@ Every alert above is sent by Grafana, so if Grafana (or the whole server) dies, 
 | ClimaBot | `https://vinisaporto.de/api/climabot/status` | HTTP 200 and the body contains `"ok":true` |
 | Grafana | `https://grafana.vinisaporto.de/api/health` | HTTP 200 and the body contains `"database": "ok"` |
 
-`/status` answers `{"ok":true,"discord":true,"database":true,"version":"…"}` when a shard is connected to Discord's gateway and MongoDB answers, and HTTP 503 with `"ok":false` otherwise (also for a minute or so after a start). Caddy forwards only that path to the bot (website repo, `deploy/caddy/vinisaporto.caddy`); `/metrics` stays private. Check every 5 minutes, alert after 2 failures, and add a maintenance window for the nightly update (05:25–06:15 UTC) if the service supports it. The fallback JavaScript bot has no `/status`, so this monitor reports it as down.
-
+`/status` answers `{"ok":true,"discord":true,"database":true,"version":"…"}` when a shard is connected to Discord's gateway and MongoDB answers, and HTTP 503 with `"ok":false` otherwise (also for a minute or so after a start). Caddy forwards only that path to the bot (website repo, `deploy/caddy/vinisaporto.caddy`); `/metrics` stays private. Check every 5 minutes, alert after 2 failures, and add a maintenance window for the nightly update (05:25–06:15 UTC) if the service supports it.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 

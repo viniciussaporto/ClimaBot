@@ -1,28 +1,25 @@
 #!/usr/bin/env bash
-# ClimaBot deployment helper: switches between the Rust and the JavaScript
-# (TypeScript) bot, and updates whichever one is running.
+# ClimaBot deployment helper: builds, starts and updates the bot.
 #
-#   climabot start-rust        pull + rebuild the Rust bot, stop the JS bot, start Rust
-#   climabot start-javascript  pull + rebuild the JS bot, stop the Rust stack, start JS
-#   climabot update            pull + rebuild + restart whichever bot is running
-#   climabot stop              stop whichever bot(s) are running
+#   climabot start             pull + rebuild the bot, start the stack
+#   climabot update            pull + rebuild + restart the running bot
+#   climabot stop              stop the stack
 #   climabot status            show what is running
-#   climabot logs              follow the running bot's logs
-#   climabot nightly           update if a bot is running (run daily by climabot-update.timer)
+#   climabot logs              follow the bot's logs
+#   climabot nightly           update if the bot is running (run daily by climabot-update.timer)
 #
 # Installed by deploy/install.sh, which also installs the climabot-* shell
-# shortcuts and SSH login banner (/etc/profile.d/climabot.sh). Paths and branches can be overridden through the
-# variables below (e.g. in /etc/default/climabot).
+# shortcuts and SSH login banner (/etc/profile.d/climabot.sh). The checkout
+# and branch can be overridden through the variables below (e.g. in
+# /etc/default/climabot). Production follows `main`; `preprod` is where
+# changes land first.
 
 set -euo pipefail
 
 [[ -r /etc/default/climabot ]] && . /etc/default/climabot
 
-RUST_DIR=${CLIMABOT_RUST_DIR:-/root/climabot-rust}         # git checkout (branch rust) + compose project
-RUST_BRANCH=${CLIMABOT_RUST_BRANCH:-rust}
-JS_SRC_DIR=${CLIMABOT_JS_SRC_DIR:-/root/ClimaBot}          # git checkout (branch javascript)
-JS_BRANCH=${CLIMABOT_JS_BRANCH:-javascript}
-JS_STACK_DIR=${CLIMABOT_JS_STACK_DIR:-/root/climabot-js}   # compose project for the JS bot
+RUST_DIR=${CLIMABOT_RUST_DIR:-/root/climabot-rust}         # git checkout + compose project
+RUST_BRANCH=${CLIMABOT_RUST_BRANCH:-main}
 MONITORING_NETWORK=${CLIMABOT_MONITORING_NETWORK:-climabot-monitoring}
 
 # Colours only in a terminal (the nightly run logs to the journal).
@@ -35,10 +32,8 @@ else
 fi
 
 rust_compose() { docker compose --project-directory "$RUST_DIR" -f "$RUST_DIR/docker-compose.yml" "$@"; }
-js_compose() { docker compose --project-directory "$JS_STACK_DIR" -f "$JS_STACK_DIR/docker-compose.yml" "$@"; }
 
 rust_running() { [[ -f "$RUST_DIR/docker-compose.yml" ]] && [[ -n "$(rust_compose ps -q --status running climabot 2>/dev/null)" ]]; }
-js_running() { [[ -f "$JS_STACK_DIR/docker-compose.yml" ]] && [[ -n "$(js_compose ps -q --status running climabot 2>/dev/null)" ]]; }
 
 git_pull() {
     local dir=$1 branch=$2
@@ -72,16 +67,16 @@ ensure_log_dir() {
 # Wait for the bot to log in to Discord (or give up after ~90 s). Only log
 # lines written after `since` count, so an earlier login can't fool it.
 wait_for_login() {
-    local compose=$1 pattern=$2 since=$3
+    local since=$1
     log "Waiting for the bot to log in to Discord"
     for _ in $(seq 1 45); do
-        if $compose logs --since "$since" climabot 2>&1 | grep -q "$pattern"; then
+        if rust_compose logs --since "$since" climabot 2>&1 | grep -q "Logged in to Discord"; then
             log "Bot is online"
             return 0
         fi
         sleep 2
     done
-    $compose logs --tail 30 climabot || true
+    rust_compose logs --tail 30 climabot || true
     die "bot did not report a Discord login; see the logs above"
 }
 
@@ -92,14 +87,8 @@ build_rust() {
     "$RUST_DIR/deploy/install.sh" >/dev/null
     log "Pulling images (MongoDB, FlareSolverr, Byparr)"
     rust_compose pull --ignore-buildable --quiet
-    log "Building the Rust bot"
+    log "Building the bot"
     rust_compose build climabot
-}
-
-build_js() {
-    git_pull "$JS_SRC_DIR" "$JS_BRANCH"
-    log "Building the JavaScript bot"
-    js_compose build climabot
 }
 
 # Start the stack, then always recreate the bot container so it restarts
@@ -107,109 +96,59 @@ build_js() {
 up_rust() {
     ensure_network
     ensure_log_dir
-    log "Starting the Rust stack"
+    log "Starting the stack"
     local since
     since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     rust_compose up -d --remove-orphans
     rust_compose up -d --no-deps --force-recreate climabot
-    wait_for_login rust_compose "Logged in to Discord" "$since"
+    wait_for_login "$since"
 }
 
-up_js() {
-    ensure_network
-    log "Starting the JavaScript bot"
-    local since
-    since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    js_compose up -d --remove-orphans --force-recreate
-    wait_for_login js_compose "Logged in as" "$since"
-}
-
-stop_rust() {
-    if [[ -f "$RUST_DIR/docker-compose.yml" ]]; then
-        log "Stopping the Rust stack"
-        rust_compose stop
-    fi
-}
-
-stop_js() {
-    if [[ -f "$JS_STACK_DIR/docker-compose.yml" ]]; then
-        log "Stopping the JavaScript bot"
-        js_compose stop
-    fi
-}
-
-# Only one bot may run: both use the same Discord token and metrics port.
-cmd_start_rust() {
-    build_rust          # build first so the running bot stays up meanwhile
-    stop_js
+cmd_start() {
+    build_rust          # build first so a running bot stays up meanwhile
     up_rust
 }
 
-cmd_start_javascript() {
-    build_js
-    stop_rust
-    up_js
-}
-
 cmd_update() {
-    if rust_running; then
-        build_rust
-        up_rust
-    elif js_running; then
-        build_js
-        up_js
-    else
-        die "no bot is running; use 'climabot start-rust' or 'climabot start-javascript'"
-    fi
+    rust_running || die "the bot is not running; use 'climabot start'"
+    build_rust
+    up_rust
 }
 
 cmd_stop() {
-    local stopped=0
-    # Checks every service of the Rust stack, so MongoDB and the browsers
-    # are stopped too even if the bot itself already exited.
+    # Checks every service of the stack, so MongoDB and the browsers are
+    # stopped too even if the bot itself already exited.
     if [[ -f "$RUST_DIR/docker-compose.yml" && -n "$(rust_compose ps -q --status running 2>/dev/null)" ]]; then
-        stop_rust
-        stopped=1
+        log "Stopping the stack"
+        rust_compose stop
+        log "Stopped"
+    else
+        log "The bot was not running"
     fi
-    if js_running; then
-        stop_js
-        stopped=1
-    fi
-    if (( stopped )); then log "Stopped"; else log "No bot was running"; fi
 }
 
 # Scheduled by climabot-update.timer. A bot that was stopped on purpose
 # stays stopped.
 cmd_nightly() {
     log "Nightly update ($(date -u '+%F %T UTC'))"
-    if rust_running || js_running; then
+    if rust_running; then
         cmd_update
     else
-        log "No bot is running; nothing to update"
+        log "The bot is not running; nothing to update"
     fi
 }
 
 cmd_logs() {
-    if rust_running; then
-        rust_compose logs -f --tail 100 climabot
-    elif js_running; then
-        js_compose logs -f --tail 100 climabot
-    else
-        die "no bot is running"
-    fi
+    rust_running || die "the bot is not running"
+    rust_compose logs -f --tail 100 climabot
 }
 
 cmd_status() {
     if rust_running; then
-        echo "Rust bot: running ($(git -C "$RUST_DIR" log --oneline -1 2>/dev/null))"
+        echo "Bot: running ($(git -C "$RUST_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null) $(git -C "$RUST_DIR" log --oneline -1 2>/dev/null))"
         rust_compose ps --format '  {{.Service}}: {{.Status}}'
     else
-        echo "Rust bot: stopped"
-    fi
-    if js_running; then
-        echo "JavaScript bot: running ($(git -C "$JS_SRC_DIR" log --oneline -1 2>/dev/null))"
-    else
-        echo "JavaScript bot: stopped"
+        echo "Bot: stopped"
     fi
     local next
     next=$(systemctl show climabot-update.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)
@@ -218,15 +157,14 @@ cmd_status() {
 }
 
 case "${1:-}" in
-    start-rust) cmd_start_rust ;;
-    start-javascript | start-js) cmd_start_javascript ;;
+    start | start-rust) cmd_start ;;
     update) cmd_update ;;
     stop) cmd_stop ;;
     status) cmd_status ;;
     logs) cmd_logs ;;
     nightly) cmd_nightly ;;
     *)
-        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
         exit 1
         ;;
 esac

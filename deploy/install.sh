@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Installs the `climabot` management command and its aliases, and sets up the
-# compose project for the JavaScript bot. Safe to run again.
+# Installs the `climabot` management command, its shell shortcuts and the
+# nightly update timer. Safe to run again.
 #
 # Usage (as root, from the Rust checkout): ./deploy/install.sh
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-JS_STACK_DIR=${CLIMABOT_JS_STACK_DIR:-/root/climabot-js}
 RC=${CLIMABOT_ALIAS_FILE:-/root/.bashrc}
 
 # Copy then rename, so a `climabot` process that is running this very
@@ -14,15 +13,6 @@ RC=${CLIMABOT_ALIAS_FILE:-/root/.bashrc}
 install -m 0755 "$here/climabot" /usr/local/bin/.climabot.new
 mv -f /usr/local/bin/.climabot.new /usr/local/bin/climabot
 echo "Installed /usr/local/bin/climabot"
-
-install -d -m 0755 "$JS_STACK_DIR"
-install -m 0644 "$here/javascript/docker-compose.yml" "$JS_STACK_DIR/.docker-compose.yml.new"
-mv -f "$JS_STACK_DIR/.docker-compose.yml.new" "$JS_STACK_DIR/docker-compose.yml"
-if [[ ! -f "$JS_STACK_DIR/.env" ]]; then
-    install -m 0600 /dev/null "$JS_STACK_DIR/.env"
-    echo "Created $JS_STACK_DIR/.env: fill in TOKEN, CLIENT_ID and OPENCAGEAPIKEY"
-fi
-echo "Installed $JS_STACK_DIR/docker-compose.yml"
 
 "$here/grafana/install.sh"
 
