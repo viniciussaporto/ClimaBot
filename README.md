@@ -137,7 +137,7 @@ Older versions are kept as the tags `archive/DeployThis` (the first Rust deploym
 | `climabot-logs` | `climabot logs` | Follow the bot's logs |
 | `climabot-help` | | Show the list again |
 
-`climabot update` also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users). ClimaBot alerts are muted from 05:25 to 06:15 UTC for it.
+`climabot update` also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users) and **3 minutes after every boot**, so a restarted server always comes back on the latest `main`. ClimaBot alerts are muted from 05:25 to 06:15 UTC for the nightly run.
 
 ### Monitoring
 
