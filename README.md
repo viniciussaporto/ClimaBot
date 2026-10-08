@@ -192,8 +192,8 @@ This is an example of how to list things you need to use the software and how to
 
 | Command | What it does |
 | --- | --- |
-| `/weather <location>` | Current conditions for a location |
-| `/forecast <location>` | 5-day forecast |
+| `/weather <location> [units]` | Current conditions for a location; `units: Imperial` shows °F, mph and inHg |
+| `/forecast <location> [units]` | 5-day forecast; `units: Imperial` shows °F |
 | `/roles` | Menu to toggle self-assignable roles (roles with moderation/admin permissions, managed roles and roles above the bot are never offered) |
 | `/pt add <url>` | Track a product page's price in any currency; re-checked about every hour (at a random time within ±15 minutes of its hourly slot, with random gaps between requests to the same shop), with a DM when it changes |
 | `/pt list` / `/pt history <item>` / `/pt remove <item>` | Manage tracked products (`item` is the position from `/pt list` or the URL) |

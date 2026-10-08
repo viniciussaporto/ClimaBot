@@ -40,14 +40,21 @@ pub fn definitions() -> Vec<CreateCommand> {
         )
         .required(true)
     };
+    let units = || {
+        CreateCommandOption::new(CommandOptionType::String, "units", "Units to show the results in (default: metric)")
+            .add_string_choice("Metric (°C, km/h, hPa)", "metric")
+            .add_string_choice("Imperial (°F, mph, inHg)", "imperial")
+    };
 
     vec![
         CreateCommand::new("weather")
             .description("Get the weather information for a location")
-            .add_option(location("weather information")),
+            .add_option(location("weather information"))
+            .add_option(units()),
         CreateCommand::new("forecast")
             .description("Get a 5-day weather forecast for a location")
-            .add_option(location("weather forecast")),
+            .add_option(location("weather forecast"))
+            .add_option(units()),
         CreateCommand::new("roles")
             .description("Manage self-assignable roles in this server")
             .contexts(vec![InteractionContext::Guild]),
@@ -180,7 +187,8 @@ async fn weather_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> 
         Err(e) => return Err(e),
     };
     let current = weather::get_current(&coords).await?;
-    let (embed, attachment) = weather::weather_embed(&coords, &current);
+    let units = weather::Units::from_option(string_option(cmd, "units"));
+    let (embed, attachment) = weather::weather_embed(&coords, &current, units);
 
     cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(embed).new_attachment(attachment))
         .await?;
@@ -205,9 +213,10 @@ async fn forecast_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()>
         Err(e) => return Err(e),
     };
     let daily = weather::get_forecast(&coords).await?;
+    let units = weather::Units::from_option(string_option(cmd, "units"));
+    let embed = weather::forecast_embed(&coords, &daily, units);
 
-    cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(weather::forecast_embed(&coords, &daily)))
-        .await?;
+    cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(embed)).await?;
     info!(location, resolved = %coords.formatted, "Forecast delivered");
     Ok(())
 }
@@ -221,8 +230,9 @@ async fn help_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
         .title("🤖 ClimaBot — Commands")
         .field(
             "🌤 Weather",
-            "`/weather <location>` — Current weather conditions\n\
-             `/forecast <location>` — 5-day forecast",
+            "`/weather <location> [units]` — Current weather conditions\n\
+             `/forecast <location> [units]` — 5-day forecast\n\
+             Pick **Imperial** under `units` for °F, mph and inHg",
             false,
         )
         .field("🎭 Roles", "`/roles` — Pick self-assignable roles from a menu", false)
