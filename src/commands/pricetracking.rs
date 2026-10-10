@@ -11,7 +11,7 @@ use serenity::all::{
     CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse, ResolvedOption,
     ResolvedValue,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 const EMBED_COLOR: u32 = 0x0099ff;
 const MAX_DESCRIPTION: usize = 4000;
@@ -98,20 +98,25 @@ fn text(s: impl Into<String>) -> EditInteractionResponse {
 }
 
 async fn add(store: &Store, user_id: u64, raw_url: &str) -> Result<EditInteractionResponse> {
-    let url = match scrape::parse_url(raw_url) {
-        Ok(u) => u.to_string(),
+    let (url, host) = match scrape::parse_url(raw_url) {
+        Ok(u) => (u.to_string(), u.host_str().unwrap_or_default().to_string()),
         Err(e) => return Ok(text(format!("❌ {e}"))),
     };
 
     let product = match scrape::fetch_product(&url).await {
         Ok(p) => p,
-        Err(e @ ScrapeError::NoPrice) => {
-            return Ok(text(format!(
-                "❌ Failed to retrieve a price from that URL ({e}).\n\
-                 The page may be unsupported, require login, or load its price with JavaScript."
-            )));
+        // Rejected before any request (e.g. a private address): not the shop's fault.
+        Err(e @ (ScrapeError::InvalidUrl(_) | ScrapeError::Blocked(_))) => return Ok(text(format!("❌ {e}"))),
+        Err(e) => {
+            record_failed_site(store, user_id, &host, &url, &e).await;
+            return Ok(match e {
+                ScrapeError::NoPrice => text(format!(
+                    "❌ Failed to retrieve a price from that URL ({e}).\n\
+                     The page may be unsupported, require login, or load its price with JavaScript."
+                )),
+                _ => text(format!("❌ Failed to retrieve a price from that URL: {e}.")),
+            });
         }
-        Err(e) => return Ok(text(format!("❌ Failed to retrieve a price from that URL: {e}."))),
     };
 
     let outcome = store
@@ -137,6 +142,17 @@ async fn add(store: &Store, user_id: u64, raw_url: &str) -> Result<EditInteracti
             "❌ You can track at most {MAX_PRODUCTS_PER_USER} products. Remove one with `/pt remove` first."
         )),
     })
+}
+
+/// Log a shop `/pt add` couldn't read a price from and add it to the
+/// `failed_sites` list (`climabot failed-sites` on the server). A database
+/// error is only logged: the user still gets the scrape error.
+async fn record_failed_site(store: &Store, user_id: u64, host: &str, url: &str, error: &ScrapeError) {
+    let reason = error.to_string();
+    warn!(user_id, host, url, reason, "No price found when adding a product");
+    if let Err(e) = store.record_failed_site(host, url, &reason).await {
+        warn!(error = %e, host, "Could not save the failed site");
+    }
 }
 
 /// Find a product by 1-based position or exact URL.

@@ -68,7 +68,7 @@ When the price changes, ClimaBot DMs the owner with the old and new price and th
 1. [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) (Chrome): handles Akamai and many Cloudflare pages.
 2. [Byparr](https://github.com/ThePhaseless/Byparr) (Firefox): handles Cloudflare challenges FlareSolverr can't.
 
-The method that last worked for a shop is tried first next time and is remembered in MongoDB across restarts. Prices are read from schema.org data, product meta tags, dedicated rules for Amazon and AliExpress, or common price markup.
+The method that last worked for a shop is tried first next time and is remembered in MongoDB across restarts. When `/pt add` can't get a price from a page, the bot logs a `No price found when adding a product` warning and adds the shop to the `failed_sites` collection (attempts, last URL, last reason), a list of shops to look into later: see `climabot failed-sites`. Prices are read from schema.org data, product meta tags, dedicated rules for Amazon and AliExpress, or common price markup.
 
 **Shops that block servers.** Some shops refuse datacenter IPs whatever the browser does (Mercado Livre's website, for example). For those, set `SCRAPER_PROXY` to a residential proxy. For Mercado Livre specifically, you can instead set `ML_CLIENT_ID`/`ML_CLIENT_SECRET` from a free [Mercado Livre developer app](https://developers.mercadolivre.com.br) to use the official API. Shops that adapt to the visitor's country (AliExpress) show prices for the server's or proxy's country.
 
@@ -135,6 +135,7 @@ Older versions are kept as the tags `archive/DeployThis` (the first Rust deploym
 | `climabot-stop` | `climabot stop` | Stop the bot and its stack |
 | `climabot-status` | `climabot status` | Branch, commit and container status |
 | `climabot-logs` | `climabot logs` | Follow the bot's logs |
+| `climabot-failed-sites` | `climabot failed-sites` | Shops where `/pt add` couldn't find a price, most recent first |
 | `climabot-help` | | Show the list again |
 
 `climabot update` also runs **nightly at 05:30 UTC** (`climabot-update.timer`, the quietest hour for the bot's users) and **3 minutes after every boot**, so a restarted server always comes back on the latest `main`. ClimaBot alerts are muted from 05:25 to 06:15 UTC for the nightly run.

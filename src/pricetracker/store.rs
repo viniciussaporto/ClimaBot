@@ -8,7 +8,8 @@
 //!
 //! It also remembers which fetch method last worked for each shop
 //! (`fetch_methods`), so a restart doesn't make every shop's first check try
-//! every method again.
+//! every method again, and which shops `/pt add` couldn't read a price from
+//! (`failed_sites`), as a list of shops to look into later.
 
 use anyhow::{Context as _, Result};
 use futures_util::TryStreamExt;
@@ -79,6 +80,19 @@ pub struct FetchMethod {
     pub updated_at: DateTime,
 }
 
+/// A shop where `/pt add` couldn't get a price, one document per host.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedSite {
+    #[serde(rename = "_id")]
+    pub host: String,
+    /// Failed `/pt add` attempts on this host.
+    pub count: i64,
+    pub last_url: String,
+    pub last_reason: String,
+    pub first_seen: DateTime,
+    pub last_seen: DateTime,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AddOutcome {
     Added,
@@ -91,6 +105,7 @@ pub struct Store {
     products: Collection<TrackedProduct>,
     history: Collection<PriceEntry>,
     fetch_methods: Collection<FetchMethod>,
+    failed_sites: Collection<FailedSite>,
 }
 
 /// Next hourly slot after `now`, keeping the product's phase: a product
@@ -140,6 +155,7 @@ impl Store {
             products: db.collection("products"),
             history: db.collection("price_history"),
             fetch_methods: db.collection("fetch_methods"),
+            failed_sites: db.collection("failed_sites"),
         };
         store.create_indexes().await?;
         Ok(store)
@@ -352,6 +368,28 @@ impl Store {
             .upsert(true)
             .await?;
         Ok(())
+    }
+
+    /// Remember that `/pt add` couldn't get a price from `url` on `host`.
+    pub async fn record_failed_site(&self, host: &str, url: &str, reason: &str) -> Result<()> {
+        let now = DateTime::now();
+        self.failed_sites
+            .update_one(
+                doc! { "_id": host },
+                doc! {
+                    "$inc": { "count": 1_i64 },
+                    "$set": { "last_url": url, "last_reason": reason, "last_seen": now },
+                    "$setOnInsert": { "first_seen": now },
+                },
+            )
+            .upsert(true)
+            .await?;
+        Ok(())
+    }
+
+    /// Every shop `/pt add` failed on, most recent first.
+    pub async fn failed_sites(&self) -> Result<Vec<FailedSite>> {
+        Ok(self.failed_sites.find(doc! {}).sort(doc! { "last_seen": -1 }).await?.try_collect().await?)
     }
 
     /// Record a failed check and schedule the next one; returns the new

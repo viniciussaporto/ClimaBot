@@ -170,6 +170,13 @@ async fn db_roundtrip(uri: &str, database: &str) -> Result<()> {
         anyhow::ensure!(store.record_failure(p).await? == 1, "failure count mismatch");
         anyhow::ensure!(store.remove_product(user, p.id).await?, "remove failed");
         anyhow::ensure!(store.history(p.id).await?.is_empty(), "history not removed");
+        store.record_failed_site("example.com", "https://example.com/a", "no price found on the page").await?;
+        store.record_failed_site("example.com", "https://example.com/b", "the page answered with HTTP 403").await?;
+        let failed = store.failed_sites().await?;
+        anyhow::ensure!(
+            failed.len() == 1 && failed[0].count == 2 && failed[0].last_url == "https://example.com/b",
+            "failed sites mismatch"
+        );
         Ok(())
     }
     .await;

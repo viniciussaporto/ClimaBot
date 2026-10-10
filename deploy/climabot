@@ -6,6 +6,7 @@
 #   climabot stop              stop the stack
 #   climabot status            show what is running
 #   climabot logs              follow the bot's logs
+#   climabot failed-sites      shops where /pt add couldn't find a price
 #   climabot nightly           update if the bot is running (run daily by climabot-update.timer)
 #
 # Installed by deploy/install.sh, which also installs the climabot-* shell
@@ -143,6 +144,19 @@ cmd_logs() {
     rust_compose logs -f --tail 100 climabot
 }
 
+# Filled by /pt add (MongoDB `failed_sites`, one entry per shop).
+cmd_failed_sites() {
+    [[ -n "$(rust_compose ps -q --status running mongo 2>/dev/null)" ]] || die "MongoDB is not running"
+    rust_compose exec -T mongo mongosh climabot --quiet --eval '
+        const sites = db.failed_sites.find().sort({ last_seen: -1 }).toArray();
+        if (!sites.length) { print("No failed sites recorded."); quit(); }
+        for (const s of sites) {
+            print(`${s._id}  (${s.count}x, last ${s.last_seen.toISOString().slice(0, 16).replace("T", " ")} UTC)`);
+            print(`  ${s.last_reason}`);
+            print(`  ${s.last_url}`);
+        }'
+}
+
 cmd_status() {
     if rust_running; then
         echo "Bot: running ($(git -C "$RUST_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null) $(git -C "$RUST_DIR" log --oneline -1 2>/dev/null))"
@@ -162,9 +176,10 @@ case "${1:-}" in
     stop) cmd_stop ;;
     status) cmd_status ;;
     logs) cmd_logs ;;
+    failed-sites) cmd_failed_sites ;;
     nightly) cmd_nightly ;;
     *)
-        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
         exit 1
         ;;
 esac
