@@ -11,6 +11,7 @@ CB_PROFILE_DONE=1
 CB_CMDS=(
   "climabot-status|Whether the bot is running, and its containers|climabot status"
   "climabot-logs|Follow the bot's logs|climabot logs"
+  "climabot-failed-sites|Shops where /pt add couldn't find a price|climabot failed-sites"
   "climabot-update|Pull, rebuild and restart the bot (also nightly at 05:30 UTC)|climabot update"
   "climabot-start|Pull, rebuild and start the bot|climabot start"
   "climabot-stop|Stop the bot and its stack|climabot stop"

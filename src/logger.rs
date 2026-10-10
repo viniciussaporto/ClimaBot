@@ -15,9 +15,15 @@ const MAX_LOG_FILES: usize = 7;
 /// The log level can be controlled with the `RUST_LOG` environment variable
 /// (default: `info`).  Example:
 ///   `RUST_LOG=climabot=debug,warn`
+///
+/// `html5ever` (the HTML parser behind `scraper`) is always capped at `error`:
+/// it warns about every malformed tag on a shop page ("foster parenting not
+/// implemented"), which flooded the logs with over a thousand lines a day.
 pub fn init() {
     let env_filter = || {
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"))
+            .add_directive("html5ever=error".parse().expect("valid log directive"))
     };
 
     let log_dir = env::var("LOG_DIR").unwrap_or_else(|_| "/var/log/climabot".into());
