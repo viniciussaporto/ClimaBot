@@ -3,7 +3,7 @@
 //! the weather APIs, the database, and optionally scraping the given URLs.
 
 use crate::{
-    commands::{roles, weather},
+    commands::{radar, roles, weather},
     pricetracker::{format_price, mercadolivre, scrape, solver, store::Store},
 };
 use anyhow::{Result, bail};
@@ -92,6 +92,11 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
                 c.temperature_2m,
                 weather::weather_description(c.weathercode)
             );
+        }
+        if let Some(data) = r.check("Precipitation map (OSM tiles + Open-Meteo grid)", radar::fetch(&loc, true).await)
+            && let Some(gif) = r.check("Precipitation GIF", radar::render_gif(&data, 0))
+        {
+            println!("       {} KiB", gif.len() / 1024);
         }
         if let Some(d) = r.check("Open-Meteo forecast", weather::get_forecast(&loc).await) {
             println!("       {} days: {}", d.time.len(), d.time.join(", "));

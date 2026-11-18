@@ -47,6 +47,10 @@ fastrand = "2"
 # Web scraping
 scraper = "0.27"
 
+# Precipitation map for /weather: decode the PNG map tiles, encode the animated GIF
+png = "0.18"
+gif = "0.14"
+
 # Metrics
 prometheus = { version = "0.14", default-features = false, features = ["process"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }

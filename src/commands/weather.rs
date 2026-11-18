@@ -60,6 +60,27 @@ struct Geometry {
 #[derive(Debug, Deserialize)]
 struct WeatherResponse {
     current: CurrentWeather,
+    utc_offset_seconds: i32,
+    hourly: Option<OutlookHourly>,
+}
+
+/// The hours the precipitation map covers, at the location itself.
+#[derive(Debug, Deserialize)]
+struct OutlookHourly {
+    #[serde(default)]
+    precipitation_probability: Vec<Option<f64>>,
+    #[serde(default)]
+    precipitation: Vec<Option<f64>>,
+}
+
+/// Rain at the location over the hours the precipitation map covers (now to
+/// +3 h): decides whether the map's grid of forecasts is worth fetching.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RainOutlook {
+    /// Highest hourly chance of precipitation, in %; `None` if the model has none.
+    pub max_chance: Option<f64>,
+    /// Total precipitation forecast, in mm.
+    pub total_mm: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,6 +93,11 @@ pub struct CurrentWeather {
     pub cloudcover: f64,
     pub windspeed_10m: f64,
     pub winddirection_10m: f64,
+    /// Offset of the location's time zone (top level of the response).
+    #[serde(skip)]
+    pub utc_offset_seconds: i32,
+    #[serde(skip)]
+    pub rain_outlook: RainOutlook,
 }
 
 // ─────────────────────────────────────────────
@@ -166,11 +192,24 @@ pub async fn get_current(loc: &Location) -> Result<CurrentWeather> {
              pressure_msl,cloudcover,windspeed_10m,winddirection_10m"
                 .to_string(),
         ),
-        ("forecast_days", "1".to_string()),
+        // From the current hour to the end of the map's last forecast hour.
+        ("hourly", "precipitation_probability,precipitation".to_string()),
+        ("forecast_hours", "5".to_string()),
         ("timezone", "auto".to_string()),
     ];
     let response: WeatherResponse = open_meteo("current", &params).await?;
-    Ok(response.current)
+    let rain_outlook = response
+        .hourly
+        .map(|h| RainOutlook {
+            max_chance: h.precipitation_probability.iter().flatten().copied().reduce(f64::max),
+            total_mm: h.precipitation.iter().flatten().sum(),
+        })
+        .unwrap_or_default();
+    Ok(CurrentWeather {
+        utc_offset_seconds: response.utc_offset_seconds,
+        rain_outlook,
+        ..response.current
+    })
 }
 
 /// Fetch a 5-day daily forecast for a coordinate.
@@ -237,15 +276,21 @@ impl Units {
 //  Discord message builders
 // ─────────────────────────────────────────────
 
-/// Build the `/weather` embed and its weather-icon attachment.
-pub fn weather_embed(loc: &Location, c: &CurrentWeather, units: Units) -> (CreateEmbed, CreateAttachment) {
+/// Build the `/weather` embed and its attachments: the weather icon and, when
+/// available, the animated precipitation map.
+pub fn weather_embed(
+    loc: &Location,
+    c: &CurrentWeather,
+    units: Units,
+    radar: Option<super::radar::Map>,
+) -> (CreateEmbed, Vec<CreateAttachment>) {
     if c.temperature_2m == 0.0 && c.weathercode == 0 {
         warn!(location = %loc.formatted, "Suspicious weather data");
     }
 
-    let attachment = CreateAttachment::bytes(weather_image(c.weathercode), "weather.png");
+    let mut attachments = vec![CreateAttachment::bytes(weather_image(c.weathercode), "weather.png")];
 
-    let embed = CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title(format!("{} Weather in {}", weather_emoji(c.weathercode), loc.formatted))
         .description(format!("**{}**", weather_description(c.weathercode)))
         .field(
@@ -279,7 +324,23 @@ pub fn weather_embed(loc: &Location, c: &CurrentWeather, units: Units) -> (Creat
         .thumbnail("attachment://weather.png")
         .footer(CreateEmbedFooter::new("Open-Meteo · OpenCage"));
 
-    (embed, attachment)
+    if let Some(map) = radar {
+        attachments.push(CreateAttachment::bytes(map.gif, "precipitation.gif"));
+        let caption = if map.precipitation_expected {
+            "🗺 **Precipitation:** now and the next 3 hours (forecast model) · ⚡ thunderstorm"
+        } else {
+            "🗺 **Precipitation:** none expected here in the next 3 hours"
+        };
+        embed = embed
+            .field("\u{200b}", caption, false)
+            .image("attachment://precipitation.gif")
+            .footer(CreateEmbedFooter::new(format!(
+                "Open-Meteo · OpenCage · Map {}",
+                super::radar::ATTRIBUTION
+            )));
+    }
+
+    (embed, attachments)
 }
 
 /// Build the `/forecast` embed.
