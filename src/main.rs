@@ -1,4 +1,5 @@
 mod commands;
+mod football;
 mod logger;
 mod metrics;
 mod pricetracker;
@@ -86,6 +87,7 @@ impl EventHandler for Handler {
         match interaction {
             Interaction::Command(cmd) => commands::handle_command(&ctx, &cmd, &self.store).await,
             Interaction::Component(comp) => commands::handle_component(&ctx, &comp, &self.store).await,
+            Interaction::Autocomplete(cmd) => commands::handle_autocomplete(&ctx, &cmd).await,
             _ => {}
         }
     }
@@ -152,6 +154,8 @@ async fn main() -> Result<()> {
     let store = connect_with_retry(&mongo).await;
     info!(database = %mongo.database, "Connected to MongoDB");
     pricetracker::remember_fetch_methods(store.clone()).await;
+    // Football data: its own collections in the same database, and its scheduler.
+    football::init(&store.database()).await;
 
     // Slash commands and components need no privileged intents.
     let mut client = Client::builder(&token, GatewayIntents::GUILDS)

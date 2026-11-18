@@ -1,0 +1,91 @@
+{
+ "filters": {
+  "season": "2026"
+ },
+ "area": {
+  "id": 2032,
+  "name": "Brazil",
+  "code": "BRA",
+  "flag": "https://crests.football-data.org/764.svg"
+ },
+ "competition": {
+  "id": 2013,
+  "name": "Campeonato Brasileiro Série A",
+  "code": "BSA",
+  "type": "LEAGUE",
+  "emblem": "https://crests.football-data.org/bsa.png"
+ },
+ "season": {
+  "id": 2474,
+  "startDate": "2026-01-28",
+  "endDate": "2026-12-02",
+  "currentMatchday": 35,
+  "winner": null
+ },
+ "standings": [
+  {
+   "stage": "REGULAR_SEASON",
+   "type": "TOTAL",
+   "group": "Matchday",
+   "table": [
+    {
+     "position": 1,
+     "team": {
+      "id": 1783,
+      "name": "CR Flamengo",
+      "shortName": "Flamengo",
+      "tla": "FLA",
+      "crest": "https://crests.football-data.org/1783.png"
+     },
+     "playedGames": 34,
+     "form": null,
+     "won": 23,
+     "draw": 7,
+     "lost": 4,
+     "points": 76,
+     "goalsFor": 71,
+     "goalsAgainst": 29,
+     "goalDifference": 42
+    },
+    {
+     "position": 2,
+     "team": {
+      "id": 1769,
+      "name": "SE Palmeiras",
+      "shortName": "Palmeiras",
+      "tla": "PAL",
+      "crest": "https://crests.football-data.org/1769.png"
+     },
+     "playedGames": 34,
+     "form": null,
+     "won": 21,
+     "draw": 10,
+     "lost": 3,
+     "points": 73,
+     "goalsFor": 62,
+     "goalsAgainst": 23,
+     "goalDifference": 39
+    },
+    {
+     "position": 3,
+     "team": {
+      "id": 1771,
+      "name": "Cruzeiro EC",
+      "shortName": "Cruzeiro",
+      "tla": "CRU",
+      "crest": "https://crests.football-data.org/1771.png"
+     },
+     "playedGames": 34,
+     "form": null,
+     "won": 18,
+     "draw": 6,
+     "lost": 10,
+     "points": 60,
+     "goalsFor": 55,
+     "goalsAgainst": 48,
+     "goalDifference": 7
+    }
+   ]
+  }
+ ]
+}

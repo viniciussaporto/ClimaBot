@@ -1,3 +1,4 @@
+pub mod football;
 pub mod pricetracking;
 pub mod radar;
 pub mod roles;
@@ -65,6 +66,9 @@ pub fn definitions() -> Vec<CreateCommand> {
         pricetracking::register(),
         CreateCommand::new("help").description("Show what ClimaBot can do"),
     ]
+    .into_iter()
+    .chain(football::register())
+    .collect()
 }
 
 // ─────────────────────────────────────────────
@@ -97,6 +101,8 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
         "roles" => roles::handle_command(ctx, cmd).await,
         "pt" => pricetracking::handle(ctx, cmd, store).await,
         "help" => help_command(ctx, cmd).await,
+        "football" => football::handle_football(ctx, cmd).await,
+        "live" => football::handle_live(ctx, cmd).await,
         _ => Err(anyhow!("unknown command")),
     };
 
@@ -109,6 +115,7 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
                 "forecast" => "❌ Unable to retrieve forecast information.",
                 "roles" => "❌ Failed to process roles command. Check that I have the **Manage Roles** permission.",
                 "pt" => "⚠️ Something went wrong with price tracking.",
+                "football" | "live" => "⚠️ Something went wrong fetching football data.",
                 _ => "❌ Something went wrong.",
             };
             reply_error(ctx, cmd, message).await;
@@ -139,8 +146,34 @@ async fn reply_error(ctx: &Context, cmd: &CommandInteraction, message: &str) {
     }
 }
 
+/// Suggestions while a user types a `/football` or `/live` option. Read
+/// from the cache only, so it answers within Discord's 3-second limit.
+pub async fn handle_autocomplete(ctx: &Context, cmd: &CommandInteraction) {
+    if let Err(e) = football::handle_autocomplete(ctx, cmd).await {
+        debug!(error = %e, command = %cmd.data.name, "Autocomplete reply failed");
+    }
+}
+
 pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction, store: &Store) {
     let id = comp.data.custom_id.as_str();
+
+    if id.starts_with(football::PAGE_PREFIX) {
+        let status = match football::handle_page(ctx, comp).await {
+            Ok(()) => "success",
+            Err(e) => {
+                error!(error = format!("{e:#}"), custom_id = id, "Football page button failed");
+                let reply = CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("⚠️ Couldn't load that page. Run the command again.")
+                        .ephemeral(true),
+                );
+                let _ = comp.create_response(&ctx.http, reply).await;
+                "error"
+            }
+        };
+        metrics::COMMAND_COUNTER.with_label_values(&["football_page", status]).inc();
+        return;
+    }
 
     if id.starts_with(STOP_BUTTON_PREFIX) {
         let status = match pricetracking::handle_stop_button(ctx, comp, store).await {
@@ -280,6 +313,19 @@ async fn help_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
             false,
         )
         .field("🎭 Roles", "`/roles` — Pick self-assignable roles from a menu", false)
+        .field(
+            "⚽ Football",
+            "`/live all` — Live scores in the competitions I follow\n\
+             `/live match <match>` — Live score, clock and latest events\n\
+             `/football competition fixtures|table|scorers <competition>` — Matches, standings, top scorers\n\
+             `/football match details|events|lineup|stats <match>` — Match report\n\
+             `/football team info|squad|fixtures|stats <team>` — Teams\n\
+             `/football player <name>` — Player statistics\n\
+             `/football competition list` — Brasileirão, Copa do Brasil, Libertadores, Sudamericana, \
+             state championships, the big European leagues and cups\n\
+             `/football` data is cached (each reply says how old it is); `/live` is refreshed every minute.",
+            false,
+        )
         .field(
             "📦 Price Tracking",
             "`/pt add <url>` — Track a product page\n\

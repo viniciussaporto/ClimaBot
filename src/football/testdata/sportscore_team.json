@@ -1,0 +1,55 @@
+{
+ "sport": "football",
+ "team": {
+  "name": "Flamengo (AA)",
+  "logo": "https://img.thesports.com/football/team/3d85483f584053252d5334908c6482ac.png",
+  "slug": "flamengo-aa",
+  "url": "/football/team/flamengo-aa/"
+ },
+ "count": 5,
+ "matches": [
+  {
+   "home": "Flamengo (AA)",
+   "away": "Sao Carlos",
+   "home_logo": "https://img.thesports.com/football/team/3d85483f584053252d5334908c6482ac.png",
+   "away_logo": "https://img.thesports.com/football/team/5807f28746bc6a213754a81b210860e1.png",
+   "home_score": "0",
+   "away_score": "0",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2025-04-19T18:00:00+00:00",
+   "competition": "Brazilian Paulista Serie B",
+   "competition_logo": "https://img.thesports.com/football/competition/5360da874f5ae86a0aa9c092bd6fe161.png",
+   "url": "/football/match/sao-carlos-vs-flamengo-aa/1l4rjnh9ygp9m7v/"
+  },
+  {
+   "home": "Flamengo (AA)",
+   "away": "Paulista(SP)",
+   "home_logo": "https://img.thesports.com/football/team/3d85483f584053252d5334908c6482ac.png",
+   "away_logo": "https://img.thesports.com/football/team/346b441f46ebe0b2a8be355ddf01843b.png",
+   "home_score": "0",
+   "away_score": "0",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2024-08-17T18:00:00+00:00",
+   "competition": "Brazilian Campeonato Paulista A4",
+   "competition_logo": "https://img.thesports.com/football/competition/f91c03219c2f44a4ee7cbf0fffd1a0e4.png",
+   "url": "/football/match/flamengo-aa-vs-paulistasp/pxwrxlh5nnlyryk/"
+  },
+  {
+   "home": "Flamengo (AA)",
+   "away": "America SP",
+   "home_logo": "https://img.thesports.com/football/team/3d85483f584053252d5334908c6482ac.png",
+   "away_logo": "https://img.thesports.com/football/team/34a8557547751e6450c5745b861b2387.png",
+   "home_score": "0",
+   "away_score": "1",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2023-07-22T18:00:00+00:00",
+   "competition": "Brazilian Paulista Serie B",
+   "competition_logo": "https://img.thesports.com/football/competition/5360da874f5ae86a0aa9c092bd6fe161.png",
+   "url": "/football/match/flamengo-aa-vs-america-sp/l7oqdeh87e65r51/"
+  }
+ ],
+ "updated": "2026-11-18T21:57:32.802101+00:00"
+}

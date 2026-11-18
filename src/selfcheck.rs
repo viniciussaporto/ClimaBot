@@ -110,6 +110,43 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
     };
     r.check("OpenCage unknown location is reported as not found", not_found);
 
+    // ── Football data ─────────────────────────
+    // Real requests against each configured provider (a handful of calls).
+    {
+        use crate::football::{Football, competitions, quota::Purpose};
+        let fb = Football::from_env(None);
+        let serie_a = competitions::by_key("brazilian-serie-a").expect("registry");
+        let today = chrono::Utc::now().date_naive();
+        if let Some(l) = r.check("SportScore fixtures", fb.fixtures(serie_a, today, Purpose::User).await.map_err(Into::into)) {
+            println!("       {} Brasileirão match(es) today, from {}", l.value.data.len(), l.value.provider);
+        }
+        if let Some(l) = r.check("SportScore live scoreboard", fb.live(Purpose::User).await.map_err(Into::into)) {
+            println!("       {} live match(es) in followed competitions", l.value.data.len());
+        }
+        if let Some(l) = r.check("SportScore standings", fb.standings(serie_a, Purpose::User).await.map_err(Into::into)) {
+            let leader = l.value.data.groups.first().and_then(|g| g.rows.first()).map(|r| r.team.clone()).unwrap_or_default();
+            println!("       leader: {leader}");
+        }
+        if fb.has_fallback() {
+            let fd = crate::football::providers::football_data::FootballData::new(
+                std::env::var("FOOTBALL_DATA_TOKEN").unwrap_or_default().trim().to_string(),
+            );
+            if let Some(s) = r.check("football-data.org standings (fallback)", fd.standings(&fb.up, "BSA", Purpose::User).await.map_err(Into::into)) {
+                println!("       {} table row(s)", s.groups.first().map(|g| g.rows.len()).unwrap_or(0));
+            }
+        } else {
+            println!("[SKIP] football-data.org: FOOTBALL_DATA_TOKEN not set");
+        }
+        match fb.api_football_status().await {
+            Some(s) => {
+                if let Some(s) = r.check("API-Football key (squads)", s.map_err(Into::into)) {
+                    println!("       {s}");
+                }
+            }
+            None => println!("[SKIP] API-Football: API_FOOTBALL_KEY not set"),
+        }
+    }
+
     // ── Database ──────────────────────────────
     let live = Store::connect(mongo_uri, database).await;
     if let Some(store) = r.check(&format!("MongoDB database '{database}'"), live)

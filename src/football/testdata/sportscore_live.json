@@ -1,0 +1,49 @@
+{
+ "sport": "football",
+ "date": "2026-11-18",
+ "count": 3,
+ "matches": [
+  {
+   "home": "Reus FC Reddis",
+   "away": "Barakaldo CF",
+   "home_logo": "https://img.thesports.com/football/team/9cbf9acbfe6fea03015207e2b5d97a84.png",
+   "away_logo": "https://img.thesports.com/football/team/f25940d25acd028fbae52f8df2497734.png",
+   "home_score": "2",
+   "away_score": "2",
+   "status": "live",
+   "status_text": "Penalty shootout",
+   "time": "2026-11-18T19:30:00+00:00",
+   "competition": "Copa del Rey",
+   "competition_logo": "https://img.thesports.com/football/competition/7067abeb61660895f3ca0227675ef16f.png",
+   "url": "/football/match/reus-fc-reddis-vs-barakaldo-cf/pxwrxlhlpd6eryk/"
+  },
+  {
+   "home": "Alianza Atletico Sullana",
+   "away": "FBC Melgar",
+   "home_logo": "https://img.thesports.com/football/team/0ce10ff2713268ab8db9fad32d2ab54e.png",
+   "away_logo": "https://img.thesports.com/football/team/215f986a8d6da00e35a2b1011922ca0d.png",
+   "home_score": "1",
+   "away_score": "1",
+   "status": "live",
+   "status_text": "2nd half",
+   "time": "2026-11-18T20:00:00+00:00",
+   "competition": "Peruvian Liga 1",
+   "competition_logo": "https://img.thesports.com/football/competition/c34077b7ac3592e339bd375e72fe441b.png",
+   "url": "/football/match/fbc-melgar-vs-alianza-atletico-sullana/x7lm7phjdwjym2w/"
+  },
+  {
+   "home": "Carabobo",
+   "away": "Zamora Barinas",
+   "home_logo": "https://img.thesports.com/football/team/f01ecc34c5814c9b486657bc3143b3b0.png",
+   "away_logo": "https://img.thesports.com/football/team/8a98d79cf69a2e89fa759a80c739f752.png",
+   "home_score": "0",
+   "away_score": "0",
+   "status": "live",
+   "status_text": "2nd half",
+   "time": "2026-11-18T20:30:00+00:00",
+   "competition": "Venezuela Cup",
+   "competition_logo": "https://img.thesports.com/football/competition/a1a0b6bf59772e5ec90ca4e8191b4062.png",
+   "url": "/football/match/carabobo-vs-zamora-barinas/4wyrn4hy87wvq86/"
+  }
+ ]
+}

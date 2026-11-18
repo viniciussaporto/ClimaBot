@@ -1,0 +1,53 @@
+{
+ "sport": "football",
+ "competition": "Brazilian Serie A",
+ "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+ "stat_type": "goals",
+ "scorers": [
+  {
+   "rank": 1,
+   "player": "Kevin Viveros",
+   "player_logo": "https://img.thesports.com/football/player/8f851e58eb52ee94df40cc2fdc4bd3ab.png",
+   "player_slug": "kevin-viveros",
+   "player_url": "/football/player/kevin-viveros/",
+   "team": "Athletico Paranaense - PR",
+   "team_logo": "https://img.thesports.com/football/team/1b54e9fdbe9c936023c55299da4165b7.png",
+   "team_slug": "athletico-paranaense-pr",
+   "goals": 21,
+   "assists": 3,
+   "matches": 32,
+   "rating": 22452,
+   "minutes": 2818
+  },
+  {
+   "rank": 2,
+   "player": "Pedro Guilherme Abreu dos Santos",
+   "player_logo": "https://img.thesports.com/football/player/e18221d728c0bf68d72e05c0bab97957.png",
+   "player_slug": "pedro-guilherme-abreu-dos-santos",
+   "player_url": "/football/player/pedro-guilherme-abreu-dos-santos/",
+   "team": "Flamengo - RJ",
+   "team_logo": "https://img.thesports.com/football/team/f19b2f9fa5b0c72acc262bc4f0d2cd77.png",
+   "team_slug": "flamengo-rj",
+   "goals": 20,
+   "assists": 6,
+   "matches": 34,
+   "rating": 25088,
+   "minutes": 2693
+  },
+  {
+   "rank": 3,
+   "player": "Gabriel Barbosa",
+   "player_logo": "https://img.thesports.com/football/player/27d35d774497a4b528ca9962c0db577e.png",
+   "player_slug": "gabriel-barbosa",
+   "player_url": "/football/player/gabriel-barbosa/",
+   "team": "Santos FC - SP",
+   "team_logo": "https://img.thesports.com/football/team/0840bace9b911b3f0dbadb710ea20316.png",
+   "team_slug": "santos-fc-sp",
+   "goals": 15,
+   "assists": 4,
+   "matches": 27,
+   "rating": 18626,
+   "minutes": 2004
+  }
+ ]
+}

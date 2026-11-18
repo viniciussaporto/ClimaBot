@@ -1,0 +1,49 @@
+{
+ "sport": "football",
+ "date": "2026-11-22",
+ "count": 3,
+ "matches": [
+  {
+   "home": "Chapecoense - SC",
+   "away": "Cruzeiro - MG",
+   "home_logo": "https://img.thesports.com/football/team/4970b9a9a215c78759a6bb84ecaa3701.png",
+   "away_logo": "https://img.thesports.com/football/team/3fe9281df0fdaf026741ff54ac24bdeb.png",
+   "home_score": null,
+   "away_score": null,
+   "status": "upcoming",
+   "status_text": "Not started",
+   "time": "2026-11-22T00:00:00+00:00",
+   "competition": "Brazilian Serie A",
+   "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+   "url": "/football/match/cruzeiro-esporte-clube-vs-chapecoense-sc/6ypq3nhv7048md7/"
+  },
+  {
+   "home": "Chapecoense - SC",
+   "away": "Cruzeiro - MG",
+   "home_logo": "https://img.thesports.com/football/team/4970b9a9a215c78759a6bb84ecaa3701.png",
+   "away_logo": "https://img.thesports.com/football/team/3fe9281df0fdaf026741ff54ac24bdeb.png",
+   "home_score": null,
+   "away_score": null,
+   "status": "upcoming",
+   "status_text": "Not started",
+   "time": "2026-11-22T00:00:00+00:00",
+   "competition": "Brazilian Serie A",
+   "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+   "url": "/football/match/cruzeiro-esporte-clube-vs-chapecoense-sc/6ypq3nhv7048md7/"
+  },
+  {
+   "home": "Jaguares Chiapas FC",
+   "away": "Los Cabos United",
+   "home_logo": "https://img.thesports.com/football/team/515effb0ab092d17cf9e61f0909259c6.png",
+   "away_logo": "https://img.thesports.com/football/team/171ce327b7694d4a124a68d718990ee9.png",
+   "home_score": null,
+   "away_score": null,
+   "status": "upcoming",
+   "status_text": "Not started",
+   "time": "2026-11-22T00:00:00+00:00",
+   "competition": "MEX Liga Premier",
+   "competition_logo": "https://img.thesports.com/football/competition/11c41b78e17e5393149005ac5474c72c.png",
+   "url": "/football/match/los-cabos-united-vs-jaguares-chiapas-fc/dj2ryohlwovlq1z/"
+  }
+ ]
+}

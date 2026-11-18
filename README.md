@@ -4,7 +4,7 @@
 
 # 🌦️ ClimaBot
 
-**A Discord bot for weather, self-assignable roles and product price tracking.**
+**A Discord bot for weather, football scores, self-assignable roles and product price tracking.**
 
 [![Rust](https://img.shields.io/badge/Rust-2024-orange?logo=rust)](https://www.rust-lang.org/)
 [![Discord](https://img.shields.io/badge/Discord-slash%20commands-5865F2?logo=discord&logoColor=white)](https://discord.com/api/oauth2/authorize?client_id=1109598244884979792&permissions=534723951680&scope=applications.commands%20bot)
@@ -23,6 +23,7 @@
 
 - [Features](#features)
 - [Commands](#commands)
+- [Football](#football)
 - [Price tracking](#price-tracking)
 - [Self-hosting](#self-hosting)
 - [Configuration](#configuration)
@@ -36,6 +37,7 @@
 ## Features
 
 - **Weather**: current conditions, an animated precipitation map (now and the next 3 hours) and a 5-day forecast for any place on Earth, in metric or imperial units. Data from [Open-Meteo](https://open-meteo.com), geocoding from [OpenCage](https://opencagedata.com), map tiles from [OpenStreetMap](https://www.openstreetmap.org/copyright).
+- **Football**: live scores, fixtures, results, tables, top scorers, match events, line-ups, teams, squads and players for the Brasileirão, Copa do Brasil, Libertadores, Sudamericana, Brazilian state championships and the main European leagues and cups. Data [Powered by SportScore](https://sportscore.com/), with [football-data.org](https://www.football-data.org/) as a backup and squads from [API-Football](https://www.api-football.com/).
 - **Self-assignable roles**: a menu members use to pick their own roles. Roles with moderation or admin permissions, managed roles and roles above the bot are never offered.
 - **Price tracking**: watch product pages in any currency and get a DM when the price changes, with a one-click **❌ Stop tracking** button.
 - **Built to run unattended**: Prometheus metrics, a `/status` health endpoint, Grafana dashboards and alerts as code, JSON logs shipped to Loki, and a nightly self-update.
@@ -51,9 +53,36 @@
 | `/pt list` | Your tracked products, current prices and next check time |
 | `/pt history <item>` | Price history of a product, with lowest and highest price |
 | `/pt remove <item>` | Stop tracking a product |
+| `/live all [competition]` | Live matches in the followed competitions, by competition |
+| `/live match <match>` | One live match: score, status, clock and latest events |
+| `/live competition <competition>` | Live matches in one competition |
+| `/football competition list` | The competitions followed and what's available for each |
+| `/football competition fixtures <competition> [date]` | Matches and results on a day (`today`, `tomorrow`, `yesterday` or `YYYY-MM-DD`) |
+| `/football competition table <competition>` | Standings (group tables for competitions with groups) |
+| `/football competition scorers <competition> [stat]` | Top goalscorers or assists |
+| `/football match details\|events\|lineup\|stats <match>` | Score, key events, the full timeline, line-ups and formations, team statistics |
+| `/football team info\|squad\|fixtures <team>` | Standings, form, recent and next matches; the current squad; all fixtures |
+| `/football team stats <team> <competition>` | A team's record in a competition |
+| `/football player <name>` | A player's season statistics |
 | `/help` | Command overview |
 
 `units` is optional: **Metric** (°C, km/h, hPa) by default, or **Imperial** (°F, mph, inHg). For `/pt history` and `/pt remove`, `item` is the position shown by `/pt list` or the product URL.
+
+## Football
+
+`/live` shows the live scoreboard, refreshed about once a minute while a followed match is about to start, under way or just ended. `/football` shows cached data and says how old it is; it's never presented as live. Every reply names its source.
+
+**Competitions:** Brasileirão Séries A, B and C, Copa do Brasil, Supercopa do Brasil, Copa do Nordeste, Copa Verde, Paulistão, Carioca, Mineiro, Gaúcho, Copa Libertadores, Copa Sudamericana, the Champions, Europa and Conference Leagues, and the leagues and cups of England, Spain, Germany, Italy, France and Portugal (`src/football/competitions.rs`). Options autocomplete as you type: competitions, matches of yesterday to tomorrow, teams in the followed tables, top scorers.
+
+**How the data is fetched.** A scheduler is the only thing that polls the providers: fixture lists every 6 hours, results and tables daily, the live scoreboard each minute during matches, and match details every 2.5 minutes for live matches in the ⭐ competitions (`FOOTBALL_PRIORITY`) or that someone asked about. When a match leaves the live list, its final score, fixture list and table are refreshed. Commands read the cache (memory, then MongoDB `football_cache`); if what they need is missing or too old they trigger one shared refresh, however many people ask. Each provider has a daily budget, restored after restarts and corrected from the provider's own quota headers; as it runs low, optional refreshes stop first and the live scoreboard last. When a provider fails or runs out, replies show the newest cached copy with its age, or say that nothing is available. No data is made up.
+
+| Source | Used for | Free limits |
+| --- | --- | --- |
+| [SportScore](https://sportscore.com/developers/) | Everything, including live scores | ~10,000 requests/day per IP; attribution required |
+| [football-data.org](https://www.football-data.org/) (`FOOTBALL_DATA_TOKEN`) | Backup for fixtures, tables and scorers of its 13 free competitions; its scores are delayed and never used for `/live` | 10 requests/minute |
+| [API-Football](https://www.api-football.com/) (`API_FOOTBALL_KEY`) | Squads (its free plan can't read current-season fixtures) | 100 requests/day |
+
+Match statistics and some player statistics are often missing from the free sources; replies then say they aren't provided rather than showing empty tables.
 
 ## Price tracking
 
@@ -89,7 +118,7 @@ ClimaBot is written in Rust and ships as a Docker Compose stack: the bot, MongoD
    ```
    MongoDB sits on an internal network only the bot can reach.
 
-Then check the deployment: Discord credentials, registered commands, role menus per server, the weather APIs and the database.
+Then check the deployment: Discord credentials, registered commands, role menus per server, the weather and football APIs and the database.
 
 ```sh
 docker compose exec climabot climabot selfcheck [product-url ...]
@@ -110,6 +139,11 @@ Everything is set in `.env`; `.env.example` documents every option.
 | `SCRAPER_PROXY` | – | HTTP or SOCKS5 proxy for all scraping |
 | `ML_CLIENT_ID` / `ML_CLIENT_SECRET` | – | Mercado Livre API app |
 | `LOG_DIR` / `CLIMABOT_LOG_DIR` | `/var/log/climabot` | JSON logs, rotated daily, 7 days kept |
+| `SPORTSCORE_API_KEY` | – | Registered SportScore key (raises their rate limit; works without one) |
+| `FOOTBALL_DATA_TOKEN` | – | football-data.org token: backup source for fixtures, tables, scorers |
+| `API_FOOTBALL_KEY` | – | API-Football key: squads (`/football team squad`) |
+| `FOOTBALL_PRIORITY` | ⭐ in `competitions.rs` | Comma-separated competition keys whose live match details are polled |
+| `SPORTSCORE_DAILY_BUDGET` / `API_FOOTBALL_DAILY_BUDGET` | `9000` / `100` | Requests per UTC day the bot allows itself |
 | `RADAR_RAIN_CHANCE` | `20` | `/weather` map: fetch the precipitation grid (~108 Open-Meteo calls) only when the chance of precipitation at the location reaches this % within 3 hours |
 | `METRICS_PORT` / `METRICS_HOST_PORT` | `9464` / `9465` | Port for `/metrics` and `/status` (host side bound to `127.0.0.1`) |
 | `RUST_LOG` | `info` | Log level |
