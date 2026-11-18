@@ -57,7 +57,9 @@
           },
           "annotations": {
             "summary": "ClimaBot is not responding",
-            "description": "Prometheus can't scrape the bot for 2 minutes: it crashed, was stopped, or can't start. Check `climabot status` and `docker compose -f /root/climabot-rust/docker-compose.yml logs climabot`."
+            "description": "Prometheus can't scrape the bot for 2 minutes: it crashed, was stopped, or can't start. Slash commands and hourly price checks are not running.",
+            "runbook": "1. `climabot status`: is climabot-climabot-1 running, restarting or exited?\n2. `docker compose -f /root/climabot-rust/docker-compose.yml logs --tail 100 climabot`: look for the panic or the last error.\n3. Exited or missing: `climabot start` (pulls, rebuilds and starts the stack).\n4. Crashes right after an update: `git -C /root/climabot-rust log --oneline -5`, revert the bad commit on main, then `climabot update`.\n5. Running but still down: the metrics port (9464) or Prometheus is the problem; `docker ps --filter name=monitoring` and check the 'climabot' target in Prometheus.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -121,7 +123,9 @@
           },
           "annotations": {
             "summary": "MongoDB of the ClimaBot stack is not running",
-            "description": "Price tracking can't read or save anything. Start it with `climabot update` or check `docker ps -a`."
+            "description": "The bot runs but can't read or save anything: tracked products, prices and alerts are not updated.",
+            "runbook": "1. `docker ps -a --filter name=climabot-mongo`: exited, restarting or gone?\n2. `docker logs climabot-mongo-1 --tail 50`: disk full and data-file corruption are the usual causes.\n3. Start it: `docker compose -f /root/climabot-rust/docker-compose.yml up -d mongo`, or `climabot start` for the whole stack.\n4. Disk full: free space first (see the 'Disk almost full' runbook), then start it.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -193,7 +197,9 @@
           },
           "annotations": {
             "summary": "vinisaporto.de is not reachable",
-            "description": "The homepage fails for 3 minutes (HTTP error, TLS problem or timeout). Check Caddy: `systemctl status caddy`."
+            "description": "The homepage fails for 3 minutes when fetched through Cloudflare (HTTP error, TLS problem or timeout).",
+            "runbook": "1. `curl -sI https://vinisaporto.de`: a 52x status comes from Cloudflare (520-523: Caddy unreachable or refusing; 525/526: TLS between Cloudflare and Caddy).\n2. `systemctl status caddy` and `journalctl -u caddy --since -15min`.\n3. Bad config after an edit: `caddy validate --config /etc/caddy/Caddyfile`, fix, then `systemctl reload caddy`.\n4. Caddy fine but the site 404s or 500s: `ls /srv/vinisaporto/public`, and redeploy with `vs-update`.\n5. Everything fine on the server: check the Cloudflare dashboard (DNS, SSL mode, outages).",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -254,7 +260,9 @@
           },
           "annotations": {
             "summary": "vinisaporto.de/api is failing",
-            "description": "/api/challenge fails for 3 minutes, so the contact form can't be used. Check `docker logs vsite-api`."
+            "description": "/api/challenge fails for 3 minutes: the contact form and the CV download don't work.",
+            "runbook": "1. `docker ps -a --filter name=vsite-api` and `docker logs vsite-api --tail 50`.\n2. Restart it: `docker compose -f /opt/vinisaporto/deploy/compose.yaml up -d api`.\n3. Container healthy but still failing: Caddy proxies /api/* to 127.0.0.1:18081, so `curl -s 127.0.0.1:18081/api/challenge` tells Caddy and the API apart.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -315,7 +323,9 @@
           },
           "annotations": {
             "summary": "vinisaporto.de/status is not reachable",
-            "description": "The public status page fails for 3 minutes."
+            "description": "The public status page fails for 3 minutes. If 'Website is down' fires too, start there.",
+            "runbook": "1. `curl -sI https://vinisaporto.de/status`.\n2. Only this page fails: the static build is missing it; redeploy with `vs-update`.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -376,7 +386,9 @@
           },
           "annotations": {
             "summary": "/api/status is failing or not reporting ok",
-            "description": "/api/status fails, or reports one of the website's services as down, for 5 minutes. Open https://vinisaporto.de/status to see which one."
+            "description": "/api/status fails, or reports one of the website's services as down, for 5 minutes.",
+            "runbook": "1. Open https://vinisaporto.de/status to see which service is down.\n2. `curl -s https://vinisaporto.de/api/status` shows the raw checks.\n3. Restart the failing container from /opt/vinisaporto/deploy/compose.yaml (`docker compose ... up -d <service>`) and read its logs.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -437,7 +449,10 @@
           },
           "annotations": {
             "summary": "A certificate expires in less than 7 days",
-            "description": "Caddy renews certificates automatically about 30 days before expiry, so renewal is failing. Check `journalctl -u caddy`."
+            "description": "The probes go through Cloudflare, so this is the certificate visitors see: Cloudflare's edge certificate, which renews itself.",
+            "runbook": "1. `echo | openssl s_client -connect vinisaporto.de:443 -servername vinisaporto.de 2>/dev/null | openssl x509 -noout -issuer -enddate` shows who issued it.\n2. Cloudflare-issued: Cloudflare dashboard, SSL/TLS, Edge Certificates; check the Universal SSL status and re-order it if it's stuck.\n3. Not Cloudflare (proxy turned off?): it's Caddy's, so `journalctl -u caddy | grep -i acme` for the renewal error.",
+            "value": "{{ with $values.A }}Expires in: {{ printf \"%.1f days\" .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -506,7 +521,10 @@
           },
           "annotations": {
             "summary": "A disk is over 90% full",
-            "description": "Free space before databases and logs fail to write. `docker system df` and `docker builder prune` usually help."
+            "description": "Databases, Prometheus and logs fail to write once it's full, and services start crashing.",
+            "runbook": "1. `df -h /` and `docker system df` to see what's big.\n2. Quick wins: `docker builder prune -af` and `docker image prune -af`.\n3. `journalctl --disk-usage` (capped at 2G) and `du -xh /var/lib/docker --max-depth 1 | sort -h | tail`.\n4. Prometheus keeps 180 days (up to 40 GB): lower the retention in /root/monitoring/docker-compose.yml if it's the culprit.",
+            "value": "{{ with $values.A }}Used: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Telegram",
@@ -567,7 +585,10 @@
           },
           "annotations": {
             "summary": "Server memory is over 95%",
-            "description": "There is no swap: the kernel will start killing processes."
+            "description": "Only the 4 GB swap file is left before the kernel starts killing processes.",
+            "runbook": "1. `docker stats --no-stream` for the biggest container.\n2. The scraper browsers (FlareSolverr, Byparr) leak memory: `docker compose -f /root/climabot-rust/docker-compose.yml restart flaresolverr byparr`.\n3. Restart whatever else grew; then look at 'Docker Host & Containers' for the trend.",
+            "value": "{{ with $values.A }}Used: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Telegram",

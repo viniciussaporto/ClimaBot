@@ -1,0 +1,69 @@
+# Notification templates for the Grafana on manassas, shared by every rule
+# (ClimaBot, website, server, AlphaTrader). Installed by deploy/grafana/install.sh.
+#
+#   manassas.telegram.message   Telegram contact point (parse_mode HTML)
+#   manassas.discord.title      Discord contact point, embed title
+#   manassas.discord.message    Discord contact point, message body
+#
+# They read these annotations from the rules: summary, description, runbook,
+# value, dashboard_url (all optional), and the labels alertname and severity.
+# One notification = one alert rule (group_by alertname): the description and
+# runbook are shown once, then one line per affected series.
+apiVersion: 1
+templates:
+  - orgId: 1
+    name: manassas
+    template: |
+      {{ define "manassas.icon" }}{{ if eq .Status "resolved" }}✅{{ else if eq .Labels.severity "critical" }}🔴{{ else if eq .Labels.severity "warning" }}🟠{{ else }}🔵{{ end }}{{ end }}
+
+      {{ define "manassas.since" }}{{ .StartsAt | tz "Europe/Lisbon" | date "02 Jan 15:04" }}{{ end }}
+
+      {{/* humanizeDuration only exists in rule annotations, not here: print the Duration, rounded to 1 s. */}}
+      {{ define "manassas.lasted" }}{{ (.EndsAt.Sub .StartsAt).Round 1000000000 }}{{ end }}
+
+      {{/* Telegram HTML: escape &, <, > and turn `code` into <code>code</code>. */}}
+      {{ define "manassas.esc" }}{{ . | reReplaceAll "&" "&amp;" | reReplaceAll "<" "&lt;" | reReplaceAll ">" "&gt;" }}{{ end }}
+      {{ define "manassas.html" }}{{ . | reReplaceAll "&" "&amp;" | reReplaceAll "<" "&lt;" | reReplaceAll ">" "&gt;" | reReplaceAll "`([^`]+)`" "<code>$1</code>" }}{{ end }}
+
+      {{ define "manassas.telegram.message" -}}
+      {{ if .Alerts.Firing -}}
+      {{ $a := index .Alerts.Firing 0 -}}
+      {{ template "manassas.icon" $a }} <b>{{ template "manassas.esc" $a.Labels.alertname }}</b>{{ if gt (len .Alerts.Firing) 1 }} ×{{ len .Alerts.Firing }}{{ end }}
+      {{ range .Alerts.Firing }}• {{ template "manassas.html" .Annotations.summary }}{{ with .Annotations.value }} — <b>{{ template "manassas.esc" . }}</b>{{ end }}
+      {{ end }}<i>since {{ template "manassas.since" $a }} · {{ $a.Labels.severity }}</i>
+      {{ with $a.Annotations.description }}
+      {{ template "manassas.html" . }}
+      {{ end }}{{ with $a.Annotations.runbook }}
+      <b>What to do</b>
+      {{ template "manassas.html" . }}
+      {{ end }}
+      <a href="{{ template "manassas.esc" $a.GeneratorURL }}">Rule</a>{{ with $a.Annotations.dashboard_url }} · <a href="{{ template "manassas.esc" . }}">Dashboard</a>{{ end }} · <a href="{{ template "manassas.esc" $a.SilenceURL }}">Silence</a>
+      {{ end -}}
+      {{ if and .Alerts.Firing .Alerts.Resolved }}
+      {{ end -}}
+      {{ range .Alerts.Resolved -}}
+      ✅ <b>Resolved:</b> {{ template "manassas.esc" .Labels.alertname }}{{ with .Annotations.summary }} — {{ template "manassas.html" . }}{{ end }} <i>(after {{ template "manassas.lasted" . }})</i>
+      {{ end -}}
+      {{- end }}
+
+      {{ define "manassas.discord.title" -}}
+      {{ if .Alerts.Firing }}{{ $a := index .Alerts.Firing 0 }}{{ template "manassas.icon" $a }} {{ $a.Labels.alertname }}{{ if gt (len .Alerts.Firing) 1 }} ×{{ len .Alerts.Firing }}{{ end }}{{ else }}✅ Resolved: {{ .CommonLabels.alertname }}{{ end }}
+      {{- end }}
+
+      {{ define "manassas.discord.message" -}}
+      {{ if .Alerts.Firing -}}
+      {{ $a := index .Alerts.Firing 0 -}}
+      {{ range .Alerts.Firing }}• {{ .Annotations.summary }}{{ with .Annotations.value }} — **{{ . }}**{{ end }}
+      {{ end }}*since {{ template "manassas.since" $a }} · {{ $a.Labels.severity }}*
+      {{ with $a.Annotations.description }}
+      {{ . }}
+      {{ end }}{{ with $a.Annotations.runbook }}
+      **What to do**
+      {{ . }}
+      {{ end }}
+      [Rule](<{{ $a.GeneratorURL }}>){{ with $a.Annotations.dashboard_url }} · [Dashboard](<{{ . }}>){{ end }} · [Silence](<{{ $a.SilenceURL }}>)
+      {{ end -}}
+      {{ range .Alerts.Resolved -}}
+      ✅ **Resolved:** {{ .Labels.alertname }}{{ with .Annotations.summary }} — {{ . }}{{ end }} *(after {{ template "manassas.lasted" . }})*
+      {{ end -}}
+      {{- end }}

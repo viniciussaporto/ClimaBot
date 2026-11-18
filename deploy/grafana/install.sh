@@ -55,8 +55,16 @@ alerting_checksum() {
     done | sha256sum
 }
 before=$(alerting_checksum)
+# Keep the current files: a provisioning error (e.g. a bad template) stops
+# Grafana from starting, so they are put back if it doesn't come up healthy.
+previous=$(mktemp -d)
+trap 'rm -rf "$previous"' EXIT
+cp -p "$ALERTING"/climabot-*.yaml "$previous"/ 2>/dev/null || true
 
 install -m 0644 "$here/alerting/urgent.yaml" "$ALERTING/climabot-urgent.yaml"
+# Notification templates (manassas.*) used by both contact points: the Telegram
+# one comes from manassas-secrets and references manassas.telegram.message.
+install -m 0644 "$here/alerting/templates.yaml" "$ALERTING/climabot-templates.yaml"
 webhook_file="$SECRETS/discord-webhook-url"
 if [[ -s "$webhook_file" ]]; then
     webhook=$(tr -d '[:space:]' <"$webhook_file")
@@ -75,10 +83,9 @@ contactPoints:
         settings:
           url: "$webhook"
           use_discord_username: false
-          message: |
-            {{ range .Alerts }}{{ if eq .Status "firing" }}🔔{{ else }}✅{{ end }} **{{ .Labels.alertname }}**: {{ .Annotations.summary }}
-            {{ .Annotations.description }}
-            {{ end }}
+          # Templates from alerting/templates.yaml (installed above).
+          title: '{{ template "manassas.discord.title" . }}'
+          message: '{{ template "manassas.discord.message" . }}'
 EOF
     install -m 0644 "$here/alerting/info.yaml" "$ALERTING/climabot-info.yaml"
 else
@@ -93,6 +100,25 @@ if [[ "$before" != "$after" ]]; then
     if [[ -n "$grafana" ]]; then
         echo "Alert rules changed: restarting Grafana"
         docker restart "$grafana" >/dev/null
+        healthy() {
+            local i
+            for i in $(seq 1 40); do
+                curl -sf http://127.0.0.1:3000/api/health >/dev/null && return 0
+                sleep 3
+            done
+            return 1
+        }
+        if ! healthy; then
+            echo "Grafana did not come back healthy: restoring the previous alerting files" >&2
+            docker logs --tail 50 "$grafana" 2>&1 | grep -iE "level=error" | tail -3 >&2 || true
+            rm -f "$ALERTING"/climabot-*.yaml
+            cp -p "$previous"/climabot-*.yaml "$ALERTING"/ 2>/dev/null || true
+            docker restart "$grafana" >/dev/null
+            healthy && echo "Grafana is healthy again with the previous alerting files" >&2 \
+                || echo "Grafana is still unhealthy: check 'docker logs $grafana'" >&2
+            exit 1
+        fi
+        echo "Grafana is healthy"
     fi
 fi
 

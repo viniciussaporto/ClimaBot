@@ -57,7 +57,9 @@
           },
           "annotations": {
             "summary": "The bot process restarted",
-            "description": "Expected after `climabot update`; otherwise look for a crash in the logs."
+            "description": "Outside the nightly update window, so it was a crash or a manual restart.",
+            "runbook": "1. `docker compose -f /root/climabot-rust/docker-compose.yml logs --tail 200 climabot | grep -iE 'panic|error'` for the cause.\n2. One restart after a crash is fine; repeated ones raise 'Container crash-looping'.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -121,7 +123,10 @@
           },
           "annotations": {
             "summary": "More than 20% of commands failed in the last hour",
-            "description": "See the 'Command errors' panel on the ClimaBot dashboard."
+            "description": "Users get error replies to slash commands.",
+            "runbook": "1. 'Command errors' panel on the ClimaBot dashboard: which command?\n2. `climabot logs` and try the command in Discord to reproduce.\n3. Weather commands: see 'Weather API errors'. /pt commands: see 'Price checks failing'.",
+            "value": "{{ with $values.A }}Failed: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -185,7 +190,10 @@
           },
           "annotations": {
             "summary": "More than 20% of weather/geocoding API calls failed",
-            "description": "OpenCage (quota?) or Open-Meteo is having problems."
+            "description": "Weather commands fail or answer without a location.",
+            "runbook": "1. `climabot logs | grep -iE 'opencage|open-meteo'` for the status codes.\n2. OpenCage 402/429: the daily quota is used up; it resets at midnight UTC.\n3. Open-Meteo 5xx: their outage, nothing to do but wait.",
+            "value": "{{ with $values.A }}Failed: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -249,7 +257,10 @@
           },
           "annotations": {
             "summary": "Some hourly price checks are more than 5 minutes late",
-            "description": "The scheduler can't keep up, or the browsers are slow or stuck."
+            "description": "The scheduler can't keep up, or the browsers are slow or stuck.",
+            "runbook": "1. Browser health: `docker stats --no-stream climabot-flaresolverr-1 climabot-byparr-1`.\n2. Stuck or near their memory limit: `docker compose -f /root/climabot-rust/docker-compose.yml restart flaresolverr byparr`.\n3. Still behind: too many products for one hour of checks; look at check durations on the ClimaBot dashboard.",
+            "value": "{{ with $values.A }}Overdue checks: {{ printf \"%.0f\" .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -313,7 +324,10 @@
           },
           "annotations": {
             "summary": "More than half of the price checks failed in the last 6 hours",
-            "description": "A shop changed its page or its bot protection. See 'Fetch success rate by method' on the ClimaBot dashboard."
+            "description": "Price drops are not being noticed for the failing shops.",
+            "runbook": "1. 'Fetch success rate by method' on the ClimaBot dashboard: one shop or all of them?\n2. One shop: it changed its page or its bot protection; `climabot failed-sites` and the logs show the reason.\n3. Cloudflare-protected shops block this server's datacenter IP; they need a residential proxy in SCRAPER_PROXY.\n4. All shops: the browsers are down, see 'Scraper browser down'.",
+            "value": "{{ with $values.A }}Failed: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -377,7 +391,10 @@
           },
           "annotations": {
             "summary": "{{ $labels.container_label_com_docker_compose_service }} is above 90% of its memory limit",
-            "description": "It will be OOM-killed and restarted if it reaches the limit."
+            "description": "It will be OOM-killed and restarted when it reaches the limit, failing the checks in flight.",
+            "runbook": "1. Restart it before it's killed: `docker compose -f /root/climabot-rust/docker-compose.yml restart {{ $labels.container_label_com_docker_compose_service }}`.\n2. If it happens daily, raise FLARESOLVERR_MEM_LIMIT or BYPARR_MEM_LIMIT in /root/climabot-rust/.env and `climabot update`.",
+            "value": "{{ with $values.A }}Of its limit: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -441,71 +458,9 @@
           },
           "annotations": {
             "summary": "{{ $labels.name }} is not running",
-            "description": "Shops behind bot protection can't be checked until it's back."
-          },
-          "notification_settings": {
-            "receiver": "Discord (info)",
-            "group_by": [
-              "alertname",
-              "grafana_folder"
-            ],
-            "repeat_interval": "24h",
-            "mute_time_intervals": [
-              "ClimaBot nightly update"
-            ]
-          },
-          "isPaused": false
-        },
-        {
-          "uid": "cb-gateway-latency",
-          "title": "Discord gateway slow",
-          "condition": "C",
-          "data": [
-            {
-              "refId": "A",
-              "relativeTimeRange": {
-                "from": 600,
-                "to": 0
-              },
-              "datasourceUid": "ced6krlr4hgxsb",
-              "model": {
-                "refId": "A",
-                "expr": "discord_gateway_latency_seconds",
-                "instant": true,
-                "range": false,
-                "intervalMs": 15000,
-                "maxDataPoints": 43200
-              }
-            },
-            {
-              "refId": "C",
-              "datasourceUid": "__expr__",
-              "model": {
-                "refId": "C",
-                "type": "threshold",
-                "expression": "A",
-                "conditions": [
-                  {
-                    "evaluator": {
-                      "type": "gt",
-                      "params": [
-                        1
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "noDataState": "OK",
-          "execErrState": "Error",
-          "for": "15m",
-          "labels": {
-            "severity": "info"
-          },
-          "annotations": {
-            "summary": "Discord gateway latency is above 1 second",
-            "description": "Usually a Discord or network problem; the bot reconnects by itself."
+            "description": "Shops behind bot protection can't be checked until it's back.",
+            "runbook": "1. `docker ps -a --filter name={{ $labels.name }}` and `docker logs {{ $labels.name }} --tail 50`.\n2. Start it: `docker compose -f /root/climabot-rust/docker-compose.yml up -d` (starts whatever is missing).",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -577,7 +532,10 @@
           },
           "annotations": {
             "summary": "The website takes more than 3 seconds to answer",
-            "description": "Measured from the server itself, TLS included."
+            "description": "Measured from the server through Cloudflare, TLS included.",
+            "runbook": "1. Server busy? Check 'Server CPU high' / memory on 'Docker Host & Containers'.\n2. Only the API slow: `docker logs vsite-api --tail 50`.\n3. Server idle: likely Cloudflare or the network; check status.cloudflare.com.",
+            "value": "{{ with $values.A }}Slowest probe: {{ printf \"%.1f s\" .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -638,7 +596,10 @@
           },
           "annotations": {
             "summary": "A certificate expires in less than 21 days",
-            "description": "Caddy should have renewed it by now. Check `journalctl -u caddy`."
+            "description": "Edge certificates normally renew around 30 days before expiry. Early warning for 'TLS certificate expires within 7 days'.",
+            "runbook": "1. Same checks as 'TLS certificate expires within 7 days', without the hurry.",
+            "value": "{{ with $values.A }}Expires in: {{ printf \"%.1f days\" .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -699,7 +660,9 @@
           },
           "annotations": {
             "summary": "grafana.vinisaporto.de is not reachable from outside",
-            "description": "Grafana itself still runs (it sent this); check the Caddy route."
+            "description": "Grafana itself still runs (it sent this), so the route to it is broken.",
+            "runbook": "1. `curl -sI https://grafana.vinisaporto.de/api/health` for the status code.\n2. `cat /etc/caddy/sites/grafana.caddy` and `journalctl -u caddy --since -30min`.\n3. `systemctl reload caddy` after fixing; check the DNS record in Cloudflare.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -760,7 +723,9 @@
           },
           "annotations": {
             "summary": "{{ $labels.name }} is not running",
-            "description": "The status page and website statistics lose data (CrowdSec: no bot blocking) until it's back."
+            "description": "The status page and website statistics lose data (CrowdSec: no bot blocking) until it's back.",
+            "runbook": "1. `docker logs {{ $labels.name }} --tail 50`.\n2. `docker compose -f /opt/vinisaporto/deploy/compose.yaml up -d` starts what's missing.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/vsite-overview"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -829,7 +794,10 @@
           },
           "annotations": {
             "summary": "Server CPU above 90% for 15 minutes",
-            "description": "See 'Docker Host & Containers' for the busiest container."
+            "description": "Everything on the server slows down: price checks, the website, Grafana.",
+            "runbook": "1. 'Docker Host & Containers' or `docker stats --no-stream` for the busiest container.\n2. Usually a scraper browser spinning on a page: restart it.\n3. Nothing in Docker: `top` for host processes (a stuck backup or update).",
+            "value": "{{ with $values.A }}CPU: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -890,7 +858,10 @@
           },
           "annotations": {
             "summary": "Server memory above 85% for 15 minutes",
-            "description": "See 'Docker Host & Containers' for the largest container."
+            "description": "Early warning for 'Server out of memory'.",
+            "runbook": "1. Same steps as 'Server out of memory', without the hurry.",
+            "value": "{{ with $values.A }}Used: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -951,7 +922,10 @@
           },
           "annotations": {
             "summary": "A disk is over 80% full",
-            "description": "`docker builder prune` and `docker image prune` free space."
+            "description": "Early warning for 'Disk almost full'.",
+            "runbook": "1. `docker builder prune -af` and `docker image prune -af` usually free enough; otherwise follow 'Disk almost full'.",
+            "value": "{{ with $values.A }}Used: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -1012,7 +986,10 @@
           },
           "annotations": {
             "summary": "{{ $labels.name }} restarted 3+ times in 15 minutes",
-            "description": "It keeps exiting and being restarted. Check `docker logs {{ $labels.name }}`."
+            "description": "It keeps exiting and being restarted.",
+            "runbook": "1. `docker logs {{ $labels.name }} --tail 100` for why it exits.\n2. `docker inspect {{ $labels.name }} | grep -E 'ExitCode|OOMKilled'`: exit code 137 or OOMKilled true means memory.\n3. Started after an update: roll back that service's last change.",
+            "value": "{{ with $values.A }}Restarts in 15 min: {{ printf \"%.0f\" .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -1073,7 +1050,9 @@
           },
           "annotations": {
             "summary": "{{ $labels.name }} was killed for running out of memory",
-            "description": "The kernel OOM-killed a process in it (it may have restarted fine). If it repeats, raise its memory limit or look for a leak on 'Docker Host & Containers'."
+            "description": "The kernel OOM-killed a process in it (it may have restarted fine).",
+            "runbook": "1. `docker stats --no-stream {{ $labels.name }}` against its limit.\n2. Once: ignore. Repeats: raise its memory limit or look for a leak on 'Docker Host & Containers'.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -1134,7 +1113,9 @@
           },
           "annotations": {
             "summary": "{{ $labels.job }}{{ $labels.name }} is not working",
-            "description": "Some alerts can't see their data until it's back."
+            "description": "Container and uptime alerts can't see their data until it's back, so they stay silent.",
+            "runbook": "1. `docker ps -a --filter name=monitoring` and the logs of the missing one.\n2. `cd /root/monitoring && docker compose up -d` starts it again.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
           },
           "notification_settings": {
             "receiver": "Discord (info)",
@@ -1147,6 +1128,83 @@
           "isPaused": false
         }
       ]
+    },
+    {
+      "orgId": 1,
+      "name": "Self-hosted apps · info",
+      "folder": "Infrastructure Metrics",
+      "interval": "5m",
+      "rules": [
+        {
+          "uid": "app-unreachable",
+          "title": "Self-hosted app unreachable",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "max by (service, instance) (1 - probe_success{service=~\"home-assistant|immich|amp\"})",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "{{ $labels.service }} is not reachable from outside",
+            "description": "{{ $labels.instance }} fails through Cloudflare: its phone apps and remote access don't work. At home on the LAN it may still be fine.",
+            "runbook": "1. `curl -sI {{ $labels.instance }}`: a 52x status comes from Cloudflare (Caddy on this server is unreachable or can't reach the app).\n2. `journalctl -u caddy --since -30min | grep -i error` and `/var/log/caddy/` for the site's access log.\n3. Home Assistant and Immich are reached over Tailscale: `tailscale status` must show their nodes, and the app must answer on the tailnet address used in /etc/caddy/sites/.\n4. Node offline in Tailscale: the VM or the home connection is down; check it at home.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/docker-host"
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h"
+          },
+          "isPaused": false
+        }
+      ]
+    }
+  ],
+  "deleteRules": [
+    {
+      "orgId": 1,
+      "uid": "cb-gateway-latency"
     }
   ]
 }
