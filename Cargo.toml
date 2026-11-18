@@ -3,7 +3,7 @@ name = "climabot"
 version = "2.0.0"
 edition = "2024"
 rust-version = "1.88"
-description = "A Discord bot with weather, self-assignable roles, and price tracking"
+description = "A Discord bot with weather, football scores, self-assignable roles, and price tracking"
 license = "MIT"
 
 [[bin]]

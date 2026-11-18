@@ -9,6 +9,206 @@
       "interval": "5m",
       "rules": [
         {
+          "uid": "cb-football-live-stale",
+          "title": "Live football scores stale",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "(time() - football_live_last_success_timestamp_seconds) and on () football_live_window_active == 1",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        600
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "The live scoreboard hasn't refreshed for over 10 minutes during matches",
+            "description": "/live shows cached scores (labelled with their age) while tracked matches are on.",
+            "runbook": "1. `climabot logs | grep -i 'football'` for the failing requests and their status.\n2. 'football_provider_up' / 'football_api_requests_total' show whether SportScore is down, rate-limiting (429) or blocking (403) this server.\n3. Budget used up (status 'blocked'): see 'Football API budget nearly used'.\n4. A SportScore outage needs no action; the bot backs off and recovers by itself.",
+            "value": "{{ with $values.A }}Last refresh: {{ humanizeDuration .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "cb-football-quota",
+          "title": "Football API budget nearly used",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "max by (provider) (football_quota_used / football_quota_limit)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.9
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "15m",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "{{ $labels.provider }} has used over 90% of today's request budget",
+            "description": "Optional refreshes (tables, match details) stop first; when it runs out, commands show cached data until 00:00 UTC.",
+            "runbook": "1. 'football_api_requests_total' by endpoint: which requests are using it up?\n2. Many /football commands on uncached data, or a long matchday: expected, it resets at 00:00 UTC.\n3. SportScore: a registered key (SPORTSCORE_API_KEY) raises the limit; the bot's own budget is SPORTSCORE_DAILY_BUDGET.",
+            "value": "{{ with $values.A }}Used: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "cb-football-provider-down",
+          "title": "Football data provider failing",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "max by (provider) (1 - football_provider_up)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "30m",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "{{ $labels.provider }} has been unusable for 30 minutes",
+            "description": "It is in a cooldown (rate limit, outage) or rejected the API key. Replies use cached data or the backup source.",
+            "runbook": "1. `climabot logs | grep -i 'football provider'` for the outcome (unauthorized, rate_limited, error).\n2. unauthorized: the key in OpenBao secret/manassas/climabot is wrong or revoked; fix it, run `manassas-secrets` and `climabot update`.\n3. rate_limited / error: their side; the bot backs off and retries by itself.",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
+          },
+          "isPaused": false
+        },
+        {
           "uid": "cb-restarted",
           "title": "ClimaBot restarted",
           "condition": "C",

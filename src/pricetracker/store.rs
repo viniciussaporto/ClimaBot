@@ -161,6 +161,11 @@ impl Store {
         Ok(store)
     }
 
+    /// The database this store lives in (shared with the football data).
+    pub fn database(&self) -> mongodb::Database {
+        self.products.client().database(self.products.namespace().db.as_str())
+    }
+
     /// Whether MongoDB answers (for the health status).
     pub async fn ping(&self) -> Result<()> {
         let db = self.products.client().database(self.products.namespace().db.as_str());

@@ -1,0 +1,55 @@
+{
+ "get": "players/squads",
+ "parameters": {
+  "team": "132"
+ },
+ "errors": [],
+ "results": 1,
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "response": [
+  {
+   "team": {
+    "id": 132,
+    "name": "Chapecoense-sc",
+    "logo": "https://media.api-sports.io/football/teams/132.png"
+   },
+   "players": [
+    {
+     "id": 80173,
+     "name": "Anderson",
+     "age": 27,
+     "number": 98,
+     "position": "Goalkeeper",
+     "photo": "https://media.api-sports.io/football/players/80173.png"
+    },
+    {
+     "id": 352217,
+     "name": "Gabriel Werner",
+     "age": 22,
+     "number": 14,
+     "position": "Goalkeeper",
+     "photo": "https://media.api-sports.io/football/players/352217.png"
+    },
+    {
+     "id": 119847,
+     "name": "Matheus Aurélio",
+     "age": 26,
+     "number": 30,
+     "position": "Goalkeeper",
+     "photo": "https://media.api-sports.io/football/players/119847.png"
+    },
+    {
+     "id": 9589,
+     "name": "Rafael Santos",
+     "age": 36,
+     "number": 1,
+     "position": "Goalkeeper",
+     "photo": "https://media.api-sports.io/football/players/9589.png"
+    }
+   ]
+  }
+ ]
+}

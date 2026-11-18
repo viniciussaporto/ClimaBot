@@ -245,6 +245,43 @@ def urgent_groups():
 
 def info_groups():
     bot = group("ClimaBot", "ClimaBot · info", "5m", [
+        info("cb-football-live-stale", "Live football scores stale",
+             "(time() - football_live_last_success_timestamp_seconds) and on () football_live_window_active == 1",
+             threshold=600,
+             summary="The live scoreboard hasn't refreshed for over 10 minutes during matches",
+             description="/live shows cached scores (labelled with their age) while tracked matches are on.",
+             value=shown("Last refresh", "duration"),
+             runbook=steps(
+                 "`climabot logs | grep -i 'football'` for the failing requests and their status.",
+                 "'football_provider_up' / 'football_api_requests_total' show whether SportScore is "
+                 "down, rate-limiting (429) or blocking (403) this server.",
+                 "Budget used up (status 'blocked'): see 'Football API budget nearly used'.",
+                 "A SportScore outage needs no action; the bot backs off and recovers by itself.")),
+        info("cb-football-quota", "Football API budget nearly used",
+             "max by (provider) (football_quota_used / football_quota_limit)",
+             threshold=0.9, for_="15m",
+             summary="{{ $labels.provider }} has used over 90% of today's request budget",
+             description="Optional refreshes (tables, match details) stop first; when it runs out, "
+                         "commands show cached data until 00:00 UTC.",
+             value=shown("Used", "pct"),
+             runbook=steps(
+                 "'football_api_requests_total' by endpoint: which requests are using it up?",
+                 "Many /football commands on uncached data, or a long matchday: expected, it resets "
+                 "at 00:00 UTC.",
+                 "SportScore: a registered key (SPORTSCORE_API_KEY) raises the limit; the bot's "
+                 "own budget is SPORTSCORE_DAILY_BUDGET.")),
+        info("cb-football-provider-down", "Football data provider failing",
+             "max by (provider) (1 - football_provider_up)",
+             for_="30m",
+             summary="{{ $labels.provider }} has been unusable for 30 minutes",
+             description="It is in a cooldown (rate limit, outage) or rejected the API key. Replies "
+                         "use cached data or the backup source.",
+             runbook=steps(
+                 "`climabot logs | grep -i 'football provider'` for the outcome (unauthorized, "
+                 "rate_limited, error).",
+                 "unauthorized: the key in OpenBao secret/manassas/climabot is wrong or revoked; fix it, "
+                 "run `manassas-secrets` and `climabot update`.",
+                 "rate_limited / error: their side; the bot backs off and retries by itself.")),
         info("cb-restarted", "ClimaBot restarted",
              'changes(process_start_time_seconds{job="climabot"}[15m])', for_="0s",
              summary="The bot process restarted",

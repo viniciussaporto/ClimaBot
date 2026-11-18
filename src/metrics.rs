@@ -4,8 +4,8 @@ use axum::{
     routing::get,
 };
 use prometheus::{
-    CounterVec, Encoder, Gauge, HistogramVec, IntGauge, TextEncoder, register_counter_vec, register_gauge,
-    register_histogram_vec, register_int_gauge,
+    CounterVec, Encoder, Gauge, GaugeVec, HistogramVec, IntGauge, TextEncoder, register_counter_vec, register_gauge,
+    register_gauge_vec, register_histogram_vec, register_int_gauge,
 };
 use std::sync::LazyLock;
 use tracing::{error, info};
@@ -119,6 +119,96 @@ pub static PRICE_CHECK_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("failed to register price_check_duration_seconds")
 });
 
+// ── Football data ─────────────────────────────
+
+/// Requests to the football data providers, by outcome (success, not_found,
+/// blocked = not sent because of budget/cooldown, rate_limited, error, …)
+pub static FOOTBALL_API_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "football_api_requests_total",
+        "Requests to football data providers, by provider, endpoint and outcome",
+        &["provider", "endpoint", "status"]
+    )
+    .expect("failed to register football_api_requests_total")
+});
+
+pub static FOOTBALL_API_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec!(
+        "football_api_request_duration_seconds",
+        "Latency of football data provider requests",
+        &["provider"],
+        vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+    .expect("failed to register football_api_request_duration_seconds")
+});
+
+/// Requests counted against today's (UTC) budget, per provider
+pub static FOOTBALL_QUOTA_USED: LazyLock<GaugeVec> = LazyLock::new(|| {
+    register_gauge_vec!(
+        "football_quota_used",
+        "Football provider requests used today (UTC), as counted by the bot and corrected from provider headers",
+        &["provider"]
+    )
+    .expect("failed to register football_quota_used")
+});
+
+pub static FOOTBALL_QUOTA_LIMIT: LazyLock<GaugeVec> = LazyLock::new(|| {
+    register_gauge_vec!("football_quota_limit", "Daily request budget per football provider", &["provider"])
+        .expect("failed to register football_quota_limit")
+});
+
+/// 1 while the provider is healthy, 0 during a cooldown, outage or with a rejected key
+pub static FOOTBALL_PROVIDER_UP: LazyLock<GaugeVec> = LazyLock::new(|| {
+    register_gauge_vec!(
+        "football_provider_up",
+        "Whether a football data provider is usable (1) or in a cooldown / failing (0)",
+        &["provider"]
+    )
+    .expect("failed to register football_provider_up")
+});
+
+/// 1 while a tracked match is about to start, live, or just ended
+pub static FOOTBALL_LIVE_WINDOW: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
+        "football_live_window_active",
+        "1 while tracked matches are live or about to start (the live scoreboard is being polled)"
+    )
+    .expect("failed to register football_live_window_active")
+});
+
+pub static FOOTBALL_LIVE_LAST_SUCCESS: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
+        "football_live_last_success_timestamp_seconds",
+        "Unix time of the last successful live scoreboard refresh"
+    )
+    .expect("failed to register football_live_last_success_timestamp_seconds")
+});
+
+pub static FOOTBALL_LIVE_MATCHES: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!("football_live_matches", "Live matches in the tracked competitions")
+        .expect("failed to register football_live_matches")
+});
+
+/// Cache lookups: hit, refreshed, stale (refresh failed, old data served), miss
+pub static FOOTBALL_CACHE_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "football_cache_requests_total",
+        "Football data cache lookups by kind and result",
+        &["kind", "result"]
+    )
+    .expect("failed to register football_cache_requests_total")
+});
+
+pub static FOOTBALL_POLL_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec!(
+        "football_poll_duration_seconds",
+        "Duration of the football scheduler's jobs",
+        &["job"],
+        vec![0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0]
+    )
+    .expect("failed to register football_poll_duration_seconds")
+});
+
 // ─────────────────────────────────────────────
 //  HTTP server
 // ─────────────────────────────────────────────
@@ -139,6 +229,16 @@ pub fn start_metrics_server(port: u16) {
     LazyLock::force(&TRACKED_PRODUCTS);
     LazyLock::force(&OVERDUE_CHECKS);
     LazyLock::force(&PRICE_CHECK_DURATION);
+    LazyLock::force(&FOOTBALL_API_COUNTER);
+    LazyLock::force(&FOOTBALL_API_LATENCY);
+    LazyLock::force(&FOOTBALL_QUOTA_USED);
+    LazyLock::force(&FOOTBALL_QUOTA_LIMIT);
+    LazyLock::force(&FOOTBALL_PROVIDER_UP);
+    LazyLock::force(&FOOTBALL_LIVE_WINDOW);
+    LazyLock::force(&FOOTBALL_LIVE_LAST_SUCCESS);
+    LazyLock::force(&FOOTBALL_LIVE_MATCHES);
+    LazyLock::force(&FOOTBALL_CACHE_COUNTER);
+    LazyLock::force(&FOOTBALL_POLL_DURATION);
 
     tokio::spawn(async move {
         let app = Router::new()

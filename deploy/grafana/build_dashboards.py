@@ -345,6 +345,39 @@ def climabot():
                    desc="Share of attempts per method that returned a price. A failed direct fetch "
                         "is normal: the browsers take over."), 12, 8)
 
+    # ── Football ──────────────────────────────
+    L.row("Football")
+    L.add(timeseries("Football API requests",
+                     [target(f"sum by (provider, status) ({inc('football_api_requests_total')})",
+                             "{{provider}} · {{status}}")],
+                     bars=True, stack=True, legend_calcs=("sum",),
+                     desc="Requests to SportScore, football-data.org and API-Football. 'blocked' = not "
+                          "sent (budget, cooldown or rejected key)."), 8, 8)
+    L.add(bargauge("Daily budget used",
+                   "football_quota_used / football_quota_limit", "{{provider}}", unit="percentunit", max_=1,
+                   steps=(("green", None), ("orange", 0.75), ("red", 0.9)),
+                   desc="Requests used today (UTC) per provider. Optional refreshes stop first as it "
+                        "fills up; user requests may use all of it.", sort=False), 8, 8)
+    L.add(timeseries("Live scoreboard", [
+        target("football_live_matches", "live matches", "A"),
+        target("football_live_window_active", "polling (match window)", "B"),
+        target("time() - football_live_last_success_timestamp_seconds", "seconds since refresh", "C"),
+    ], legend_calcs=("lastNotNull", "max"),
+        desc="Live matches in the followed competitions, and how fresh the scoreboard is. Polled "
+             "every minute only while a match is about to start, on, or just ended."), 8, 8)
+    L.add(timeseries("Football cache",
+                     [target(f"sum by (result) ({inc('football_cache_requests_total')})", "{{result}}")],
+                     bars=True, stack=True, legend_calcs=("sum",),
+                     desc="Lookups served from cache (hit), refreshed, served stale because the refresh "
+                          "failed, or missing."), 8, 8)
+    L.add(timeseries("Provider latency p95",
+                     [target(f"histogram_quantile(0.95, sum by (le, provider) "
+                             f"({rate('football_api_request_duration_seconds_bucket')}))", "{{provider}}")],
+                     unit="s"), 8, 8)
+    L.add(bargauge("Providers up", "football_provider_up", "{{provider}}", max_=1, sort=False,
+                   steps=(("red", None), ("green", 1)),
+                   desc="1 = usable, 0 = in a cooldown (rate limit, outage) or the key was rejected."), 8, 8)
+
     # ── Resources ─────────────────────────────
     L.row("Resources")
     L.add(timeseries("CPU by container",

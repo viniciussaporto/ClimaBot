@@ -1,0 +1,192 @@
+{
+ "sport": "football",
+ "match": {
+  "home": "Ipswich Town",
+  "away": "Bournemouth AFC",
+  "home_logo": "https://img.thesports.com/football/team/08a5f0316b334cf59f2f76e2266e90c3.png",
+  "away_logo": "https://img.thesports.com/football/team/932f872b378d4c9280f2f898b8c42905.png",
+  "home_score": "1",
+  "away_score": "2",
+  "status": "finished",
+  "status_text": "Finished",
+  "time": "2026-11-08T14:00:00+00:00",
+  "competition": "English Premier League",
+  "competition_logo": "https://img.thesports.com/football/competition/ec6a685bcbc7413d9165918787e889fd.png",
+  "url": "/football/match/bournemouth-afc-vs-ipswich-town/23xmvkh6zj09qg8/",
+  "live_minute": null,
+  "incidents": [
+   {
+    "time": 5,
+    "type": "Goal",
+    "type_id": 1,
+    "side": "away",
+    "player": "Francisco Evanilson",
+    "is_goal": true,
+    "home_score": 0,
+    "away_score": 1
+   },
+   {
+    "time": 43,
+    "type": "Yellow card",
+    "type_id": 3,
+    "side": "away",
+    "player": "Adam Smith",
+    "is_card": true
+   },
+   {
+    "time": 43,
+    "type": "Yellow card",
+    "type_id": 3,
+    "side": "home",
+    "player": "Julio Enciso",
+    "is_card": true
+   },
+   {
+    "time": 43,
+    "type": "Yellow card",
+    "type_id": 3,
+    "side": "away",
+    "player": "Marcus Tavernier",
+    "is_card": true
+   },
+   {
+    "time": 46,
+    "type": "Own goal",
+    "type_id": 17,
+    "side": "away",
+    "player": "Leif Davis",
+    "is_goal": true,
+    "home_score": 0,
+    "away_score": 2
+   },
+   {
+    "time": 73,
+    "type": "Penalty goal",
+    "type_id": 8,
+    "side": "home",
+    "player": "Jack Clarke",
+    "is_goal": true,
+    "home_score": 1,
+    "away_score": 2
+   },
+   {
+    "time": 53,
+    "type": "Substitution",
+    "type_id": 9,
+    "side": "home",
+    "player": "",
+    "is_sub": true,
+    "player_in": "Jack Clarke",
+    "player_out": "Jaden Philogene-Bidace"
+   }
+  ],
+  "stats": [],
+  "lineups": {
+   "home_formation": "4-2-3-1",
+   "away_formation": "4-2-3-1",
+   "home_coach": null,
+   "away_coach": null,
+   "confirmed": true,
+   "home_xi": [
+    {
+     "name": "Leif Davis",
+     "number": 3,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Issa Diop",
+     "number": 6,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Julio Enciso",
+     "number": 10,
+     "position": "M",
+     "captain": false,
+     "rating": "0.0"
+    }
+   ],
+   "home_subs": [
+    {
+     "name": "Darnell Furlong",
+     "number": 2,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Azor Matusiwa",
+     "number": 5,
+     "position": "M",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Abdul Fatawu Issahaku",
+     "number": 7,
+     "position": "F",
+     "captain": false,
+     "rating": "0.0"
+    }
+   ],
+   "away_xi": [
+    {
+     "name": "Djordje Petrović",
+     "number": 1,
+     "position": "G",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Adrien Truffert",
+     "number": 3,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "James Hill",
+     "number": 5,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    }
+   ],
+   "away_subs": [
+    {
+     "name": "Lewis Cook",
+     "number": 4,
+     "position": "M",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Julio Soler",
+     "number": 6,
+     "position": "D",
+     "captain": false,
+     "rating": "0.0"
+    },
+    {
+     "name": "Alex Scott",
+     "number": 8,
+     "position": "M",
+     "captain": false,
+     "rating": "0.0"
+    }
+   ]
+  },
+  "home_ht_score": 0,
+  "away_ht_score": 1,
+  "tracker": {
+   "id": "23xmvkh6zj09qg8",
+   "profile": "9emo4h1e9hluyqd",
+   "sport": "football"
+  }
+ },
+ "updated": "2026-11-18T10:23:35.451738+00:00"
+}

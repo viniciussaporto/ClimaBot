@@ -2023,13 +2023,454 @@
     },
     {
       "type": "row",
-      "title": "Resources",
+      "title": "Football",
       "collapsed": false,
       "panels": [],
       "id": 30,
       "gridPos": {
         "x": 0,
         "y": 59,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Football API requests",
+      "description": "Requests to SportScore, football-data.org and API-Football. 'blocked' = not sent (budget, cooldown or rejected key).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (provider, status) (increase(football_api_requests_total{}[$__interval]))",
+          "legendFormat": "{{provider}} · {{status}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 31,
+      "gridPos": {
+        "x": 0,
+        "y": 60,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Daily budget used",
+      "description": "Requests used today (UTC) per provider. Optional refreshes stop first as it fills up; user requests may use all of it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "football_quota_used / football_quota_limit",
+          "legendFormat": "{{provider}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "None in this time range",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 40
+      },
+      "id": 32,
+      "gridPos": {
+        "x": 8,
+        "y": 60,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Live scoreboard",
+      "description": "Live matches in the followed competitions, and how fresh the scoreboard is. Polled every minute only while a match is about to start, on, or just ended.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "football_live_matches",
+          "legendFormat": "live matches",
+          "refId": "A",
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "football_live_window_active",
+          "legendFormat": "polling (match window)",
+          "refId": "B",
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "time() - football_live_last_success_timestamp_seconds",
+          "legendFormat": "seconds since refresh",
+          "refId": "C",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 33,
+      "gridPos": {
+        "x": 16,
+        "y": 60,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Football cache",
+      "description": "Lookups served from cache (hit), refreshed, served stale because the refresh failed, or missing.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (result) (increase(football_cache_requests_total{}[$__interval]))",
+          "legendFormat": "{{result}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 34,
+      "gridPos": {
+        "x": 0,
+        "y": 68,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider latency p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, provider) (rate(football_api_request_duration_seconds_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{provider}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 35,
+      "gridPos": {
+        "x": 8,
+        "y": 68,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Providers up",
+      "description": "1 = usable, 0 = in a cooldown (rate limit, outage) or the key was rejected.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "football_provider_up",
+          "legendFormat": "{{provider}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "None in this time range",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 40
+      },
+      "id": 36,
+      "gridPos": {
+        "x": 16,
+        "y": 68,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Resources",
+      "collapsed": false,
+      "panels": [],
+      "id": 37,
+      "gridPos": {
+        "x": 0,
+        "y": 76,
         "w": 24,
         "h": 1
       }
@@ -2092,10 +2533,10 @@
           "sort": "desc"
         }
       },
-      "id": 31,
+      "id": 38,
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 77,
         "w": 8,
         "h": 8
       }
@@ -2158,10 +2599,10 @@
           "sort": "desc"
         }
       },
-      "id": 32,
+      "id": 39,
       "gridPos": {
         "x": 8,
-        "y": 60,
+        "y": 77,
         "w": 8,
         "h": 8
       }
@@ -2233,10 +2674,10 @@
         "minVizHeight": 16,
         "maxVizHeight": 40
       },
-      "id": 33,
+      "id": 40,
       "gridPos": {
         "x": 16,
-        "y": 60,
+        "y": 77,
         "w": 8,
         "h": 8
       }
@@ -2309,10 +2750,10 @@
           "sort": "desc"
         }
       },
-      "id": 34,
+      "id": 41,
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2385,10 +2826,10 @@
           "sort": "desc"
         }
       },
-      "id": 35,
+      "id": 42,
       "gridPos": {
         "x": 8,
-        "y": 68,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2471,10 +2912,10 @@
           "sort": "desc"
         }
       },
-      "id": 36,
+      "id": 43,
       "gridPos": {
         "x": 16,
-        "y": 68,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2541,10 +2982,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 37,
+      "id": 44,
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 93,
         "w": 8,
         "h": 6
       }
@@ -2611,10 +3052,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 38,
+      "id": 45,
       "gridPos": {
         "x": 8,
-        "y": 76,
+        "y": 93,
         "w": 8,
         "h": 6
       }
@@ -2681,10 +3122,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 39,
+      "id": 46,
       "gridPos": {
         "x": 16,
-        "y": 76,
+        "y": 93,
         "w": 8,
         "h": 6
       }
@@ -2694,10 +3135,10 @@
       "title": "Logs",
       "collapsed": false,
       "panels": [],
-      "id": 40,
+      "id": 47,
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 99,
         "w": 24,
         "h": 1
       }
@@ -2820,10 +3261,10 @@
           "sort": "desc"
         }
       },
-      "id": 41,
+      "id": 48,
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 100,
         "w": 24,
         "h": 6
       }
@@ -2858,10 +3299,10 @@
         "showCommonLabels": false,
         "prettifyLogMessage": false
       },
-      "id": 42,
+      "id": 49,
       "gridPos": {
         "x": 0,
-        "y": 89,
+        "y": 106,
         "w": 24,
         "h": 10
       }
@@ -2896,10 +3337,10 @@
         "showCommonLabels": false,
         "prettifyLogMessage": false
       },
-      "id": 43,
+      "id": 50,
       "gridPos": {
         "x": 0,
-        "y": 99,
+        "y": 116,
         "w": 24,
         "h": 12
       }

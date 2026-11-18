@@ -1,0 +1,81 @@
+{
+ "sport": "football",
+ "competition": "Brazilian Serie A",
+ "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+ "competition_slug": "brazilian-serie-a",
+ "tables": [
+  {
+   "group": "",
+   "rows": [
+    {
+     "pos": 1,
+     "team": "Flamengo - RJ",
+     "team_logo": "https://img.thesports.com/football/team/f19b2f9fa5b0c72acc262bc4f0d2cd77.png",
+     "team_slug": "flamengo-rj",
+     "team_url": "/football/team/flamengo-rj/",
+     "p": 34,
+     "w": 23,
+     "d": 7,
+     "l": 4,
+     "gf": 71,
+     "ga": 29,
+     "gd": 42,
+     "pts": 76,
+     "promo_color": "#a2e76f",
+     "promo_name": "LIBC CL group stage"
+    },
+    {
+     "pos": 2,
+     "team": "Palmeiras - SP",
+     "team_logo": "https://img.thesports.com/football/team/e6a85b64d28f448601e90857eb799140.png",
+     "team_slug": "palmeiras-sp",
+     "team_url": "/football/team/palmeiras-sp/",
+     "p": 34,
+     "w": 21,
+     "d": 10,
+     "l": 3,
+     "gf": 62,
+     "ga": 23,
+     "gd": 39,
+     "pts": 73,
+     "promo_color": "#a2e76f",
+     "promo_name": "LIBC CL group stage"
+    },
+    {
+     "pos": 3,
+     "team": "Cruzeiro - MG",
+     "team_logo": "https://img.thesports.com/football/team/3fe9281df0fdaf026741ff54ac24bdeb.png",
+     "team_slug": "cruzeiro-mg",
+     "team_url": "/football/team/cruzeiro-mg/",
+     "p": 34,
+     "w": 18,
+     "d": 6,
+     "l": 10,
+     "gf": 55,
+     "ga": 48,
+     "gd": 7,
+     "pts": 60,
+     "promo_color": "#a2e76f",
+     "promo_name": "LIBC CL group stage"
+    },
+    {
+     "pos": 4,
+     "team": "Fluminense - RJ",
+     "team_logo": "https://img.thesports.com/football/team/a6bce9adfac7903426bed2b253991a18.png",
+     "team_slug": "fluminense-rj",
+     "team_url": "/football/team/fluminense-rj/",
+     "p": 34,
+     "w": 16,
+     "d": 9,
+     "l": 9,
+     "gf": 55,
+     "ga": 42,
+     "gd": 13,
+     "pts": 57,
+     "promo_color": "#a2e76f",
+     "promo_name": "LIBC CL group stage"
+    }
+   ]
+  }
+ ]
+}

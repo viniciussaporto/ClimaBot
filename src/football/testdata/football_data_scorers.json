@@ -1,0 +1,116 @@
+{
+ "count": 3,
+ "filters": {
+  "season": "2026",
+  "limit": 3
+ },
+ "competition": {
+  "id": 2013,
+  "name": "Campeonato Brasileiro Série A",
+  "code": "BSA",
+  "type": "LEAGUE",
+  "emblem": "https://crests.football-data.org/bsa.png"
+ },
+ "season": {
+  "id": 2474,
+  "startDate": "2026-01-28",
+  "endDate": "2026-12-02",
+  "currentMatchday": 35,
+  "winner": null
+ },
+ "scorers": [
+  {
+   "player": {
+    "id": 192070,
+    "name": "Kevin Viveros",
+    "firstName": "Kevin",
+    "lastName": "Viveros",
+    "dateOfBirth": "2000-04-26",
+    "nationality": "Colombia",
+    "section": "Offence",
+    "position": null,
+    "shirtNumber": null,
+    "lastUpdated": "2023-08-22T11:53:03Z"
+   },
+   "team": {
+    "id": 1768,
+    "name": "CA Paranaense",
+    "shortName": "Paranaense",
+    "tla": "CAP",
+    "crest": "https://crests.football-data.org/1768.png",
+    "address": "Estrada do Ganchinho 1451, Umbará Curitiba, PR 81930-160",
+    "website": "http://www.atleticoparanaense.com",
+    "founded": 1924,
+    "clubColors": "Black / White / Red",
+    "venue": "Estádio Joaquim Américo Guimarães",
+    "lastUpdated": "2022-04-06T13:14:06Z"
+   },
+   "playedMatches": 32,
+   "goals": 21,
+   "assists": 3,
+   "penalties": 4
+  },
+  {
+   "player": {
+    "id": 1077,
+    "name": "Pedro",
+    "firstName": "",
+    "lastName": "Pedro",
+    "dateOfBirth": "1997-06-20",
+    "nationality": "Brazil",
+    "section": "Offence",
+    "position": null,
+    "shirtNumber": null,
+    "lastUpdated": "2023-07-30T23:15:48Z"
+   },
+   "team": {
+    "id": 1783,
+    "name": "CR Flamengo",
+    "shortName": "Flamengo",
+    "tla": "FLA",
+    "crest": "https://crests.football-data.org/1783.png",
+    "address": "null Rio de Janeiro, RJ null",
+    "website": "https://www.flamengo.com.br/pagina-inicial-basquete",
+    "founded": 1919,
+    "clubColors": "Red / Black / White",
+    "venue": "Estadio Jornalista Mário Filho",
+    "lastUpdated": "2022-04-06T13:13:43Z"
+   },
+   "playedMatches": 34,
+   "goals": 20,
+   "assists": 7,
+   "penalties": null
+  },
+  {
+   "player": {
+    "id": 1327,
+    "name": "Gabriel Barbosa",
+    "firstName": "",
+    "lastName": "Gabriel Barbosa",
+    "dateOfBirth": "1996-08-30",
+    "nationality": "Brazil",
+    "section": "Offence",
+    "position": null,
+    "shirtNumber": null,
+    "lastUpdated": "2023-07-30T23:15:48Z"
+   },
+   "team": {
+    "id": 6685,
+    "name": "Santos FC",
+    "shortName": "Santos",
+    "tla": "SAN",
+    "crest": "https://crests.football-data.org/6685.png",
+    "address": "Rua Princesa Isabel S/N, Vila Belmiro Santos, SP 11075-501",
+    "website": "http://santosfc.com.br",
+    "founded": 1912,
+    "clubColors": "Black / White",
+    "venue": "Estádio Urbano Caldeira",
+    "lastUpdated": "2023-02-18T08:43:18Z"
+   },
+   "playedMatches": 28,
+   "goals": 15,
+   "assists": 4,
+   "penalties": 2
+  }
+ ]
+}
