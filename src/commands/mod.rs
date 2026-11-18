@@ -1,4 +1,5 @@
 pub mod football;
+pub mod help;
 pub mod pricetracking;
 pub mod radar;
 pub mod roles;
@@ -11,7 +12,7 @@ use crate::{
 use anyhow::{Result, anyhow};
 use serenity::all::{
     CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateCommand,
-    CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
+    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
     EditInteractionResponse, InteractionContext, UserId,
 };
 use std::{sync::OnceLock, time::Instant};
@@ -64,7 +65,7 @@ pub fn definitions() -> Vec<CreateCommand> {
             .description("Manage self-assignable roles in this server")
             .contexts(vec![InteractionContext::Guild]),
         pricetracking::register(),
-        CreateCommand::new("help").description("Show what ClimaBot can do"),
+        help::register(),
     ]
     .into_iter()
     .chain(football::register())
@@ -100,7 +101,7 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
         "forecast" => forecast_command(ctx, cmd).await,
         "roles" => roles::handle_command(ctx, cmd).await,
         "pt" => pricetracking::handle(ctx, cmd, store).await,
-        "help" => help_command(ctx, cmd).await,
+        "help" => help::handle(ctx, cmd).await,
         "football" => football::handle_football(ctx, cmd).await,
         "live" => football::handle_live(ctx, cmd).await,
         _ => Err(anyhow!("unknown command")),
@@ -295,50 +296,5 @@ async fn forecast_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()>
 
     cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(embed)).await?;
     info!(location, resolved = %coords.formatted, "Forecast delivered");
-    Ok(())
-}
-
-// ─────────────────────────────────────────────
-//  /help
-// ─────────────────────────────────────────────
-
-async fn help_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
-    let embed = CreateEmbed::new()
-        .title("🤖 ClimaBot — Commands")
-        .field(
-            "🌤 Weather",
-            "`/weather <location> [units]` — Current weather conditions\n\
-             `/forecast <location> [units]` — 5-day forecast\n\
-             Pick **Imperial** under `units` for °F, mph and inHg",
-            false,
-        )
-        .field("🎭 Roles", "`/roles` — Pick self-assignable roles from a menu", false)
-        .field(
-            "⚽ Football",
-            "`/live all` — Live scores in the competitions I follow\n\
-             `/live match <match>` — Live score, clock and latest events\n\
-             `/football competition fixtures|table|scorers <competition>` — Matches, standings, top scorers\n\
-             `/football match details|events|lineup|stats <match>` — Match report\n\
-             `/football team info|squad|fixtures|stats <team>` — Teams\n\
-             `/football player <name>` — Player statistics\n\
-             `/football competition list` — Brasileirão, Copa do Brasil, Libertadores, Sudamericana, \
-             state championships, the big European leagues and cups\n\
-             `/football` data is cached (each reply says how old it is); `/live` is refreshed every minute.",
-            false,
-        )
-        .field(
-            "📦 Price Tracking",
-            "`/pt add <url>` — Track a product page\n\
-             `/pt list` — Your tracked products\n\
-             `/pt history <item>` — Price history\n\
-             `/pt remove <item>` — Stop tracking\n\
-             Each product is re-checked about every hour, at a slightly random time; \
-             I'll DM you when its price changes. Any currency is supported.",
-            false,
-        )
-        .color(0x0099ff);
-
-    let msg = CreateInteractionResponseMessage::new().embed(embed).ephemeral(true);
-    cmd.create_response(&ctx.http, CreateInteractionResponse::Message(msg)).await?;
     Ok(())
 }

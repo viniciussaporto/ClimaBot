@@ -101,7 +101,7 @@ All commands are slash commands. Options in `<angle brackets>` are required, `[s
 | `/pt list` | Your tracked products, current prices and next check time |
 | `/pt history <item>` | A product's price history, with its lowest and highest price |
 | `/pt remove <item>` | Stop tracking a product |
-| `/help` | Command overview |
+| `/help [topic]` | Overview, or how a command works, where its data comes from and how its reply is built: `/help weather`, `forecast`, `live`, `football`, `roles`, `pt`, `about` |
 
 For `/pt history` and `/pt remove`, `item` is the position shown by `/pt list`, or the product URL.
 
@@ -408,7 +408,8 @@ cargo run -- extract page.html <url>     # or `climabot extract …` on the serv
 src/
 ├── main.rs              Startup, Discord event handler, MongoDB connection
 ├── commands/            Slash commands
-│   ├── mod.rs           Definitions, dispatch, /help
+│   ├── mod.rs           Definitions and dispatch
+│   ├── help.rs          /help and its topics
 │   ├── weather.rs       /weather, /forecast (OpenCage, Open-Meteo)
 │   ├── radar.rs         The animated precipitation map
 │   ├── football.rs      /football, /live: rendering, autocomplete, pagination
