@@ -1,4 +1,4 @@
-use crate::metrics;
+use crate::{metrics, usage};
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Deserialize;
@@ -39,6 +39,17 @@ impl std::error::Error for LocationNotFound {}
 struct GeocodingResponse {
     #[serde(default)]
     results: Vec<GeocodingResult>,
+    /// Free-tier quota, reported in every response.
+    #[serde(default)]
+    rate: Option<GeocodingRate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeocodingRate {
+    limit: u64,
+    remaining: u64,
+    /// Unix time of the next reset.
+    reset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,10 +155,16 @@ pub async fn get_coordinates(location: &str) -> Result<Location> {
         Ok(r) => r.json().await.context("invalid OpenCage response")?,
         Err(e) => {
             metrics::WEATHER_API_COUNTER.with_label_values(&["geocoding", "error"]).inc();
+            usage::record(usage::Service::OpenCage, 1, false);
             return Err(anyhow!(e).context("OpenCage request failed"));
         }
     };
     metrics::WEATHER_API_COUNTER.with_label_values(&["geocoding", "success"]).inc();
+    usage::record(usage::Service::OpenCage, 1, true);
+    if let Some(r) = &response.rate {
+        let reset = r.reset.and_then(|t| chrono::DateTime::from_timestamp(t, 0));
+        usage::report(usage::Service::OpenCage, r.limit, r.remaining, reset);
+    }
 
     let result = response
         .results
@@ -178,6 +195,7 @@ async fn open_meteo<T: serde::de::DeserializeOwned>(kind: &str, params: &[(&str,
 
     let status = if result.is_ok() { "success" } else { "error" };
     metrics::WEATHER_API_COUNTER.with_label_values(&[kind, status]).inc();
+    usage::record(usage::Service::OpenMeteo, 1, result.is_ok());
     result.with_context(|| format!("Open-Meteo {kind} request failed"))
 }
 

@@ -101,7 +101,7 @@ All commands are slash commands. Options in `<angle brackets>` are required, `[s
 | `/pt list` | Your tracked products, current prices and next check time |
 | `/pt history <item>` | A product's price history, with its lowest and highest price |
 | `/pt remove <item>` | Stop tracking a product |
-| `/help <topic>` | `/help overview` for all commands, or how one works, where its data comes from and how its reply is built: `/help weather`, `forecast`, `live`, `football`, `roles`, `pt`, `about` |
+| `/help <topic>` | `/help overview` for all commands, or how one works, where its data comes from and how its reply is built: `/help weather`, `forecast`, `live`, `football`, `roles`, `pt`, `about`. `/help status` shows live health of the bot and every API, and how much of each limit is used today |
 
 For `/pt history` and `/pt remove`, `item` is the position shown by `/pt list`, or the product URL.
 

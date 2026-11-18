@@ -2,7 +2,16 @@
 //! use it, where its data comes from and how the reply is built. Replies are
 //! ephemeral (only the person asking sees them).
 
+use crate::{
+    football::{
+        self,
+        model::{Fixture, Provider},
+        quota::Health,
+    },
+    metrics, usage,
+};
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serenity::all::{
     CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateEmbed,
     CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage, ResolvedValue,
@@ -50,7 +59,11 @@ const TOPICS: &[Topic] = &[
                 "`/pt add <url>` — Track a product page\n\
                  `/pt list` · `/pt history <item>` · `/pt remove <item>`",
             ),
-            ("ℹ️ About · `/help about`", "Data sources, privacy, status and source code"),
+            (
+                "📶 Status · `/help status`",
+                "Live status of the bot and its data sources, and how much of each API's limit is used today",
+            ),
+            ("ℹ️ About · `/help about`", "Data sources, privacy and source code"),
         ],
     },
     Topic {
@@ -260,8 +273,15 @@ const TOPICS: &[Topic] = &[
         ],
     },
     Topic {
+        name: "status",
+        description: "Live status of the bot and its APIs' limits",
+        title: "📶 Status",
+        intro: "Built live when you ask.",
+        sections: &[],
+    },
+    Topic {
         name: "about",
-        description: "Data sources, privacy and status",
+        description: "Data sources, privacy and links",
         title: "ℹ️ About ClimaBot",
         intro: "An open-source Discord bot written in Rust.",
         sections: &[
@@ -318,9 +338,167 @@ fn topic_of(cmd: &CommandInteraction) -> &'static Topic {
 }
 
 pub async fn handle(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
-    let msg = CreateInteractionResponseMessage::new().embed(embed(topic_of(cmd))).ephemeral(true);
+    let topic = topic_of(cmd);
+    let page = if topic.name == "status" { status_embed() } else { embed(topic) };
+    let msg = CreateInteractionResponseMessage::new().embed(page).ephemeral(true);
     cmd.create_response(&ctx.http, CreateInteractionResponse::Message(msg)).await?;
     Ok(())
+}
+
+// ─────────────────────────────────────────────
+//  /help status
+// ─────────────────────────────────────────────
+
+fn ago(t: Option<DateTime<Utc>>) -> String {
+    t.map(|t| format!("<t:{}:R>", t.timestamp())).unwrap_or_else(|| "not yet".into())
+}
+
+fn ok(b: bool) -> &'static str {
+    if b { "✅" } else { "❌" }
+}
+
+/// Icon for a service from its last success and last error.
+fn usage_icon(u: &usage::Usage) -> &'static str {
+    match (u.last_success, u.last_error) {
+        (None, None) => "⚪",
+        (Some(s), Some(e)) if e > s => "⚠️",
+        (None, Some(_)) => "⚠️",
+        _ => "✅",
+    }
+}
+
+fn thousands(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn weather_status() -> String {
+    let oc = usage::get(usage::Service::OpenCage);
+    let om = usage::get(usage::Service::OpenMeteo);
+    let osm = usage::get(usage::Service::OsmTiles);
+    let opencage = match oc.reported {
+        Some((limit, remaining, reset)) => format!(
+            "{} **OpenCage** (geocoding): {} of {} requests used today, {} left{}",
+            usage_icon(&oc),
+            thousands(limit.saturating_sub(remaining)),
+            thousands(limit),
+            thousands(remaining),
+            reset.map(|r| format!(" · resets <t:{}:R>", r.timestamp())).unwrap_or_default()
+        ),
+        None => format!(
+            "{} **OpenCage** (geocoding): {} requests today · free plan: 2,500/day",
+            usage_icon(&oc),
+            thousands(oc.calls)
+        ),
+    };
+    format!(
+        "{opencage}\n\
+         {} **Open-Meteo** (weather): ≈ {} of 10,000 calls today · a precipitation map costs 108, \
+         so maps are only made when rain is likely\n\
+         {} **OpenStreetMap** (map tiles): {} downloaded today, {} cached for a week\n\
+         Last successful weather request: {}",
+        usage_icon(&om),
+        thousands(om.calls),
+        usage_icon(&osm),
+        thousands(osm.calls),
+        super::radar::cached_tiles(),
+        ago(om.last_success),
+    )
+}
+
+fn football_status() -> String {
+    let Some(fb) = football::get() else {
+        return "⚪ Not started yet.".into();
+    };
+    let mut lines = vec![];
+    for p in Provider::ALL {
+        let role = match p {
+            Provider::SportScore => "everything, live included",
+            Provider::FootballData => "backup",
+            Provider::ApiFootball => "squads",
+        };
+        let line = fb
+            .up
+            .with_gate(p, |g| {
+                let (icon, state) = match &g.health {
+                    Health::Healthy => ("✅", String::new()),
+                    Health::RateLimitedMinute { until } => {
+                        ("⏳", format!(" · rate-limited until <t:{}:t>", until.timestamp()))
+                    }
+                    Health::DailyQuotaExhausted { until } => {
+                        ("⛔", format!(" · daily limit reached, resets <t:{}:R>", until.timestamp()))
+                    }
+                    Health::Unavailable { until, .. } => {
+                        ("⚠️", format!(" · failing, next try <t:{}:R>", until.timestamp()))
+                    }
+                    Health::Unauthorized => ("❌", " · API key rejected".to_string()),
+                };
+                format!(
+                    "{icon} **{p}** ({role}): {} of {} requests today, max {}/min{state} · last success {}",
+                    thousands(g.used as u64),
+                    thousands(g.limits.daily as u64),
+                    g.limits.per_minute,
+                    ago(g.last_success)
+                )
+            })
+            .unwrap_or_else(|| format!("⚪ **{p}** ({role}): not configured"));
+        lines.push(line);
+    }
+    let live = fb.cached_now::<Vec<Fixture>>("live");
+    let updated = live.as_ref().map(|l| format!("<t:{}:R>", l.fetched_at)).unwrap_or_else(|| "never".into());
+    lines.push(if fb.in_watch_window() {
+        format!(
+            "🔴 Live scoreboard: polled every minute, {} live match(es) · updated {updated}",
+            live.map(|l| l.data.len()).unwrap_or(0)
+        )
+    } else {
+        format!("💤 Live scoreboard: idle, no followed match on right now · last updated {updated}")
+    });
+    lines.join("\n")
+}
+
+fn status_embed() -> CreateEmbed {
+    let (discord, database) = crate::status::current();
+    let latency = metrics::GATEWAY_LATENCY.get();
+    let latency = if latency > 0.0 { format!(" · {:.0} ms latency", latency * 1000.0) } else { String::new() };
+    let since = usage::since();
+    let bot = format!(
+        "{} Discord gateway{latency}\n{} Database\n📡 In {} servers · v{} · running since <t:{}:R>",
+        ok(discord),
+        ok(database),
+        metrics::GUILDS.get(),
+        env!("CARGO_PKG_VERSION"),
+        since.timestamp()
+    );
+    let prices = format!(
+        "{} products tracked · {} checks running late",
+        metrics::TRACKED_PRODUCTS.get(),
+        metrics::OVERDUE_CHECKS.get()
+    );
+    let counted = if since.date_naive() == Utc::now().date_naive() {
+        format!("Weather counts start at the bot's last restart (<t:{}:t>). ", since.timestamp())
+    } else {
+        String::new()
+    };
+    CreateEmbed::new()
+        .title("📶 Status")
+        .description(format!(
+            "Live status of the bot and the services it uses. Limits are the free plans'; days reset \
+             at 00:00 UTC. {counted}Football limits are the bot's own budgets, kept below the providers'."
+        ))
+        .field("🤖 Bot", bot, false)
+        .field("🌤 Weather and maps", weather_status(), false)
+        .field("⚽ Football data", football_status(), false)
+        .field("📦 Price tracking", prices, false)
+        .color(COLOR)
+        .footer(CreateEmbedFooter::new(FOOTER))
 }
 
 #[cfg(test)]
@@ -343,6 +521,16 @@ mod tests {
             }
             assert!(total <= 6000, "{}: {total} chars", t.name);
         }
+    }
+
+    #[test]
+    fn status_page_fits() {
+        let v = serde_json::to_value(status_embed()).unwrap();
+        for f in v["fields"].as_array().unwrap() {
+            assert!(f["value"].as_str().unwrap().chars().count() <= 1024);
+        }
+        assert_eq!(thousands(1234567), "1,234,567");
+        assert_eq!(thousands(12), "12");
     }
 
     #[test]

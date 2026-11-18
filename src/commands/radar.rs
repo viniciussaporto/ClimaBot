@@ -108,6 +108,11 @@ static CACHE: LazyLock<Mutex<Vec<Cached>>> = LazyLock::new(Default::default);
 type TileCache = HashMap<(i64, i64), (Instant, Arc<Vec<u8>>)>;
 static TILES: LazyLock<Mutex<TileCache>> = LazyLock::new(Default::default);
 
+/// Map tiles currently cached (for `/help status`).
+pub fn cached_tiles() -> usize {
+    TILES.lock().map(|t| t.len()).unwrap_or(0)
+}
+
 // ─────────────────────────────────────────────
 //  Web Mercator
 // ─────────────────────────────────────────────
@@ -266,6 +271,7 @@ async fn tile(x: i64, y: i64) -> Result<Arc<Vec<u8>>> {
     metrics::WEATHER_API_COUNTER
         .with_label_values(&["map_tile", status])
         .inc();
+    crate::usage::record(crate::usage::Service::OsmTiles, 1, result.is_ok());
     let png = Arc::new(result.with_context(|| format!("map tile {url}"))?.to_vec());
 
     let mut cache = TILES.lock().unwrap();
@@ -382,6 +388,8 @@ async fn precipitation_grid(ox: f64, oy: f64) -> Result<Vec<Frame>> {
     metrics::WEATHER_API_COUNTER
         .with_label_values(&["precip_grid", status])
         .inc();
+    // Open-Meteo counts every location of a request as one call.
+    crate::usage::record(crate::usage::Service::OpenMeteo, (COLS * ROWS) as u64, result.is_ok());
     frames_from(result.context("Open-Meteo precipitation grid request failed")?)
 }
 

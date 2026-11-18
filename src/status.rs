@@ -69,6 +69,13 @@ pub async fn run_probes(store: Store, shard_manager: Arc<ShardManager>) {
     }
 }
 
+/// (Discord connected, MongoDB answering), from the latest probe; both false
+/// when the probe is stuck or hasn't run yet.
+pub fn current() -> (bool, bool) {
+    let b = body(*SNAPSHOT.read().unwrap_or_else(|p| p.into_inner()), Instant::now());
+    (b.discord, b.database)
+}
+
 fn body(snapshot: Snapshot, now: Instant) -> Body {
     let fresh = snapshot.at.is_some_and(|at| now.duration_since(at) <= MAX_AGE);
     Body {
