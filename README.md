@@ -35,7 +35,7 @@
 
 ## Features
 
-- **Weather**: current conditions and a 5-day forecast for any place on Earth, in metric or imperial units. Data from [Open-Meteo](https://open-meteo.com), geocoding from [OpenCage](https://opencagedata.com).
+- **Weather**: current conditions, an animated precipitation map (now and the next 3 hours) and a 5-day forecast for any place on Earth, in metric or imperial units. Data from [Open-Meteo](https://open-meteo.com), geocoding from [OpenCage](https://opencagedata.com), map tiles from [OpenStreetMap](https://www.openstreetmap.org/copyright).
 - **Self-assignable roles**: a menu members use to pick their own roles. Roles with moderation or admin permissions, managed roles and roles above the bot are never offered.
 - **Price tracking**: watch product pages in any currency and get a DM when the price changes, with a one-click **❌ Stop tracking** button.
 - **Built to run unattended**: Prometheus metrics, a `/status` health endpoint, Grafana dashboards and alerts as code, JSON logs shipped to Loki, and a nightly self-update.
@@ -44,7 +44,7 @@
 
 | Command | What it does |
 | --- | --- |
-| `/weather <location> [units]` | Current temperature, feels-like, humidity, clouds, wind and pressure |
+| `/weather <location> [units]` | Current temperature, feels-like, humidity, clouds, wind and pressure, with an animated map of rain, snow and thunderstorms for now and the next 3 hours |
 | `/forecast <location> [units]` | 5-day forecast: highs, lows and chance of rain (dates shown day-first, e.g. `Tue, 29/09`) |
 | `/roles` | Menu to toggle self-assignable roles (server only) |
 | `/pt add <url>` | Start tracking a product page |
@@ -110,6 +110,7 @@ Everything is set in `.env`; `.env.example` documents every option.
 | `SCRAPER_PROXY` | – | HTTP or SOCKS5 proxy for all scraping |
 | `ML_CLIENT_ID` / `ML_CLIENT_SECRET` | – | Mercado Livre API app |
 | `LOG_DIR` / `CLIMABOT_LOG_DIR` | `/var/log/climabot` | JSON logs, rotated daily, 7 days kept |
+| `RADAR_RAIN_CHANCE` | `20` | `/weather` map: fetch the precipitation grid (~108 Open-Meteo calls) only when the chance of precipitation at the location reaches this % within 3 hours |
 | `METRICS_PORT` / `METRICS_HOST_PORT` | `9464` / `9465` | Port for `/metrics` and `/status` (host side bound to `127.0.0.1`) |
 | `RUST_LOG` | `info` | Log level |
 

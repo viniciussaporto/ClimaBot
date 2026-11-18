@@ -1,4 +1,5 @@
 pub mod pricetracking;
+pub mod radar;
 pub mod roles;
 pub mod weather;
 
@@ -13,7 +14,7 @@ use serenity::all::{
     EditInteractionResponse, InteractionContext, UserId,
 };
 use std::{sync::OnceLock, time::Instant};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 static BOT_USER_ID: OnceLock<UserId> = OnceLock::new();
 
@@ -208,11 +209,33 @@ async fn weather_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> 
         Err(e) => return Err(e),
     };
     let current = weather::get_current(&coords).await?;
-    let units = weather::Units::from_option(string_option(cmd, "units"));
-    let (embed, attachment) = weather::weather_embed(&coords, &current, units);
 
-    cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(embed).new_attachment(attachment))
-        .await?;
+    // The precipitation map is optional: without it the embed is sent as before.
+    // Its grid of forecasts (~108 Open-Meteo calls) is only fetched when rain
+    // is likely here; otherwise the map is drawn without precipitation.
+    let precipitation_expected = radar::rain_expected(&current);
+    let map = async {
+        let data = tokio::time::timeout(
+            std::time::Duration::from_secs(12),
+            radar::fetch(&coords, precipitation_expected),
+        )
+        .await
+        .unwrap_or_else(|_| Err(anyhow!("timed out")))?;
+        let offset = current.utc_offset_seconds;
+        let gif = tokio::task::spawn_blocking(move || radar::render_gif(&data, offset)).await??;
+        Ok::<_, anyhow::Error>(radar::Map { gif, precipitation_expected })
+    }
+    .await
+    .inspect_err(|e| warn!(error = format!("{e:#}"), location, "Precipitation map unavailable"))
+    .ok();
+    let units = weather::Units::from_option(string_option(cmd, "units"));
+    let (embed, attachments) = weather::weather_embed(&coords, &current, units, map);
+
+    let mut reply = EditInteractionResponse::new().embed(embed);
+    for a in attachments {
+        reply = reply.new_attachment(a);
+    }
+    cmd.edit_response(&ctx.http, reply).await?;
     info!(location, resolved = %coords.formatted, "Weather delivered");
     Ok(())
 }
