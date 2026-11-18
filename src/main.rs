@@ -5,6 +5,7 @@ mod metrics;
 mod pricetracker;
 mod selfcheck;
 mod status;
+mod usage;
 
 use anyhow::{Context as _, Result, anyhow};
 use pricetracker::store::Store;
@@ -117,6 +118,7 @@ fn mongo_config() -> MongoConfig {
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     logger::init();
+    usage::init();
 
     // `climabot extract <saved.html> <page-url>`: run the price extractor on a
     // saved page, to debug why a shop isn't recognised.
