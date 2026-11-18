@@ -631,6 +631,10 @@ fn draw_frame(
         format!("NOW {}", local.format("%H:%M"))
     };
     draw_label(&mut px, &label);
+    // The scale only means something when there is precipitation to read.
+    if data.frames.iter().any(|f| f.rate.iter().any(|&r| r >= DRY)) {
+        draw_legend(&mut px);
+    }
     draw_progress(&mut px, index, count);
     px
 }
@@ -705,6 +709,9 @@ fn glyph(c: char) -> [u8; 7] {
         'N' => [0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11],
         'O' => [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
         'W' => [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A],
+        'M' => [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11],
+        '.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C],
+        '/' => [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10],
         _ => [0; 7],
     }
 }
@@ -723,18 +730,55 @@ fn draw_label(px: &mut [Rgba], text: &str) {
         [0x10, 0x10, 0x14],
         0.75,
     );
+    draw_text(px, 16, 14, text, SCALE);
+}
+
+/// White text with its top-left corner at (x, y); each glyph is 6 × `scale` wide.
+fn draw_text(px: &mut [Rgba], x: i32, y: i32, text: &str, scale: i32) {
     for (i, c) in text.chars().enumerate() {
-        let rows = glyph(c);
-        for (r, bits) in rows.iter().enumerate() {
+        for (r, bits) in glyph(c).iter().enumerate() {
             for col in 0..5 {
                 if bits & (0x10 >> col) != 0 {
-                    let x = 16 + i as i32 * ADVANCE + col * SCALE;
-                    let y = 14 + r as i32 * SCALE;
-                    fill_rect(px, x, y, SCALE, SCALE, [255, 255, 255], 1.0);
+                    let gx = x + (i as i32 * 6 + col) * scale;
+                    let gy = y + r as i32 * scale;
+                    fill_rect(px, gx, gy, scale, scale, [255, 255, 255], 1.0);
                 }
             }
         }
     }
+}
+
+/// Colour scale in the top-right corner: a vertical gradient from the
+/// lightest rain shown (bottom) to the heaviest stop (top), in mm/h.
+fn draw_legend(px: &mut [Rgba]) {
+    const BAR_W: i32 = 8;
+    const BAR_H: i32 = 96;
+    let (lo, hi) = (RAIN_BANDS[0].0, RAIN_BANDS[RAIN_BANDS.len() - 1].0);
+    let (top_label, bottom_label) = (format!("{hi}+"), format!("{lo}"));
+    let label_w = 6 * top_label.len().max(bottom_label.len()) as i32 - 1;
+    let (w, h) = (6 + label_w + 4 + BAR_W + 6, 6 + 7 + 6 + BAR_H + 6);
+    let (x0, y0) = (WIDTH as i32 - 8 - w, 8);
+    fill_rect(px, x0, y0, w, h, [0x10, 0x10, 0x14], 0.75);
+
+    draw_text(px, x0 + w - 6 - (6 * 4 - 1), y0 + 6, "MM/H", 1);
+    let (bar_x, bar_y) = (x0 + w - 6 - BAR_W, y0 + 6 + 7 + 6);
+    for i in 0..BAR_H {
+        // Log scale, like the colour stops: each doubling gets the same height.
+        let t = 1.0 - i as f32 / (BAR_H - 1) as f32;
+        let rate = lo * (hi / lo).powf(t);
+        if let Some((colour, _)) = precip_colour(rate, 0.0) {
+            fill_rect(px, bar_x, bar_y + i, BAR_W, 1, colour, 1.0);
+        }
+    }
+    let text_x = |s: &str| bar_x - 4 - (6 * s.len() as i32 - 1);
+    draw_text(px, text_x(&top_label), bar_y, &top_label, 1);
+    draw_text(
+        px,
+        text_x(&bottom_label),
+        bar_y + BAR_H - 7,
+        &bottom_label,
+        1,
+    );
 }
 
 /// One segment per frame along the bottom edge; the current one is bright.
@@ -932,7 +976,10 @@ async fn live_render() {
     let started = Instant::now();
     let current = super::weather::get_current(&loc).await.unwrap();
     let wet = rain_expected(&current);
-    println!("outlook {:?}, code {}, grid fetched: {wet}", current.rain_outlook, current.weathercode);
+    println!(
+        "outlook {:?}, code {}, grid fetched: {wet}",
+        current.rain_outlook, current.weathercode
+    );
     let data = fetch(&loc, wet).await.unwrap();
     let fetched = started.elapsed();
     let gif = render_gif(&data, 0).unwrap();
