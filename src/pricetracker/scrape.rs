@@ -135,7 +135,7 @@ static PREFERRED_CHANGES: OnceLock<UnboundedSender<(String, String)>> = OnceLock
 
 /// Load saved preferred methods (host, method label); returns how many apply.
 pub fn restore_preferred(saved: impl IntoIterator<Item = (String, String)>) -> usize {
-    let mut preferred = PREFERRED.lock().unwrap_or_else(|p| p.into_inner());
+    let mut preferred = PREFERRED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut restored = 0;
     for (host, label) in saved {
         if let Some(method) = Method::from_label(&label) {
@@ -154,7 +154,7 @@ pub fn report_preferred_changes(tx: UnboundedSender<(String, String)>) {
 fn methods_for(host: &str) -> Vec<Method> {
     let mut methods: Vec<Method> =
         std::iter::once(Method::Direct).chain((0..solver::SOLVERS.len()).map(Method::Solver)).collect();
-    let preferred = PREFERRED.lock().unwrap_or_else(|p| p.into_inner()).get(host).copied();
+    let preferred = PREFERRED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(host).copied();
     if let Some(p) = preferred
         && let Some(pos) = methods.iter().position(|m| *m == p)
     {
@@ -239,7 +239,8 @@ pub async fn fetch_product(raw_url: &str) -> Result<Product, ScrapeError> {
 
         match result {
             Ok(p) => {
-                let previous = PREFERRED.lock().unwrap_or_else(|p| p.into_inner()).insert(host.clone(), method);
+                let previous =
+                    PREFERRED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(host.clone(), method);
                 if previous != Some(method)
                     && let Some(tx) = PREFERRED_CHANGES.get()
                 {
@@ -277,7 +278,7 @@ fn check_url_shape(url: &Url) -> Result<(), ScrapeError> {
     if url.host().is_none() {
         return Err(ScrapeError::InvalidUrl("missing host".into()));
     }
-    if !matches!(url.port(), None | Some(80) | Some(443)) {
+    if !matches!(url.port(), None | Some(80 | 443)) {
         return Err(ScrapeError::Blocked("non-standard port".into()));
     }
     if !url.username().is_empty() || url.password().is_some() {
@@ -621,6 +622,8 @@ fn single_separator(token: &str, sep: char, minor_digits: u8) -> String {
 }
 
 #[cfg(test)]
+// Prices parsed from text are compared exactly on purpose.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

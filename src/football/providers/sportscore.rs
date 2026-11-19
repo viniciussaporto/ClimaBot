@@ -7,7 +7,10 @@
 use super::{FetchError, FetchResult, Upstream, num, str_or_empty, text, unix, unum};
 use crate::football::{
     competitions::{self, Competition},
-    model::*,
+    model::{
+        Event, EventKind, Fixture, HeadToHead, LineupPlayer, Lineups, MatchDetail, PlayerProfile, Provider, Scorer,
+        SearchResults, Side, StandingGroup, StandingRow, Standings, Stat, Status, TeamLineup, TeamSchedule,
+    },
     quota::Purpose,
 };
 use chrono::NaiveDate;

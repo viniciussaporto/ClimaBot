@@ -34,12 +34,11 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
 
     // ── Discord ───────────────────────────────
     let http = token.map(Http::new);
-    let me = match &http {
-        Some(http) => r.check("Discord token", http.get_current_user().await.map_err(Into::into)),
-        None => {
-            println!("[SKIP] Discord checks: DISCORD_TOKEN / TOKEN not set");
-            None
-        }
+    let me = if let Some(http) = &http {
+        r.check("Discord token", http.get_current_user().await.map_err(Into::into))
+    } else {
+        println!("[SKIP] Discord checks: DISCORD_TOKEN / TOKEN not set");
+        None
     };
     if let (Some(http), Some(me)) = (&http, me) {
         println!("       logged in as {} ({})", me.tag(), me.id);
@@ -132,7 +131,7 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
                 "football-data.org standings (fallback)",
                 fd.standings(&fb.up, "BSA", Purpose::User).await.map_err(Into::into),
             ) {
-                println!("       {} table row(s)", s.groups.first().map(|g| g.rows.len()).unwrap_or(0));
+                println!("       {} table row(s)", s.groups.first().map_or(0, |g| g.rows.len()));
             }
         } else {
             println!("[SKIP] football-data.org: FOOTBALL_DATA_TOKEN not set");

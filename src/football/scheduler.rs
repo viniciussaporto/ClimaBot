@@ -13,7 +13,11 @@
 //! Everything goes through the shared budget, so when a provider runs low the
 //! optional work (tables, details) stops before the live scoreboard does.
 
-use super::{Football, competitions, model::*, quota::Purpose};
+use super::{
+    Football, competitions,
+    model::{Fixture, MatchDetail, Status},
+    quota::Purpose,
+};
 use crate::metrics;
 use chrono::{Duration as ChronoDuration, Utc};
 use std::{
@@ -123,7 +127,7 @@ pub async fn run(fb: Arc<Football>) {
                     primed = true;
                 }
                 Ok(l) => {
-                    warn!(reason = l.note.unwrap_or_default(), "Live scoreboard refresh failed; serving cached data")
+                    warn!(reason = l.note.unwrap_or_default(), "Live scoreboard refresh failed; serving cached data");
                 }
                 Err(e) => warn!(error = %e, "Live scoreboard refresh failed"),
             }
@@ -195,9 +199,8 @@ async fn verify_final(fb: &Football, f: &Fixture) -> Option<Fixture> {
         }
     }
     if let Some(c) = competitions::by_key(&f.competition) {
-        let date = chrono::DateTime::from_timestamp(f.kickoff, 0)
-            .map(|d| d.date_naive())
-            .unwrap_or_else(|| Utc::now().date_naive());
+        let date =
+            chrono::DateTime::from_timestamp(f.kickoff, 0).map_or_else(|| Utc::now().date_naive(), |d| d.date_naive());
         let key = super::fixtures_key(c, date);
         fb.expire(&key);
         if let Ok(list) = fb.fixtures(c, date, Purpose::Detail).await

@@ -37,7 +37,7 @@ struct Handler {
 
 impl Handler {
     fn update_guilds(&self, change: impl FnOnce(&mut HashSet<GuildId>)) {
-        let mut guilds = self.guilds.lock().unwrap_or_else(|p| p.into_inner());
+        let mut guilds = self.guilds.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         change(&mut guilds);
         metrics::GUILDS.set(guilds.len() as i64);
     }

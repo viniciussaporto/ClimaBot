@@ -259,7 +259,7 @@ async fn tile(x: i64, y: i64) -> Result<Arc<Vec<u8>>> {
 /// Turn the light OSM style into a dark, nearly grey one so the precipitation
 /// colours stand out: invert the luminance, compress it, tint it slightly blue.
 fn darken(p: Rgba) -> Rgba {
-    let lum = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
+    let lum = 0.299 * f32::from(p[0]) + 0.587 * f32::from(p[1]) + 0.114 * f32::from(p[2]);
     let v = 22.0 + (255.0 - lum) * 0.6;
     [(v * 0.92) as u8, (v * 0.97) as u8, (v * 1.08).min(255.0) as u8, 255]
 }
@@ -340,7 +340,7 @@ async fn precipitation_grid(ox: f64, oy: f64) -> Result<Vec<Frame>> {
     metrics::WEATHER_API_COUNTER.with_label_values(&["precip_grid", status]).inc();
     // Open-Meteo counts every location of a request as one call.
     crate::usage::record(crate::usage::Service::OpenMeteo, (COLS * ROWS) as u64, result.is_ok());
-    frames_from(result.context("Open-Meteo precipitation grid request failed")?)
+    frames_from(&result.context("Open-Meteo precipitation grid request failed")?)
 }
 
 /// Frames with no precipitation, for `now` (UTC) and the next hours.
@@ -353,7 +353,7 @@ fn dry_frames(now: NaiveDateTime) -> Vec<Frame> {
     frames
 }
 
-fn frames_from(points: Vec<GridPoint>) -> Result<Vec<Frame>> {
+fn frames_from(points: &[GridPoint]) -> Result<Vec<Frame>> {
     if points.len() != COLS * ROWS {
         bail!("expected {} grid points, got {}", COLS * ROWS, points.len());
     }
@@ -434,18 +434,18 @@ fn precip_colour(rate: f32, snow: f32) -> Option<([u8; 3], f32)> {
         Some(next) if rate >= RAIN_BANDS[0].0 => {
             let (lo, hi) = (RAIN_BANDS[band], next);
             let t = (rate / lo.0).ln() / (hi.0 / lo.0).ln();
-            let mix = |a: u8, b: u8| a as f32 + (b as f32 - a as f32) * t;
+            let mix = |a: u8, b: u8| f32::from(a) + (f32::from(b) - f32::from(a)) * t;
             let c = [mix(lo.1[0], hi.1[0]), mix(lo.1[1], hi.1[1]), mix(lo.1[2], hi.1[2])];
             (c, lo.2 + (hi.2 - lo.2) * t, band as f32 + t)
         }
         _ => {
             let (_, c, a) = RAIN_BANDS[band];
-            ([c[0] as f32, c[1] as f32, c[2] as f32], a, band as f32)
+            ([f32::from(c[0]), f32::from(c[1]), f32::from(c[2])], a, band as f32)
         }
     };
     let x = ((rate - DRY) / (RAIN_BANDS[0].0 * 2.0 - DRY)).clamp(0.0, 1.0);
     let fade = x * x * (3.0 - 2.0 * x);
-    let mix = |a: f32, b: u8| (a + (b as f32 - a) * snow).round() as u8;
+    let mix = |a: f32, b: u8| (a + (f32::from(b) - a) * snow).round() as u8;
     let colour = [mix(colour[0], SNOW[0]), mix(colour[1], SNOW[1]), mix(colour[2], SNOW[2])];
     let alpha = alpha + (0.35 + pos * 0.08 - alpha) * snow;
     Some((colour, alpha * fade))
@@ -465,7 +465,7 @@ fn cubic_weights(g: f32, n: usize) -> [(usize, f32); 4] {
 
 fn blend(dst: &mut Rgba, src: [u8; 3], alpha: f32) {
     for i in 0..3 {
-        dst[i] = (dst[i] as f32 * (1.0 - alpha) + src[i] as f32 * alpha).round() as u8;
+        dst[i] = (f32::from(dst[i]) * (1.0 - alpha) + f32::from(src[i]) * alpha).round() as u8;
     }
 }
 
@@ -678,6 +678,8 @@ fn draw_progress(px: &mut [Rgba], index: usize, count: usize) {
 }
 
 #[cfg(test)]
+// The tests compare exact values computed from exact inputs.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -737,8 +739,8 @@ mod tests {
     }
 
     fn sample() -> Vec<Frame> {
-        let points = (0..COLS * ROWS).map(|_| point("2026-11-18T20:15", 2.0, 80)).collect();
-        frames_from(points).unwrap()
+        let points: Vec<GridPoint> = (0..COLS * ROWS).map(|_| point("2026-11-18T20:15", 2.0, 80)).collect();
+        frames_from(&points).unwrap()
     }
 
     #[test]
@@ -779,7 +781,7 @@ mod tests {
 
     #[test]
     fn grid_size_is_checked() {
-        assert!(frames_from(vec![point("2026-11-18T20:15", 0.0, 0)]).is_err());
+        assert!(frames_from(&[point("2026-11-18T20:15", 0.0, 0)]).is_err());
     }
 
     #[test]

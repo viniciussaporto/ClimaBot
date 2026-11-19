@@ -71,7 +71,7 @@ impl Upstream {
 
     /// Run `f` on a provider's gate.
     pub fn with_gate<R>(&self, p: Provider, f: impl FnOnce(&mut Gate) -> R) -> Option<R> {
-        self.gates.get(&p).map(|g| f(&mut g.lock().unwrap_or_else(|e| e.into_inner())))
+        self.gates.get(&p).map(|g| f(&mut g.lock().unwrap_or_else(std::sync::PoisonError::into_inner)))
     }
 
     /// GET a JSON document. `endpoint` is a short label for metrics.
@@ -154,8 +154,8 @@ impl Upstream {
         }) else {
             return;
         };
-        metrics::FOOTBALL_QUOTA_USED.with_label_values(&[provider.id()]).set(used as f64);
-        metrics::FOOTBALL_QUOTA_LIMIT.with_label_values(&[provider.id()]).set(daily as f64);
+        metrics::FOOTBALL_QUOTA_USED.with_label_values(&[provider.id()]).set(f64::from(used));
+        metrics::FOOTBALL_QUOTA_LIMIT.with_label_values(&[provider.id()]).set(f64::from(daily));
         metrics::FOOTBALL_PROVIDER_UP.with_label_values(&[provider.id()]).set(if health == "healthy" {
             1.0
         } else {

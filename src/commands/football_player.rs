@@ -10,7 +10,11 @@ use super::football::{
     source_note, team_buttons, unavailable,
 };
 use crate::football::{
-    Football, SEASONS_AVAILABLE, competitions::COMPETITIONS, model::*, providers::FetchError, quota::Purpose,
+    Football, SEASONS_AVAILABLE,
+    competitions::COMPETITIONS,
+    model::{Absence, CareerTeam, PlayerRef, Provider, SquadPlayer, Standings, Status, Trophy},
+    providers::FetchError,
+    quota::Purpose,
 };
 use anyhow::Result;
 use chrono::{NaiveDate, Utc};
@@ -28,7 +32,7 @@ const VIEWS: [(&str, &str); 5] = [
 ];
 
 fn day(d: &str) -> String {
-    NaiveDate::parse_from_str(d, "%Y-%m-%d").map(|d| d.format("%d %b %Y").to_string()).unwrap_or_else(|_| d.to_string())
+    NaiveDate::parse_from_str(d, "%Y-%m-%d").map_or_else(|_| d.to_string(), |d| d.format("%d %b %Y").to_string())
 }
 
 fn no_key() -> Reply {
@@ -235,7 +239,7 @@ async fn seasons(fb: &Football, p: &PlayerRef) -> Reply {
     let mut e = player_embed(p, "seasons").description(format!(
         "{}\n\nPer competition, for the seasons the free plan covers ({}). This season: `/football player stats`.\n\n{}",
         header(p),
-        SEASONS_AVAILABLE.iter().rev().map(|s| s.to_string()).collect::<Vec<_>>().join(", "),
+        SEASONS_AVAILABLE.iter().rev().map(ToString::to_string).collect::<Vec<_>>().join(", "),
         source_note(&lookup)
     ));
     if by_season.is_empty() {
@@ -298,7 +302,7 @@ async fn trophies(fb: &Football, p: &PlayerRef) -> Reply {
             match groups.iter_mut().find(|(k, _)| *k == key) {
                 Some((_, s)) => {
                     if !season.is_empty() && !s.contains(&season) {
-                        s.push(season)
+                        s.push(season);
                     }
                 }
                 None => groups.push((key, if season.is_empty() { vec![] } else { vec![season] })),
@@ -364,7 +368,7 @@ pub(super) fn current_absence<'a>(abs: &'a [Absence], today: &str) -> Option<&'a
 }
 
 fn absence_line(a: &Absence, today: &str, newest: bool) -> String {
-    let start = a.start.as_deref().map(day).unwrap_or_else(|| "?".into());
+    let start = a.start.as_deref().map_or_else(|| "?".into(), day);
     let end = match (&a.end, newest && a.is_current(today)) {
         (Some(e), true) => format!("expected back **{}**", day(e)),
         (None, true) => "ongoing, **return date unknown**".to_string(),
@@ -619,6 +623,7 @@ pub(super) async fn handle_component(fb: &Football, comp: &ComponentInteraction)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::football::model::Squad;
 
     fn abs(kind: &str, start: &str, end: Option<&str>) -> Absence {
         Absence { kind: kind.into(), start: Some(start.into()), end: end.map(String::from) }
@@ -652,7 +657,7 @@ mod tests {
     /// Injury views against API-Football (about 7 requests). Run with
     /// `cargo test live_injuries -- --ignored --nocapture` and API_FOOTBALL_KEY set.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "calls API-Football (about 7 requests)"]
     async fn live_injuries() {
         let fb = Football::from_env(None);
         let print = |label: &str, r: &Reply| {

@@ -25,7 +25,10 @@ pub mod store;
 use crate::metrics;
 use chrono::{NaiveDate, Utc};
 use competitions::{COMPETITIONS, Competition};
-use model::*;
+use model::{
+    Absence, CareerTeam, Fixture, HeadToHead, MatchDetail, PlayerProfile, PlayerRef, Provider, Scorer, SearchResults,
+    SeasonLine, Squad, Standings, Status, TeamSchedule, Transfer, Trophy,
+};
 use providers::{
     FetchError, FetchResult, Upstream, api_football::ApiFootball, football_data::FootballData, sportscore::SportScore,
 };
@@ -59,11 +62,9 @@ pub fn fold(s: &str) -> String {
             'í' | 'ì' | 'î' | 'ï' => 'i',
             'ó' | 'ò' | 'ô' | 'õ' | 'ö' | 'ø' => 'o',
             'ú' | 'ù' | 'û' | 'ü' => 'u',
-            'ç' => 'c',
+            'ç' | 'ć' | 'č' => 'c',
             'ñ' => 'n',
-            'ß' => 's',
-            'ć' | 'č' => 'c',
-            'š' => 's',
+            'ß' | 'š' => 's',
             'ž' => 'z',
             'đ' => 'd',
             other => other,
@@ -232,7 +233,7 @@ impl Football {
 
     /// The notifier's end of the live-event channel (only the first caller gets it).
     pub fn take_events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<LiveEvent>> {
-        self.events_rx.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.events_rx.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
     }
 
     pub fn has_careers(&self) -> bool {
@@ -254,12 +255,12 @@ impl Football {
     // ── Cache ────────────────────────────────────────────────
 
     fn mem_get(&self, key: &str) -> Option<(Provider, i64, Arc<str>)> {
-        let mem = self.mem.lock().unwrap_or_else(|e| e.into_inner());
+        let mem = self.mem.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         mem.get(key).map(|e| (e.provider, e.fetched_at, e.json.clone()))
     }
 
     fn mem_put(&self, key: &str, provider: Provider, fetched_at: i64, json: Arc<str>) {
-        let mut mem = self.mem.lock().unwrap_or_else(|e| e.into_inner());
+        let mut mem = self.mem.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if mem.len() >= MEM_LIMIT && !mem.contains_key(key) {
             let cutoff = Utc::now().timestamp() - 86400;
             mem.retain(|_, e| e.fetched_at > cutoff);
@@ -272,16 +273,15 @@ impl Football {
 
     /// Cached data only, from memory (then MongoDB). Never calls a provider.
     pub async fn cached<T: DeserializeOwned>(&self, key: &str) -> Option<Cached<T>> {
-        let (provider, fetched_at, json) = match self.mem_get(key) {
-            Some(e) => e,
-            None => {
-                let doc = self.store.as_ref()?.load(key).await.ok().flatten()?;
-                let provider = Provider::ALL.into_iter().find(|p| p.id() == doc.provider)?;
-                let fetched_at = doc.fetched_at.timestamp_millis() / 1000;
-                let json: Arc<str> = doc.data.into();
-                self.mem_put(key, provider, fetched_at, json.clone());
-                (provider, fetched_at, json)
-            }
+        let (provider, fetched_at, json) = if let Some(e) = self.mem_get(key) {
+            e
+        } else {
+            let doc = self.store.as_ref()?.load(key).await.ok().flatten()?;
+            let provider = Provider::ALL.into_iter().find(|p| p.id() == doc.provider)?;
+            let fetched_at = doc.fetched_at.timestamp_millis() / 1000;
+            let json: Arc<str> = doc.data.into();
+            self.mem_put(key, provider, fetched_at, json.clone());
+            (provider, fetched_at, json)
         };
         match serde_json::from_str(&json) {
             Ok(data) => Some(Cached { data, provider, fetched_at }),
@@ -321,14 +321,14 @@ impl Football {
 
     /// Mark cached data as due for a refresh, keeping it as a fallback.
     pub fn expire(&self, key: &str) {
-        let mut mem = self.mem.lock().unwrap_or_else(|e| e.into_inner());
+        let mut mem = self.mem.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(e) = mem.get_mut(key) {
             e.fetched_at = 0;
         }
     }
 
     fn lock_for(&self, key: &str) -> Arc<tokio::sync::Mutex<()>> {
-        let mut locks = self.locks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut locks = self.locks.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if locks.len() > 2000 {
             locks.retain(|_, l| Arc::strong_count(l) > 1);
         }
@@ -435,13 +435,13 @@ impl Football {
 
     /// A user asked about this match: poll its details while it's live.
     pub fn note_demand(&self, slug: &str) {
-        let mut d = self.demand.lock().unwrap_or_else(|e| e.into_inner());
+        let mut d = self.demand.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         d.retain(|_, t| t.elapsed() < DEMAND_WINDOW);
         d.insert(slug.to_string(), Instant::now());
     }
 
     pub fn is_demanded(&self, slug: &str) -> bool {
-        let d = self.demand.lock().unwrap_or_else(|e| e.into_inner());
+        let d = self.demand.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         d.get(slug).is_some_and(|t| t.elapsed() < DEMAND_WINDOW)
     }
 
@@ -651,19 +651,18 @@ impl Football {
                     Some(s) => s.team_id(&map_key).await.ok().flatten().map(|d| d.api_football_id),
                     None => None,
                 };
-                let id = match known {
-                    Some(id) => id,
-                    None => {
-                        let candidates = af.search_teams(&self.up, team_name, purpose).await?;
-                        let team = providers::api_football::pick_team(&candidates, team_name, country)
-                            .ok_or(FetchError::NotFound)?;
-                        if let Some(s) = &self.store
-                            && let Err(e) = s.save_team_id(&map_key, team.id, &team.name).await
-                        {
-                            warn!(error = format!("{e:#}"), "Could not save API-Football team id");
-                        }
-                        team.id
+                let id = if let Some(id) = known {
+                    id
+                } else {
+                    let candidates = af.search_teams(&self.up, team_name, purpose).await?;
+                    let team = providers::api_football::pick_team(&candidates, team_name, country)
+                        .ok_or(FetchError::NotFound)?;
+                    if let Some(s) = &self.store
+                        && let Err(e) = s.save_team_id(&map_key, team.id, &team.name).await
+                    {
+                        warn!(error = format!("{e:#}"), "Could not save API-Football team id");
                     }
+                    team.id
                 };
                 Ok((af.squad(&self.up, id, purpose).await?, Provider::ApiFootball))
             },

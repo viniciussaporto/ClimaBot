@@ -439,7 +439,7 @@ pub async fn handle(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
 // ─────────────────────────────────────────────
 
 fn ago(t: Option<DateTime<Utc>>) -> String {
-    t.map(|t| format!("<t:{}:R>", t.timestamp())).unwrap_or_else(|| "not yet".into())
+    t.map_or_else(|| "not yet".into(), |t| format!("<t:{}:R>", t.timestamp()))
 }
 
 fn ok(b: bool) -> &'static str {
@@ -531,8 +531,8 @@ fn football_status() -> String {
                 };
                 format!(
                     "{icon} **{p}** ({role}): {} of {} requests today, max {}/min{state} · last success {}",
-                    thousands(g.used as u64),
-                    thousands(g.limits.daily as u64),
+                    thousands(u64::from(g.used)),
+                    thousands(u64::from(g.limits.daily)),
                     g.limits.per_minute,
                     ago(g.last_success)
                 )
@@ -541,11 +541,11 @@ fn football_status() -> String {
         lines.push(line);
     }
     let live = fb.cached_now::<Vec<Fixture>>("live");
-    let updated = live.as_ref().map(|l| format!("<t:{}:R>", l.fetched_at)).unwrap_or_else(|| "never".into());
+    let updated = live.as_ref().map_or_else(|| "never".into(), |l| format!("<t:{}:R>", l.fetched_at));
     lines.push(if fb.in_watch_window() {
         format!(
             "🔴 Live scoreboard: polled every minute, {} live match(es) · updated {updated}",
-            live.map(|l| l.data.len()).unwrap_or(0)
+            live.map_or(0, |l| l.data.len())
         )
     } else {
         format!("💤 Live scoreboard: idle, no followed match on right now · last updated {updated}")

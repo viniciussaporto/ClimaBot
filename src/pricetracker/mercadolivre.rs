@@ -95,6 +95,8 @@ struct Item {
     currency_id: Option<String>,
 }
 
+// `client_id` / `client_secret` are the OAuth terms Mercado Livre uses.
+#[allow(clippy::struct_field_names)]
 pub struct Client {
     client_id: String,
     client_secret: String,
@@ -127,7 +129,7 @@ impl Client {
             ])
             .send()
             .await
-            .and_then(|r| r.error_for_status())
+            .and_then(reqwest::Response::error_for_status)
             .map_err(api_error)?
             .json()
             .await
@@ -145,7 +147,7 @@ impl Client {
             .bearer_auth(token)
             .send()
             .await
-            .and_then(|r| r.error_for_status())
+            .and_then(reqwest::Response::error_for_status)
             .map_err(api_error)?
             .json()
             .await

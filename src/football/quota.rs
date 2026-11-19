@@ -218,7 +218,7 @@ impl Gate {
             }
             _ => {}
         }
-        let floor = (self.limits.daily as f64 * purpose.floor()).ceil() as u32;
+        let floor = (f64::from(self.limits.daily) * purpose.floor()).ceil() as u32;
         if self.remaining() <= floor {
             return Err(Blocked::Budget);
         }

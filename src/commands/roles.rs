@@ -162,15 +162,12 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction) -> Result<(
     let (roles, bot_roles) = load_roles(ctx, guild_id).await?;
     let assignable = assignable_roles(&roles, guild_id, &bot_roles);
 
-    match role_menu(&assignable, 0, None) {
-        Some(menu) => {
-            cmd.create_response(&ctx.http, CreateInteractionResponse::Message(menu)).await?;
-            info!(user = %cmd.user.name, guild = %guild_id, roles = assignable.len(), "Role menu shown");
-        }
-        None => {
-            warn!(guild = %guild_id, "No assignable roles in this server");
-            cmd.create_response(&ctx.http, ephemeral("No assignable roles available in this server!")).await?;
-        }
+    if let Some(menu) = role_menu(&assignable, 0, None) {
+        cmd.create_response(&ctx.http, CreateInteractionResponse::Message(menu)).await?;
+        info!(user = %cmd.user.name, guild = %guild_id, roles = assignable.len(), "Role menu shown");
+    } else {
+        warn!(guild = %guild_id, "No assignable roles in this server");
+        cmd.create_response(&ctx.http, ephemeral("No assignable roles available in this server!")).await?;
     }
     Ok(())
 }

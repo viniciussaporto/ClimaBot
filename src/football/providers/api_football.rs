@@ -4,7 +4,11 @@
 //! this provider is used for squads only.
 
 use super::{FetchResult, Upstream, num, str_or_empty, text, unum};
-use crate::football::{fold, model::*, quota::Purpose};
+use crate::football::{
+    fold,
+    model::{Absence, CareerTeam, PlayerRef, Provider, SeasonLine, Squad, SquadPlayer, Transfer, Trophy},
+    quota::Purpose,
+};
 use serde_json::Value;
 
 const BASE: &str = "https://v3.football.api-sports.io";
@@ -235,7 +239,7 @@ pub fn rank_players(mut list: Vec<PlayerRef>, name: &str) -> Vec<PlayerRef> {
 /// The word to search API-Football's profiles by: its search matches last
 /// names, so use the name's longest word (3+ letters).
 pub fn profile_query(name: &str) -> Option<String> {
-    words(name).into_iter().filter(|w| w.len() >= 3).max_by_key(|w| w.len())
+    words(name).into_iter().filter(|w| w.len() >= 3).max_by_key(String::len)
 }
 
 pub fn parse_sidelined(v: &Value) -> Vec<Absence> {

@@ -51,7 +51,7 @@ fn today() -> String {
 }
 
 fn with<R>(service: Service, f: impl FnOnce(&mut Usage) -> R) -> R {
-    let mut state = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut state = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let u = &mut state.services[service.index()];
     let day = today();
     if u.day != day {
@@ -84,7 +84,7 @@ pub fn get(service: Service) -> Usage {
 
 /// When counting started (the bot's start).
 pub fn since() -> DateTime<Utc> {
-    STATE.lock().unwrap_or_else(|e| e.into_inner()).started
+    STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).started
 }
 
 /// Make sure the start time is the process start, not the first `/help status`.

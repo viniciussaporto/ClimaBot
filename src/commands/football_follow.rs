@@ -16,7 +16,7 @@ use crate::{
         Football, LiveEvent, LiveEventKind,
         competitions::{self, COMPETITIONS, Kind},
         follows::{FollowStore, FollowedTeam, Owner, Subscription},
-        model::*,
+        model::{Fixture, Provider, Standings, Status, TeamSchedule},
     },
     metrics,
 };
@@ -60,7 +60,7 @@ pub(super) async fn handle(ctx: &Context, cmd: &CommandInteraction, fb: &Footbal
         ["follow", "team"] => match resolve_team(fb, args.get("team").unwrap_or_default()).await {
             Ok(t) => {
                 let mut sub = store.get(Owner::User(cmd.user.id.get())).await?;
-                let text = toggle_team(&mut sub, t.slug.clone(), t.name.clone(), "You");
+                let text = toggle_team(&mut sub, t.slug.clone(), &t.name, "You");
                 save(store, &mut sub, cmd.user.id.get()).await?;
                 follow_ack(&text)
             }
@@ -99,7 +99,7 @@ pub(super) async fn handle(ctx: &Context, cmd: &CommandInteraction, fb: &Footbal
                 "team" => match resolve_team(fb, args.get("team").unwrap_or_default()).await {
                     Ok(t) => {
                         let mut sub = store.get(owner).await?;
-                        let text = toggle_team(&mut sub, t.slug.clone(), t.name.clone(), "This server");
+                        let text = toggle_team(&mut sub, t.slug.clone(), &t.name, "This server");
                         save(store, &mut sub, cmd.user.id.get()).await?;
                         panel(&sub, Some(text))
                     }
@@ -118,8 +118,8 @@ async fn edit(ctx: &Context, cmd: &CommandInteraction, r: Reply) -> Result<()> {
     Ok(())
 }
 
-fn toggle_team(sub: &mut Subscription, slug: String, name: String, who: &str) -> String {
-    match sub.toggle_team(FollowedTeam { slug, name: name.clone() }) {
+fn toggle_team(sub: &mut Subscription, slug: String, name: &str, who: &str) -> String {
+    match sub.toggle_team(FollowedTeam { slug, name: name.to_string() }) {
         Some(true) => format!("⭐ {who} now follow{} **{name}**.", if who == "You" { "" } else { "s" }),
         Some(false) => format!("{who} no longer follow{} **{name}**.", if who == "You" { "" } else { "s" }),
         None => format!(
@@ -202,7 +202,7 @@ fn panel(sub: &Subscription, message: Option<String>) -> Reply {
     } else {
         sub.competitions.iter().map(|k| comp_label(k, k)).collect::<Vec<_>>().join(", ")
     };
-    let channel = sub.channel_id.map(|c| format!("<#{c}>")).unwrap_or_else(|| "not set".into());
+    let channel = sub.channel_id.map_or_else(|| "not set".into(), |c| format!("<#{c}>"));
     let mut desc = if guild {
         format!(
             "**Server football posts** (off by default). Choose a channel, what the server follows, and what to post.\n\
@@ -326,13 +326,13 @@ pub(super) async fn handle_component(ctx: &Context, comp: &ComponentInteraction,
         ComponentInteractionDataKind::ChannelSelect { values } => values.iter().map(|c| c.get().to_string()).collect(),
         _ => vec![],
     };
-    let action = id.split_once(':').map(|(_, a)| a).unwrap_or("");
+    let action = id.split_once(':').map_or("", |(_, a)| a);
     let mut message = None;
 
     // Buttons that open something else, as a new private message.
     if let Some(slug) = action.strip_prefix("toggle:") {
         let t = super::football::team_from_slug(fb, slug).await;
-        let text = toggle_team(&mut sub, t.slug, t.name, "You");
+        let text = toggle_team(&mut sub, t.slug, &t.name, "You");
         save(store, &mut sub, comp.user.id.get()).await?;
         let r = follow_ack(&text);
         let msg = CreateInteractionResponseMessage::new().embed(r.embed).components(r.rows).ephemeral(true);
@@ -502,7 +502,7 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
     let now = Utc::now();
     let ts = now.timestamp();
     let today = now.date_naive();
-    let day_of = |t: i64| chrono::DateTime::from_timestamp(t, 0).map(|d| d.date_naive()).unwrap_or(today);
+    let day_of = |t: i64| chrono::DateTime::from_timestamp(t, 0).map_or(today, |d| d.date_naive());
     let with_comp = |f: &Fixture, date: bool| {
         format!("{} · {}", fixture_line(f, date), comp_label(&f.competition, &f.competition_name))
     };
@@ -583,8 +583,8 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
                     .rows
                     .iter()
                     .filter_map(|r| {
-                        let was = prev.as_ref()?.get(&r.team)?.0 as i64;
-                        let d = was - r.position as i64;
+                        let was = i64::from(prev.as_ref()?.get(&r.team)?.0);
+                        let d = was - i64::from(r.position);
                         (d.abs() >= 2).then(|| (d, format!("{}{}", r.team, arrow(Some(was as u32), r.position))))
                     })
                     .collect();
@@ -634,8 +634,7 @@ fn event_line(e: &LiveEvent) -> String {
     let f = &e.fixture;
     let score = f
         .score()
-        .map(|(h, a)| format!("{} {h}–{a} {}", f.home, f.away))
-        .unwrap_or_else(|| format!("{} vs {}", f.home, f.away));
+        .map_or_else(|| format!("{} vs {}", f.home, f.away), |(h, a)| format!("{} {h}–{a} {}", f.home, f.away));
     let comp = comp_label(&f.competition, &f.competition_name);
     match e.kind {
         LiveEventKind::Kickoff => format!("▶️ **Kick-off** · {} vs {} · {comp}", f.home, f.away),

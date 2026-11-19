@@ -150,7 +150,7 @@ pub async fn get_coordinates(location: &str) -> Result<Location> {
         .query(&[("key", api_key), ("q", location), ("no_annotations", "1"), ("limit", "1")])
         .send()
         .await
-        .and_then(|r| r.error_for_status());
+        .and_then(reqwest::Response::error_for_status);
     let response: GeocodingResponse = match result {
         Ok(r) => r.json().await.context("invalid OpenCage response")?,
         Err(e) => {
@@ -447,6 +447,8 @@ fn weather_image(code: i32) -> &'static [u8] {
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/images/icons8-", $name, "-48.png"))
         };
     }
+    // Clippy sees the `include_bytes!` arms as identical; they load different files.
+    #[allow(clippy::match_same_arms)]
     match code {
         0 => icon!("sun"),
         1 | 2 => icon!("partly-cloudy-day"),

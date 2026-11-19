@@ -204,7 +204,7 @@ async fn list(store: &Store, user_id: u64) -> Result<EditInteractionResponse> {
     }
 
     let entries = products.iter().enumerate().map(|(i, p)| {
-        let price = p.last_price.map(|v| format_price(v, p.currency.as_deref())).unwrap_or_else(|| "–".into());
+        let price = p.last_price.map_or_else(|| "–".into(), |v| format_price(v, p.currency.as_deref()));
         let mut entry = format!(
             "**{}.** [{}]({})\n{} · next check <t:{}:R>",
             i + 1,
