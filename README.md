@@ -308,7 +308,7 @@ Everything is set in `.env`. [`.env.example`](.env.example) documents every opti
 | `API_FOOTBALL_KEY` | – | API-Football key: squads (`/football team squad`) |
 | `FOOTBALL_PRIORITY` | the ⭐ competitions | Comma-separated competition keys whose live match details are polled, e.g. `brazilian-serie-a,conmebol-copa-libertadores` |
 | `SPORTSCORE_DAILY_BUDGET` | `9000` | SportScore requests per UTC day the bot allows itself |
-| `SPORTSCORE_PER_MINUTE` | `120` | SportScore requests per minute |
+| `SPORTSCORE_PER_MINUTE` | `300` | SportScore requests per minute (their free tier allows about 15 per second) |
 | `FOOTBALL_DATA_DAILY_BUDGET` | `5000` | football-data.org requests per UTC day |
 | `API_FOOTBALL_DAILY_BUDGET` | `100` | API-Football requests per UTC day |
 
