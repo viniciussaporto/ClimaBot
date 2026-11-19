@@ -19,32 +19,20 @@ use tracing::{error, info};
 
 /// Number of commands received / completed / failed
 pub static COMMAND_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
-    register_counter_vec!(
-        "discord_command_total",
-        "Count of Discord commands executed",
-        &["command", "status"]
-    )
-    .expect("failed to register discord_command_total")
+    register_counter_vec!("discord_command_total", "Count of Discord commands executed", &["command", "status"])
+        .expect("failed to register discord_command_total")
 });
 
 /// Number of self-assigned role changes
 pub static ROLE_ASSIGNMENT_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
-    register_counter_vec!(
-        "discord_role_assignments_total",
-        "Count of role assignments",
-        &["action", "role"]
-    )
-    .expect("failed to register discord_role_assignments_total")
+    register_counter_vec!("discord_role_assignments_total", "Count of role assignments", &["action", "role"])
+        .expect("failed to register discord_role_assignments_total")
 });
 
 /// Number of outbound weather / geocoding API calls
 pub static WEATHER_API_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
-    register_counter_vec!(
-        "weather_api_requests_total",
-        "Count of weather API requests",
-        &["type", "status"]
-    )
-    .expect("failed to register weather_api_requests_total")
+    register_counter_vec!("weather_api_requests_total", "Count of weather API requests", &["type", "status"])
+        .expect("failed to register weather_api_requests_total")
 });
 
 /// End-to-end command latency
@@ -60,12 +48,8 @@ pub static RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 /// Number of product price checks performed by the hourly job
 pub static PRICE_CHECK_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
-    register_counter_vec!(
-        "price_checks_total",
-        "Count of product price checks, by outcome",
-        &["status"]
-    )
-    .expect("failed to register price_checks_total")
+    register_counter_vec!("price_checks_total", "Count of product price checks, by outcome", &["status"])
+        .expect("failed to register price_checks_total")
 });
 
 /// Page fetches by the price scraper, by method and outcome
@@ -86,11 +70,8 @@ pub static GUILDS: LazyLock<IntGauge> = LazyLock::new(|| {
 
 /// Heartbeat round trip to Discord's gateway
 pub static GATEWAY_LATENCY: LazyLock<Gauge> = LazyLock::new(|| {
-    register_gauge!(
-        "discord_gateway_latency_seconds",
-        "Heartbeat latency of the Discord gateway connection"
-    )
-    .expect("failed to register discord_gateway_latency_seconds")
+    register_gauge!("discord_gateway_latency_seconds", "Heartbeat latency of the Discord gateway connection")
+        .expect("failed to register discord_gateway_latency_seconds")
 });
 
 /// Products currently tracked, across all users
@@ -101,11 +82,8 @@ pub static TRACKED_PRODUCTS: LazyLock<IntGauge> = LazyLock::new(|| {
 
 /// Products whose hourly check is more than 5 minutes late
 pub static OVERDUE_CHECKS: LazyLock<IntGauge> = LazyLock::new(|| {
-    register_int_gauge!(
-        "price_checks_overdue",
-        "Products whose scheduled price check is more than 5 minutes late"
-    )
-    .expect("failed to register price_checks_overdue")
+    register_int_gauge!("price_checks_overdue", "Products whose scheduled price check is more than 5 minutes late")
+        .expect("failed to register price_checks_overdue")
 });
 
 /// Time to check one product (all fetch attempts included)
@@ -252,9 +230,7 @@ pub fn start_metrics_server(port: u16) {
     LazyLock::force(&FOOTBALL_NOTIFICATIONS);
 
     tokio::spawn(async move {
-        let app = Router::new()
-            .route("/metrics", get(metrics_handler))
-            .route("/status", get(crate::status::handler));
+        let app = Router::new().route("/metrics", get(metrics_handler)).route("/status", get(crate::status::handler));
 
         let addr = format!("0.0.0.0:{port}");
         let listener = match tokio::net::TcpListener::bind(&addr).await {

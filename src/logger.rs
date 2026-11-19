@@ -27,16 +27,14 @@ pub fn init() {
     };
 
     let log_dir = env::var("LOG_DIR").unwrap_or_else(|_| "/var/log/climabot".into());
-    let file_appender = std::fs::create_dir_all(&log_dir)
-        .map_err(|e| e.to_string())
-        .and_then(|()| {
-            RollingFileAppender::builder()
-                .rotation(Rotation::DAILY)
-                .filename_prefix("climabot.log")
-                .max_log_files(MAX_LOG_FILES)
-                .build(&log_dir)
-                .map_err(|e| e.to_string())
-        });
+    let file_appender = std::fs::create_dir_all(&log_dir).map_err(|e| e.to_string()).and_then(|()| {
+        RollingFileAppender::builder()
+            .rotation(Rotation::DAILY)
+            .filename_prefix("climabot.log")
+            .max_log_files(MAX_LOG_FILES)
+            .build(&log_dir)
+            .map_err(|e| e.to_string())
+    });
 
     let file_layer = match file_appender {
         Ok(appender) => {
@@ -44,13 +42,7 @@ pub fn init() {
             // Keep the guard alive for the entire process lifetime so the
             // background flusher thread is never dropped prematurely.
             std::mem::forget(guard);
-            Some(
-                fmt::layer()
-                    .json()
-                    .with_current_span(true)
-                    .with_writer(non_blocking)
-                    .with_filter(env_filter()),
-            )
+            Some(fmt::layer().json().with_current_span(true).with_writer(non_blocking).with_filter(env_filter()))
         }
         Err(e) => {
             eprintln!("File logging disabled: cannot write to {log_dir}: {e}");

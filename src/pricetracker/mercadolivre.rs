@@ -26,8 +26,7 @@ pub enum Listing {
 }
 
 pub fn is_mercadolivre(host: &str) -> bool {
-    host.split('.')
-        .any(|label| label == "mercadolivre" || label == "mercadolibre")
+    host.split('.').any(|label| label == "mercadolivre" || label == "mercadolibre")
 }
 
 /// Find an ML id (`MLB123…`, `MLA-123…`) in `s`, normalised without the dash.
@@ -193,10 +192,7 @@ pub static CLIENT: LazyLock<Option<Client>> = LazyLock::new(|| {
     Some(Client {
         client_id: id.trim().to_string(),
         client_secret: secret.trim().to_string(),
-        http: reqwest::Client::builder()
-            .timeout(Duration::from_secs(15))
-            .build()
-            .expect("failed to build HTTP client"),
+        http: reqwest::Client::builder().timeout(Duration::from_secs(15)).build().expect("failed to build HTTP client"),
         token: Mutex::new(None),
     })
 });

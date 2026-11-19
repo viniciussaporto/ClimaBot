@@ -52,7 +52,12 @@ impl ApiFootball {
     }
 
     /// Clubs and national teams, with the seasons played for each.
-    pub async fn player_teams(&self, up: &Upstream, player: &PlayerRef, purpose: Purpose) -> FetchResult<Vec<CareerTeam>> {
+    pub async fn player_teams(
+        &self,
+        up: &Upstream,
+        player: &PlayerRef,
+        purpose: Purpose,
+    ) -> FetchResult<Vec<CareerTeam>> {
         let v = self.get(up, "player_teams", &format!("/players/teams?player={}", player.id), purpose).await?;
         Ok(parse_player_teams(&v, player.nationality.as_deref().unwrap_or("")))
     }
@@ -67,7 +72,13 @@ impl ApiFootball {
 
     /// Per-competition statistics of one season. The free plan only serves
     /// seasons 2022 to 2024.
-    pub async fn season(&self, up: &Upstream, player: i64, season: i32, purpose: Purpose) -> FetchResult<Vec<SeasonLine>> {
+    pub async fn season(
+        &self,
+        up: &Upstream,
+        player: i64,
+        season: i32,
+        purpose: Purpose,
+    ) -> FetchResult<Vec<SeasonLine>> {
         let v = self.get(up, "player_season", &format!("/players?id={player}&season={season}"), purpose).await?;
         Ok(parse_season(&v, season))
     }
@@ -101,7 +112,11 @@ pub fn parse_teams(v: &Value) -> Vec<TeamCandidate> {
             a.iter()
                 .filter_map(|r| {
                     let t = &r["team"];
-                    Some(TeamCandidate { id: num(&t["id"])?, name: text(&t["name"])?, country: str_or_empty(&t["country"]) })
+                    Some(TeamCandidate {
+                        id: num(&t["id"])?,
+                        name: text(&t["name"])?,
+                        country: str_or_empty(&t["country"]),
+                    })
                 })
                 .collect()
         })
@@ -110,9 +125,23 @@ pub fn parse_teams(v: &Value) -> Vec<TeamCandidate> {
 
 fn is_reserve_side(name: &str) -> bool {
     let n = format!(" {} ", fold(name).replace(['-', '_'], " "));
-    [" u17 ", " u18 ", " u19 ", " u20 ", " u21 ", " u23 ", " b ", " ii ", " w ", " women ", " fem ", " feminino ", " sub 20 "]
-        .iter()
-        .any(|m| n.contains(m))
+    [
+        " u17 ",
+        " u18 ",
+        " u19 ",
+        " u20 ",
+        " u21 ",
+        " u23 ",
+        " b ",
+        " ii ",
+        " w ",
+        " women ",
+        " fem ",
+        " feminino ",
+        " sub 20 ",
+    ]
+    .iter()
+    .any(|m| n.contains(m))
 }
 
 /// The senior team best matching `name` (in `country` when known).
@@ -163,7 +192,8 @@ pub fn parse_profiles(v: &Value) -> Vec<PlayerRef> {
             a.iter()
                 .filter_map(|r| {
                     let p = &r["player"];
-                    let full: Vec<String> = [text(&p["firstname"]), text(&p["lastname"])].into_iter().flatten().collect();
+                    let full: Vec<String> =
+                        [text(&p["firstname"]), text(&p["lastname"])].into_iter().flatten().collect();
                     Some(PlayerRef {
                         id: num(&p["id"])?,
                         name: text(&p["name"])?,
@@ -213,7 +243,9 @@ pub fn parse_sidelined(v: &Value) -> Vec<Absence> {
         .as_array()
         .map(|a| {
             a.iter()
-                .filter_map(|r| Some(Absence { kind: text(&r["type"])?, start: text(&r["start"]), end: text(&r["end"]) }))
+                .filter_map(|r| {
+                    Some(Absence { kind: text(&r["type"])?, start: text(&r["start"]), end: text(&r["end"]) })
+                })
                 .collect()
         })
         .unwrap_or_default();

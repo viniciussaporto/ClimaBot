@@ -104,9 +104,7 @@ impl Upstream {
         }
         let started = std::time::Instant::now();
         let response = req.send().await;
-        metrics::FOOTBALL_API_LATENCY
-            .with_label_values(&[provider.id()])
-            .observe(started.elapsed().as_secs_f64());
+        metrics::FOOTBALL_API_LATENCY.with_label_values(&[provider.id()]).observe(started.elapsed().as_secs_f64());
 
         let (outcome, result) = match response {
             Err(e) => (Outcome::Unavailable, Err(FetchError::Failed(format!("request failed: {e}")))),
@@ -158,9 +156,11 @@ impl Upstream {
         };
         metrics::FOOTBALL_QUOTA_USED.with_label_values(&[provider.id()]).set(used as f64);
         metrics::FOOTBALL_QUOTA_LIMIT.with_label_values(&[provider.id()]).set(daily as f64);
-        metrics::FOOTBALL_PROVIDER_UP
-            .with_label_values(&[provider.id()])
-            .set(if health == "healthy" { 1.0 } else { 0.0 });
+        metrics::FOOTBALL_PROVIDER_UP.with_label_values(&[provider.id()]).set(if health == "healthy" {
+            1.0
+        } else {
+            0.0
+        });
         if health_changed && let Some(store) = &self.store {
             store.save_health(provider, health, until, last_success, last_error);
         }
@@ -235,7 +235,9 @@ pub fn classify(
     // API-Football reports most problems as HTTP 200 with an `errors` object.
     if provider == Provider::ApiFootball {
         let errors: Vec<(String, String)> = match &json["errors"] {
-            Value::Object(m) => m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string())).collect(),
+            Value::Object(m) => {
+                m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string())).collect()
+            }
             Value::Array(a) => a.iter().map(|v| (String::new(), v.to_string())).collect(),
             _ => vec![],
         };
@@ -314,23 +316,37 @@ mod tests {
 
     #[test]
     fn classify_errors() {
-        let ok = |p, s: u16, body: &str| classify(p, StatusCode::from_u16(s).unwrap(), &HeaderMap::new(), body.as_bytes()).0;
+        let ok =
+            |p, s: u16, body: &str| classify(p, StatusCode::from_u16(s).unwrap(), &HeaderMap::new(), body.as_bytes()).0;
         assert_eq!(ok(Provider::SportScore, 200, r#"{"matches":[]}"#), Outcome::Success);
         assert_eq!(ok(Provider::SportScore, 200, r#"{"error":"Match not found"}"#), Outcome::NotFound);
         assert_eq!(ok(Provider::SportScore, 200, "<html>"), Outcome::Malformed);
         assert_eq!(ok(Provider::SportScore, 502, "bad gateway"), Outcome::Unavailable);
-        assert_eq!(ok(Provider::FootballData, 403, r#"{"message":"The resource you are looking for is restricted"}"#), Outcome::PlanRestricted);
-        assert_eq!(ok(Provider::FootballData, 400, r#"{"message":"Your API token is invalid."}"#), Outcome::Unauthorized);
+        assert_eq!(
+            ok(Provider::FootballData, 403, r#"{"message":"The resource you are looking for is restricted"}"#),
+            Outcome::PlanRestricted
+        );
+        assert_eq!(
+            ok(Provider::FootballData, 400, r#"{"message":"Your API token is invalid."}"#),
+            Outcome::Unauthorized
+        );
         assert_eq!(ok(Provider::ApiFootball, 403, r#"{"message":"missing key"}"#), Outcome::Unauthorized);
         assert_eq!(
             ok(Provider::ApiFootball, 200, r#"{"errors":{"plan":"Free plans do not have access to this season"}}"#),
             Outcome::PlanRestricted
         );
         assert_eq!(
-            ok(Provider::ApiFootball, 200, r#"{"errors":{"requests":"You have reached the request limit for the day"}}"#),
+            ok(
+                Provider::ApiFootball,
+                200,
+                r#"{"errors":{"requests":"You have reached the request limit for the day"}}"#
+            ),
             Outcome::DailyLimit
         );
-        assert_eq!(ok(Provider::ApiFootball, 200, r#"{"errors":{"token":"Missing application key"}}"#), Outcome::Unauthorized);
+        assert_eq!(
+            ok(Provider::ApiFootball, 200, r#"{"errors":{"token":"Missing application key"}}"#),
+            Outcome::Unauthorized
+        );
         assert_eq!(ok(Provider::ApiFootball, 200, r#"{"errors":[],"response":[]}"#), Outcome::Success);
         assert_eq!(ok(Provider::ApiFootball, 429, "Too many requests per day"), Outcome::DailyLimit);
     }

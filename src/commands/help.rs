@@ -13,8 +13,8 @@ use crate::{
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serenity::all::{
-    CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateEmbed,
-    CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage, ResolvedValue,
+    CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter,
+    CreateInteractionResponse, CreateInteractionResponseMessage, ResolvedValue,
 };
 
 const COLOR: u32 = 0x0099ff;
@@ -421,11 +421,8 @@ fn embed(topic: &Topic) -> CreateEmbed {
 }
 
 fn topic_of(cmd: &CommandInteraction) -> &'static Topic {
-    let chosen = cmd
-        .data
-        .options()
-        .into_iter()
-        .find_map(|o| matches!(o.value, ResolvedValue::SubCommand(_)).then_some(o.name));
+    let chosen =
+        cmd.data.options().into_iter().find_map(|o| matches!(o.value, ResolvedValue::SubCommand(_)).then_some(o.name));
     chosen.and_then(|n| TOPICS.iter().find(|t| t.name == n)).unwrap_or(&TOPICS[0])
 }
 

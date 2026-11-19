@@ -60,9 +60,7 @@ impl Solver {
             name,
             endpoint,
             proxy,
-            http: reqwest::Client::builder()
-                .timeout(MAX_TIMEOUT + Duration::from_secs(60))
-                .build()?,
+            http: reqwest::Client::builder().timeout(MAX_TIMEOUT + Duration::from_secs(60)).build()?,
             permits: Semaphore::new(concurrency.max(1)),
         })
     }
@@ -108,10 +106,8 @@ impl Solver {
                 .await
                 .map_err(|e| ScrapeError::Network(format!("{name} unavailable: {}", e.without_url())))?;
             let status = http_response.status();
-            let text = http_response
-                .text()
-                .await
-                .map_err(|e| ScrapeError::Network(format!("{name}: {}", e.without_url())))?;
+            let text =
+                http_response.text().await.map_err(|e| ScrapeError::Network(format!("{name}: {}", e.without_url())))?;
             // Solvers report errors (e.g. challenge timeouts) with HTTP 500 and
             // a JSON body, so parse the body regardless of the status code.
             match serde_json::from_str(&text) {
@@ -134,9 +130,7 @@ impl Solver {
         if response.status != "ok" {
             return Err(ScrapeError::Network(format!("{name}: {}", response.message)));
         }
-        let solution = response
-            .solution
-            .ok_or_else(|| ScrapeError::Network(format!("{name} returned no page")))?;
+        let solution = response.solution.ok_or_else(|| ScrapeError::Network(format!("{name} returned no page")))?;
         if !(200..300).contains(&solution.status) {
             return Err(ScrapeError::Status(
                 reqwest::StatusCode::from_u16(solution.status).unwrap_or(reqwest::StatusCode::BAD_GATEWAY),
@@ -149,10 +143,7 @@ impl Solver {
 
 fn from_env(name: &'static str, url_var: &str, concurrency_var: &str) -> Option<Solver> {
     let base = std::env::var(url_var).ok().filter(|s| !s.trim().is_empty())?;
-    let concurrency = std::env::var(concurrency_var)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(1);
+    let concurrency = std::env::var(concurrency_var).ok().and_then(|v| v.parse().ok()).unwrap_or(1);
     match Solver::new(name, base.trim(), super::scrape::proxy(), concurrency) {
         Ok(s) => Some(s),
         Err(e) => {
@@ -188,9 +179,10 @@ mod tests {
         let s = r.solution.unwrap();
         assert_eq!((s.status, s.url.as_str(), s.response.as_str()), (200, "https://x.com/p", "<html></html>"));
 
-        let r: Response =
-            serde_json::from_str(r#"{"status":"error","message":"Error: Error solving the challenge. Timeout after 60.0 seconds."}"#)
-                .unwrap();
+        let r: Response = serde_json::from_str(
+            r#"{"status":"error","message":"Error: Error solving the challenge. Timeout after 60.0 seconds."}"#,
+        )
+        .unwrap();
         assert_eq!(r.status, "error");
         assert!(r.solution.is_none());
     }

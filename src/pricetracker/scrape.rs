@@ -15,11 +15,11 @@
 //! standard web ports. Otherwise the bot could be used to probe services on
 //! its private network (Prometheus, Grafana, …).
 
+use super::{currency, mercadolivre, sites, solver};
+use crate::metrics;
 use reqwest::{StatusCode, header, redirect};
 use scraper::{Html, Selector};
 use serde_json::Value;
-use super::{currency, mercadolivre, sites, solver};
-use crate::metrics;
 use std::{
     collections::HashMap,
     fmt,
@@ -152,9 +152,8 @@ pub fn report_preferred_changes(tx: UnboundedSender<(String, String)>) {
 }
 
 fn methods_for(host: &str) -> Vec<Method> {
-    let mut methods: Vec<Method> = std::iter::once(Method::Direct)
-        .chain((0..solver::SOLVERS.len()).map(Method::Solver))
-        .collect();
+    let mut methods: Vec<Method> =
+        std::iter::once(Method::Direct).chain((0..solver::SOLVERS.len()).map(Method::Solver)).collect();
     let preferred = PREFERRED.lock().unwrap_or_else(|p| p.into_inner()).get(host).copied();
     if let Some(p) = preferred
         && let Some(pos) = methods.iter().position(|m| *m == p)
@@ -323,8 +322,8 @@ async fn fetch_html(mut url: Url) -> Result<(String, Url), ScrapeError> {
             .cookie_provider(cookies.clone())
             .redirect(redirect::Policy::none());
         if let Some(proxy) = proxy() {
-            let proxy = reqwest::Proxy::all(&proxy)
-                .map_err(|e| ScrapeError::Network(format!("bad SCRAPER_PROXY: {e}")))?;
+            let proxy =
+                reqwest::Proxy::all(&proxy).map_err(|e| ScrapeError::Network(format!("bad SCRAPER_PROXY: {e}")))?;
             builder = builder.proxy(proxy);
         } else if let Some(Host::Domain(domain)) = url.host() {
             // Pin the connection to the addresses we just vetted so a second
@@ -348,9 +347,7 @@ async fn fetch_html(mut url: Url) -> Result<(String, Url), ScrapeError> {
                 .get(header::LOCATION)
                 .and_then(|v| v.to_str().ok())
                 .ok_or(ScrapeError::Status(status))?;
-            url = url
-                .join(location)
-                .map_err(|e| ScrapeError::InvalidUrl(format!("bad redirect: {e}")))?;
+            url = url.join(location).map_err(|e| ScrapeError::InvalidUrl(format!("bad redirect: {e}")))?;
             continue;
         }
         if !status.is_success() {
@@ -358,11 +355,7 @@ async fn fetch_html(mut url: Url) -> Result<(String, Url), ScrapeError> {
         }
 
         let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| ScrapeError::Network(e.without_url().to_string()))?
-        {
+        while let Some(chunk) = response.chunk().await.map_err(|e| ScrapeError::Network(e.without_url().to_string()))? {
             body.extend_from_slice(&chunk);
             if body.len() > MAX_BODY_BYTES {
                 return Err(ScrapeError::Network("page is too large".into()));
@@ -439,9 +432,7 @@ pub fn extract_product(html: &str, host: Option<&str>) -> Option<Product> {
         Some(p) => (p, None),
         None => markup_price(&doc, structured_currency.as_deref(), host)?,
     };
-    let currency = structured_currency
-        .or(text_currency)
-        .or_else(|| currency::from_host(host));
+    let currency = structured_currency.or(text_currency).or_else(|| currency::from_host(host));
 
     let name = ld
         .map(|p| p.name)
@@ -465,11 +456,7 @@ fn clean_text(s: &str) -> String {
 
 fn attr_of(doc: &Html, selector: &str, attr: &str) -> Option<String> {
     let sel = Selector::parse(selector).ok()?;
-    doc.select(&sel)
-        .filter_map(|el| el.value().attr(attr))
-        .map(str::trim)
-        .find(|v| !v.is_empty())
-        .map(str::to_string)
+    doc.select(&sel).filter_map(|el| el.value().attr(attr)).map(str::trim).find(|v| !v.is_empty()).map(str::to_string)
 }
 
 fn json_ld_product(doc: &Html) -> Option<Product> {
@@ -507,9 +494,7 @@ fn ld_offer_price(offers: &Value) -> Option<(f64, Option<String>)> {
     match offers {
         Value::Array(items) => items.iter().find_map(ld_offer_price),
         Value::Object(offer) => {
-            let spec = offer
-                .get("priceSpecification")
-                .map(|s| s.as_array().and_then(|a| a.first()).unwrap_or(s));
+            let spec = offer.get("priceSpecification").map(|s| s.as_array().and_then(|a| a.first()).unwrap_or(s));
             let currency = offer
                 .get("priceCurrency")
                 .or_else(|| spec?.get("priceCurrency"))
@@ -532,11 +517,7 @@ fn ld_offer_price(offers: &Value) -> Option<(f64, Option<String>)> {
 fn structured_price(v: &Value, minor_digits: u8) -> Option<f64> {
     let price = match v {
         Value::Number(n) => n.as_f64()?,
-        Value::String(s) => s
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .or_else(|| parse_price(s, minor_digits))?,
+        Value::String(s) => s.trim().parse::<f64>().ok().or_else(|| parse_price(s, minor_digits))?,
         _ => return None,
     };
     valid_price(price)
@@ -544,35 +525,21 @@ fn structured_price(v: &Value, minor_digits: u8) -> Option<f64> {
 
 fn meta_price(doc: &Html) -> Option<f64> {
     let digits = currency::minor_digits(meta_currency(doc).as_deref());
-    [
-        "meta[property='product:price:amount']",
-        "meta[property='og:price:amount']",
-        "meta[itemprop='price']",
-    ]
-    .iter()
-    .find_map(|sel| attr_of(doc, sel, "content"))
-    .and_then(|s| structured_price(&Value::String(s), digits))
+    ["meta[property='product:price:amount']", "meta[property='og:price:amount']", "meta[itemprop='price']"]
+        .iter()
+        .find_map(|sel| attr_of(doc, sel, "content"))
+        .and_then(|s| structured_price(&Value::String(s), digits))
 }
 
 fn meta_currency(doc: &Html) -> Option<String> {
-    [
-        "meta[property='product:price:currency']",
-        "meta[property='og:price:currency']",
-        "[itemprop='priceCurrency']",
-    ]
-    .iter()
-    .find_map(|sel| attr_of(doc, sel, "content"))
+    ["meta[property='product:price:currency']", "meta[property='og:price:currency']", "[itemprop='priceCurrency']"]
+        .iter()
+        .find_map(|sel| attr_of(doc, sel, "content"))
 }
 
 /// Price from page markup, with the currency shown next to it if any.
 fn markup_price(doc: &Html, known_currency: Option<&str>, host: Option<&str>) -> Option<(f64, Option<String>)> {
-    const SELECTORS: [&str; 5] = [
-        "[itemprop='price']",
-        "[data-price]",
-        ".price",
-        "#price",
-        "[class*='price']",
-    ];
+    const SELECTORS: [&str; 5] = ["[itemprop='price']", "[data-price]", ".price", "#price", "[class*='price']"];
     for sel_str in SELECTORS {
         let Ok(sel) = Selector::parse(sel_str) else {
             continue;
@@ -648,14 +615,9 @@ pub fn parse_price(raw: &str, minor_digits: u8) -> Option<f64> {
 /// is the decimal point.
 fn single_separator(token: &str, sep: char, minor_digits: u8) -> String {
     let parts: Vec<&str> = token.split(sep).collect();
-    let is_thousands = parts.len() > 2
-        || minor_digits == 0
-        || (minor_digits != 3 && parts.last().is_some_and(|p| p.len() == 3));
-    if is_thousands {
-        parts.concat()
-    } else {
-        token.replace(sep, ".")
-    }
+    let is_thousands =
+        parts.len() > 2 || minor_digits == 0 || (minor_digits != 3 && parts.last().is_some_and(|p| p.len() == 3));
+    if is_thousands { parts.concat() } else { token.replace(sep, ".") }
 }
 
 #[cfg(test)]
@@ -785,8 +747,18 @@ mod tests {
     #[test]
     fn blocks_private_addresses() {
         for ip in [
-            "127.0.0.1", "10.1.2.3", "172.19.0.3", "192.168.1.1", "169.254.169.254", "100.124.239.27",
-            "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.19.0.3",
+            "192.168.1.1",
+            "169.254.169.254",
+            "100.124.239.27",
+            "0.0.0.0",
+            "::1",
+            "fd00::1",
+            "fe80::1",
+            "::ffff:127.0.0.1",
+            "::ffff:10.0.0.1",
         ] {
             assert!(!is_public_ip(ip.parse().unwrap()), "{ip} should be blocked");
         }

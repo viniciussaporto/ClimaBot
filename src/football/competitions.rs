@@ -45,27 +45,135 @@ macro_rules! comp {
 
 pub static COMPETITIONS: &[Competition] = &[
     // Brazil
-    comp!("brazilian-serie-a", "Brasileirão Série A", "Brazilian Serie A", "🇧🇷 Brazil", "Brazil", League, Some("BSA"), true),
+    comp!(
+        "brazilian-serie-a",
+        "Brasileirão Série A",
+        "Brazilian Serie A",
+        "🇧🇷 Brazil",
+        "Brazil",
+        League,
+        Some("BSA"),
+        true
+    ),
     comp!("brazilian-serie-b", "Brasileirão Série B", "Brazilian Serie B", "🇧🇷 Brazil", "Brazil", League, None, true),
     comp!("brazilian-serie-c", "Brasileirão Série C", "Brazilian Serie C", "🇧🇷 Brazil", "Brazil", Groups, None, false),
     comp!("brazilian-cup", "Copa do Brasil", "Brazilian Cup", "🇧🇷 Brazil", "Brazil", Cup, None, true),
     comp!("supercopa-do-brasil", "Supercopa do Brasil", "Supercopa do Brasil", "🇧🇷 Brazil", "Brazil", Cup, None, true),
-    comp!("brazilian-copa-do-nordeste", "Copa do Nordeste", "Brazilian Copa do Nordeste", "🇧🇷 Brazil", "Brazil", Groups, None, false),
+    comp!(
+        "brazilian-copa-do-nordeste",
+        "Copa do Nordeste",
+        "Brazilian Copa do Nordeste",
+        "🇧🇷 Brazil",
+        "Brazil",
+        Groups,
+        None,
+        false
+    ),
     comp!("brazilian-copa-verde", "Copa Verde", "Brazilian Copa Verde", "🇧🇷 Brazil", "Brazil", Groups, None, false),
-    comp!("brazilian-campeonato-paulista-a1", "Paulistão", "Brazilian Campeonato Paulista A1", "🇧🇷 Brazil", "Brazil", League, None, true),
-    comp!("brazilian-campeonato-carioca-a", "Campeonato Carioca", "Brazilian Campeonato Carioca A", "🇧🇷 Brazil", "Brazil", Groups, None, true),
-    comp!("brazilian-campeonato-mineiro-division-1", "Campeonato Mineiro", "Brazilian Campeonato Mineiro Division 1", "🇧🇷 Brazil", "Brazil", Groups, None, false),
-    comp!("brazilian-campeonato-gaucho", "Campeonato Gaúcho", "Brazilian Campeonato Gaucho", "🇧🇷 Brazil", "Brazil", Groups, None, false),
+    comp!(
+        "brazilian-campeonato-paulista-a1",
+        "Paulistão",
+        "Brazilian Campeonato Paulista A1",
+        "🇧🇷 Brazil",
+        "Brazil",
+        League,
+        None,
+        true
+    ),
+    comp!(
+        "brazilian-campeonato-carioca-a",
+        "Campeonato Carioca",
+        "Brazilian Campeonato Carioca A",
+        "🇧🇷 Brazil",
+        "Brazil",
+        Groups,
+        None,
+        true
+    ),
+    comp!(
+        "brazilian-campeonato-mineiro-division-1",
+        "Campeonato Mineiro",
+        "Brazilian Campeonato Mineiro Division 1",
+        "🇧🇷 Brazil",
+        "Brazil",
+        Groups,
+        None,
+        false
+    ),
+    comp!(
+        "brazilian-campeonato-gaucho",
+        "Campeonato Gaúcho",
+        "Brazilian Campeonato Gaucho",
+        "🇧🇷 Brazil",
+        "Brazil",
+        Groups,
+        None,
+        false
+    ),
     // South America
-    comp!("conmebol-copa-libertadores", "Copa Libertadores", "CONMEBOL Copa Libertadores", "🌎 South America", "", Groups, Some("CLI"), true),
-    comp!("conmebol-copa-sudamericana", "Copa Sudamericana", "CONMEBOL Copa Sudamericana", "🌎 South America", "", Groups, None, true),
+    comp!(
+        "conmebol-copa-libertadores",
+        "Copa Libertadores",
+        "CONMEBOL Copa Libertadores",
+        "🌎 South America",
+        "",
+        Groups,
+        Some("CLI"),
+        true
+    ),
+    comp!(
+        "conmebol-copa-sudamericana",
+        "Copa Sudamericana",
+        "CONMEBOL Copa Sudamericana",
+        "🌎 South America",
+        "",
+        Groups,
+        None,
+        true
+    ),
     // Europe
-    comp!("uefa-champions-league", "UEFA Champions League", "UEFA Champions League", "🇪🇺 Europe", "", League, Some("CL"), false),
+    comp!(
+        "uefa-champions-league",
+        "UEFA Champions League",
+        "UEFA Champions League",
+        "🇪🇺 Europe",
+        "",
+        League,
+        Some("CL"),
+        false
+    ),
     comp!("uefa-europa-league", "UEFA Europa League", "UEFA Europa League", "🇪🇺 Europe", "", League, None, false),
-    comp!("uefa-europa-conference-league", "UEFA Conference League", "UEFA Europa Conference League", "🇪🇺 Europe", "", League, None, false),
-    comp!("english-premier-league", "Premier League", "English Premier League", "🏴 England", "England", League, Some("PL"), false),
+    comp!(
+        "uefa-europa-conference-league",
+        "UEFA Conference League",
+        "UEFA Europa Conference League",
+        "🇪🇺 Europe",
+        "",
+        League,
+        None,
+        false
+    ),
+    comp!(
+        "english-premier-league",
+        "Premier League",
+        "English Premier League",
+        "🏴 England",
+        "England",
+        League,
+        Some("PL"),
+        false
+    ),
     comp!("fa-cup", "FA Cup", "FA Cup", "🏴 England", "England", Cup, None, false),
-    comp!("english-football-league-cup", "EFL Cup", "English Football League Cup", "🏴 England", "England", Cup, None, false),
+    comp!(
+        "english-football-league-cup",
+        "EFL Cup",
+        "English Football League Cup",
+        "🏴 England",
+        "England",
+        Cup,
+        None,
+        false
+    ),
     comp!("spanish-la-liga", "La Liga", "Spanish La Liga", "🇪🇸 Spain", "Spain", League, Some("PD"), false),
     comp!("copa-del-rey", "Copa del Rey", "Copa del Rey", "🇪🇸 Spain", "Spain", Cup, None, false),
     comp!("bundesliga", "Bundesliga", "Bundesliga", "🇩🇪 Germany", "Germany", League, Some("BL1"), false),
@@ -74,9 +182,27 @@ pub static COMPETITIONS: &[Competition] = &[
     comp!("coppa-italia", "Coppa Italia", "Coppa Italia", "🇮🇹 Italy", "Italy", Cup, None, false),
     comp!("french-ligue-1", "Ligue 1", "French Ligue 1", "🇫🇷 France", "France", League, Some("FL1"), false),
     comp!("coupe-de-france", "Coupe de France", "Coupe de France", "🇫🇷 France", "France", Cup, None, false),
-    comp!("portuguese-primera-liga", "Primeira Liga", "Portuguese Primera Liga", "🇵🇹 Portugal", "Portugal", League, Some("PPL"), false),
+    comp!(
+        "portuguese-primera-liga",
+        "Primeira Liga",
+        "Portuguese Primera Liga",
+        "🇵🇹 Portugal",
+        "Portugal",
+        League,
+        Some("PPL"),
+        false
+    ),
     comp!("portuguese-cup", "Taça de Portugal", "Portuguese Cup", "🇵🇹 Portugal", "Portugal", Cup, None, false),
-    comp!("portuguese-league-cup", "Taça da Liga", "Portuguese League Cup", "🇵🇹 Portugal", "Portugal", Cup, None, false),
+    comp!(
+        "portuguese-league-cup",
+        "Taça da Liga",
+        "Portuguese League Cup",
+        "🇵🇹 Portugal",
+        "Portugal",
+        Cup,
+        None,
+        false
+    ),
 ];
 
 pub fn by_key(key: &str) -> Option<&'static Competition> {

@@ -44,10 +44,7 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
     if let (Some(http), Some(me)) = (&http, me) {
         println!("       logged in as {} ({})", me.tag(), me.id);
 
-        if let Some(app) = r.check(
-            "Application info",
-            http.get_current_application_info().await.map_err(Into::into),
-        ) {
+        if let Some(app) = r.check("Application info", http.get_current_application_info().await.map_err(Into::into)) {
             http.set_application_id(app.id);
             if let Some(cmds) = r.check("Global commands", http.get_global_commands().await.map_err(Into::into)) {
                 let names: Vec<_> = cmds.iter().map(|c| format!("/{}", c.name)).collect();
@@ -87,11 +84,7 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
     if let Some(loc) = r.check("OpenCage geocoding", weather::get_coordinates("Rio de Janeiro").await) {
         println!("       resolved: {} ({:.3}, {:.3})", loc.formatted, loc.lat, loc.lng);
         if let Some(c) = r.check("Open-Meteo current", weather::get_current(&loc).await) {
-            println!(
-                "       {:.1}°C, {}",
-                c.temperature_2m,
-                weather::weather_description(c.weathercode)
-            );
+            println!("       {:.1}°C, {}", c.temperature_2m, weather::weather_description(c.weathercode));
         }
         if let Some(data) = r.check("Precipitation map (OSM tiles + Open-Meteo grid)", radar::fetch(&loc, true).await)
             && let Some(gif) = r.check("Precipitation GIF", radar::render_gif(&data, 0))
@@ -117,21 +110,28 @@ pub async fn run(token: Option<&str>, mongo_uri: &str, database: &str, urls: &[S
         let fb = Football::from_env(None);
         let serie_a = competitions::by_key("brazilian-serie-a").expect("registry");
         let today = chrono::Utc::now().date_naive();
-        if let Some(l) = r.check("SportScore fixtures", fb.fixtures(serie_a, today, Purpose::User).await.map_err(Into::into)) {
+        if let Some(l) =
+            r.check("SportScore fixtures", fb.fixtures(serie_a, today, Purpose::User).await.map_err(Into::into))
+        {
             println!("       {} Brasileirão match(es) today, from {}", l.value.data.len(), l.value.provider);
         }
         if let Some(l) = r.check("SportScore live scoreboard", fb.live(Purpose::User).await.map_err(Into::into)) {
             println!("       {} live match(es) in followed competitions", l.value.data.len());
         }
-        if let Some(l) = r.check("SportScore standings", fb.standings(serie_a, Purpose::User).await.map_err(Into::into)) {
-            let leader = l.value.data.groups.first().and_then(|g| g.rows.first()).map(|r| r.team.clone()).unwrap_or_default();
+        if let Some(l) = r.check("SportScore standings", fb.standings(serie_a, Purpose::User).await.map_err(Into::into))
+        {
+            let leader =
+                l.value.data.groups.first().and_then(|g| g.rows.first()).map(|r| r.team.clone()).unwrap_or_default();
             println!("       leader: {leader}");
         }
         if fb.has_fallback() {
             let fd = crate::football::providers::football_data::FootballData::new(
                 std::env::var("FOOTBALL_DATA_TOKEN").unwrap_or_default().trim().to_string(),
             );
-            if let Some(s) = r.check("football-data.org standings (fallback)", fd.standings(&fb.up, "BSA", Purpose::User).await.map_err(Into::into)) {
+            if let Some(s) = r.check(
+                "football-data.org standings (fallback)",
+                fd.standings(&fb.up, "BSA", Purpose::User).await.map_err(Into::into),
+            ) {
                 println!("       {} table row(s)", s.groups.first().map(|g| g.rows.len()).unwrap_or(0));
             }
         } else {
@@ -199,8 +199,12 @@ async fn db_roundtrip(uri: &str, database: &str) -> Result<()> {
     let result = async {
         let user = 42;
         let url = "https://example.com/p".to_string();
-        anyhow::ensure!(store.add_product(user, url.clone(), "P".into(), 10.0, Some("EUR".into())).await? == AddOutcome::Added);
-        anyhow::ensure!(store.add_product(user, url.clone(), "P".into(), 10.0, None).await? == AddOutcome::AlreadyTracked);
+        anyhow::ensure!(
+            store.add_product(user, url.clone(), "P".into(), 10.0, Some("EUR".into())).await? == AddOutcome::Added
+        );
+        anyhow::ensure!(
+            store.add_product(user, url.clone(), "P".into(), 10.0, None).await? == AddOutcome::AlreadyTracked
+        );
         let products = store.list_products(user).await?;
         anyhow::ensure!(products.len() == 1, "expected 1 product");
         // Not due yet: nothing to claim.

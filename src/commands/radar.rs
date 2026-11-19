@@ -63,11 +63,7 @@ pub const ATTRIBUTION: &str = "© OpenStreetMap contributors";
 static HTTP: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
-        .user_agent(concat!(
-            "ClimaBot/",
-            env!("CARGO_PKG_VERSION"),
-            " (+https://github.com/viniciussaporto/ClimaBot)"
-        ))
+        .user_agent(concat!("ClimaBot/", env!("CARGO_PKG_VERSION"), " (+https://github.com/viniciussaporto/ClimaBot)"))
         .build()
         .expect("failed to build HTTP client")
 });
@@ -126,10 +122,7 @@ fn to_world(lat: f64, lng: f64) -> (f64, f64) {
 
 fn from_world(x: f64, y: f64) -> (f64, f64) {
     let lng = x / WORLD * 360.0 - 180.0;
-    let lat = (std::f64::consts::PI * (1.0 - 2.0 * y / WORLD))
-        .sinh()
-        .atan()
-        .to_degrees();
+    let lat = (std::f64::consts::PI * (1.0 - 2.0 * y / WORLD)).sinh().atan().to_degrees();
     (lat, (lng + 180.0).rem_euclid(360.0) - 180.0)
 }
 
@@ -141,10 +134,7 @@ fn origin(loc: &Location) -> (f64, f64) {
 
 /// Map pixel of grid point (col, row): the grid spans the whole image.
 fn grid_pixel(col: usize, row: usize) -> (f64, f64) {
-    (
-        col as f64 * (WIDTH - 1) as f64 / (COLS - 1) as f64,
-        row as f64 * (HEIGHT - 1) as f64 / (ROWS - 1) as f64,
-    )
+    (col as f64 * (WIDTH - 1) as f64 / (COLS - 1) as f64, row as f64 * (HEIGHT - 1) as f64 / (ROWS - 1) as f64)
 }
 
 // ─────────────────────────────────────────────
@@ -155,10 +145,8 @@ fn grid_pixel(col: usize, row: usize) -> (f64, f64) {
 /// the precipitation grid: it's precipitating now, some is forecast, or the
 /// chance reaches `RADAR_RAIN_CHANCE` (default 20%).
 pub fn rain_expected(c: &CurrentWeather) -> bool {
-    let threshold = std::env::var("RADAR_RAIN_CHANCE")
-        .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(DEFAULT_RAIN_CHANCE);
+    let threshold =
+        std::env::var("RADAR_RAIN_CHANCE").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(DEFAULT_RAIN_CHANCE);
     rain_expected_with(c.weathercode, c.rain_outlook, threshold)
 }
 
@@ -184,9 +172,7 @@ pub async fn fetch(loc: &Location, precipitation_expected: bool) -> Result<Arc<R
     let (base, frames) = if precipitation_expected {
         tokio::try_join!(basemap(ox, oy), precipitation_grid(ox, oy))?
     } else {
-        metrics::WEATHER_API_COUNTER
-            .with_label_values(&["precip_grid", "skipped"])
-            .inc();
+        metrics::WEATHER_API_COUNTER.with_label_values(&["precip_grid", "skipped"]).inc();
         debug!(location = %loc.formatted, "No rain expected: precipitation grid skipped");
         (basemap(ox, oy).await?, dry_frames(Utc::now().naive_utc()))
     };
@@ -196,11 +182,7 @@ pub async fn fetch(loc: &Location, precipitation_expected: bool) -> Result<Arc<R
     if cache.len() >= CACHE_SIZE {
         cache.remove(0);
     }
-    cache.push(Cached {
-        key,
-        at: Instant::now(),
-        data: data.clone(),
-    });
+    cache.push(Cached { key, at: Instant::now(), data: data.clone() });
     Ok(data)
 }
 
@@ -241,8 +223,7 @@ async fn basemap(ox: f64, oy: f64) -> Result<Vec<Rgba>> {
             for x in 0..TILE as i64 {
                 let mx = left + x;
                 if (0..WIDTH as i64).contains(&mx) {
-                    out[my as usize * WIDTH + mx as usize] =
-                        darken(px[y as usize * TILE + x as usize]);
+                    out[my as usize * WIDTH + mx as usize] = darken(px[y as usize * TILE + x as usize]);
                 }
             }
         }
@@ -258,19 +239,9 @@ async fn tile(x: i64, y: i64) -> Result<Arc<Vec<u8>>> {
         return Ok(png.clone());
     }
     let url = format!("{OSM_TILES}/{ZOOM}/{x}/{y}.png");
-    let result = async {
-        HTTP.get(&url)
-            .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await
-    }
-    .await;
+    let result = async { HTTP.get(&url).send().await?.error_for_status()?.bytes().await }.await;
     let status = if result.is_ok() { "success" } else { "error" };
-    metrics::WEATHER_API_COUNTER
-        .with_label_values(&["map_tile", status])
-        .inc();
+    metrics::WEATHER_API_COUNTER.with_label_values(&["map_tile", status]).inc();
     crate::usage::record(crate::usage::Service::OsmTiles, 1, result.is_ok());
     let png = Arc::new(result.with_context(|| format!("map tile {url}"))?.to_vec());
 
@@ -290,12 +261,7 @@ async fn tile(x: i64, y: i64) -> Result<Arc<Vec<u8>>> {
 fn darken(p: Rgba) -> Rgba {
     let lum = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
     let v = 22.0 + (255.0 - lum) * 0.6;
-    [
-        (v * 0.92) as u8,
-        (v * 0.97) as u8,
-        (v * 1.08).min(255.0) as u8,
-        255,
-    ]
+    [(v * 0.92) as u8, (v * 0.97) as u8, (v * 1.08).min(255.0) as u8, 255]
 }
 
 /// Decode a PNG into RGBA pixels.
@@ -303,27 +269,13 @@ fn decode_png(bytes: &[u8]) -> Result<(usize, usize, Vec<Rgba>)> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info()?;
-    let mut buf = vec![
-        0;
-        reader
-            .output_buffer_size()
-            .ok_or_else(|| anyhow!("PNG too large"))?
-    ];
+    let mut buf = vec![0; reader.output_buffer_size().ok_or_else(|| anyhow!("PNG too large"))?];
     let info = reader.next_frame(&mut buf)?;
     let buf = &buf[..info.buffer_size()];
     let px: Vec<Rgba> = match info.color_type {
-        png::ColorType::Rgba => buf
-            .chunks_exact(4)
-            .map(|p| [p[0], p[1], p[2], p[3]])
-            .collect(),
-        png::ColorType::Rgb => buf
-            .chunks_exact(3)
-            .map(|p| [p[0], p[1], p[2], 255])
-            .collect(),
-        png::ColorType::GrayscaleAlpha => buf
-            .chunks_exact(2)
-            .map(|p| [p[0], p[0], p[0], p[1]])
-            .collect(),
+        png::ColorType::Rgba => buf.chunks_exact(4).map(|p| [p[0], p[1], p[2], p[3]]).collect(),
+        png::ColorType::Rgb => buf.chunks_exact(3).map(|p| [p[0], p[1], p[2], 255]).collect(),
+        png::ColorType::GrayscaleAlpha => buf.chunks_exact(2).map(|p| [p[0], p[0], p[0], p[1]]).collect(),
         png::ColorType::Grayscale => buf.iter().map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => bail!("PNG palette was not expanded"),
     };
@@ -385,9 +337,7 @@ async fn precipitation_grid(ox: f64, oy: f64) -> Result<Vec<Frame>> {
     }
     .await;
     let status = if result.is_ok() { "success" } else { "error" };
-    metrics::WEATHER_API_COUNTER
-        .with_label_values(&["precip_grid", status])
-        .inc();
+    metrics::WEATHER_API_COUNTER.with_label_values(&["precip_grid", status]).inc();
     // Open-Meteo counts every location of a request as one call.
     crate::usage::record(crate::usage::Service::OpenMeteo, (COLS * ROWS) as u64, result.is_ok());
     frames_from(result.context("Open-Meteo precipitation grid request failed")?)
@@ -395,17 +345,9 @@ async fn precipitation_grid(ox: f64, oy: f64) -> Result<Vec<Frame>> {
 
 /// Frames with no precipitation, for `now` (UTC) and the next hours.
 fn dry_frames(now: NaiveDateTime) -> Vec<Frame> {
-    let now = now
-        .with_second(0)
-        .and_then(|t| t.with_nanosecond(0))
-        .unwrap_or(now);
+    let now = now.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap_or(now);
     let hour = now.with_minute(0).unwrap_or(now);
-    let frame = |time, forecast| Frame {
-        time,
-        forecast,
-        rate: vec![0.0; COLS * ROWS],
-        code: vec![0; COLS * ROWS],
-    };
+    let frame = |time, forecast| Frame { time, forecast, rate: vec![0.0; COLS * ROWS], code: vec![0; COLS * ROWS] };
     let mut frames = vec![frame(now, false)];
     frames.extend((1..=FORECAST_FRAMES).map(|k| frame(hour + ChronoDuration::hours(k), true)));
     frames
@@ -423,15 +365,9 @@ fn frames_from(points: Vec<GridPoint>) -> Result<Vec<Frame>> {
         forecast: false,
         rate: points
             .iter()
-            .map(|p| {
-                (p.current.precipitation.unwrap_or(0.0) * 3600.0 / p.current.interval.max(60.0))
-                    as f32
-            })
+            .map(|p| (p.current.precipitation.unwrap_or(0.0) * 3600.0 / p.current.interval.max(60.0)) as f32)
             .collect(),
-        code: points
-            .iter()
-            .map(|p| p.current.weather_code.unwrap_or(0))
-            .collect(),
+        code: points.iter().map(|p| p.current.weather_code.unwrap_or(0)).collect(),
     }];
 
     // Hourly values are totals for the hour *ending* at their timestamp, so
@@ -439,9 +375,7 @@ fn frames_from(points: Vec<GridPoint>) -> Result<Vec<Frame>> {
     let hour = now.with_minute(0).unwrap_or(now);
     for k in 1..=FORECAST_FRAMES {
         let start = hour + ChronoDuration::hours(k);
-        let stamp = (start + ChronoDuration::hours(1))
-            .format("%Y-%m-%dT%H:%M")
-            .to_string();
+        let stamp = (start + ChronoDuration::hours(1)).format("%Y-%m-%dT%H:%M").to_string();
         let Some(i) = points[0].hourly.time.iter().position(|t| *t == stamp) else {
             bail!("no hourly forecast for {stamp}");
         };
@@ -450,19 +384,9 @@ fn frames_from(points: Vec<GridPoint>) -> Result<Vec<Frame>> {
             forecast: true,
             rate: points
                 .iter()
-                .map(|p| {
-                    p.hourly
-                        .precipitation
-                        .get(i)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(0.0) as f32
-                })
+                .map(|p| p.hourly.precipitation.get(i).copied().flatten().unwrap_or(0.0) as f32)
                 .collect(),
-            code: points
-                .iter()
-                .map(|p| p.hourly.weather_code.get(i).copied().flatten().unwrap_or(0))
-                .collect(),
+            code: points.iter().map(|p| p.hourly.weather_code.get(i).copied().flatten().unwrap_or(0)).collect(),
         });
     }
     Ok(frames)
@@ -511,11 +435,7 @@ fn precip_colour(rate: f32, snow: f32) -> Option<([u8; 3], f32)> {
             let (lo, hi) = (RAIN_BANDS[band], next);
             let t = (rate / lo.0).ln() / (hi.0 / lo.0).ln();
             let mix = |a: u8, b: u8| a as f32 + (b as f32 - a as f32) * t;
-            let c = [
-                mix(lo.1[0], hi.1[0]),
-                mix(lo.1[1], hi.1[1]),
-                mix(lo.1[2], hi.1[2]),
-            ];
+            let c = [mix(lo.1[0], hi.1[0]), mix(lo.1[1], hi.1[1]), mix(lo.1[2], hi.1[2])];
             (c, lo.2 + (hi.2 - lo.2) * t, band as f32 + t)
         }
         _ => {
@@ -526,11 +446,7 @@ fn precip_colour(rate: f32, snow: f32) -> Option<([u8; 3], f32)> {
     let x = ((rate - DRY) / (RAIN_BANDS[0].0 * 2.0 - DRY)).clamp(0.0, 1.0);
     let fade = x * x * (3.0 - 2.0 * x);
     let mix = |a: f32, b: u8| (a + (b as f32 - a) * snow).round() as u8;
-    let colour = [
-        mix(colour[0], SNOW[0]),
-        mix(colour[1], SNOW[1]),
-        mix(colour[2], SNOW[2]),
-    ];
+    let colour = [mix(colour[0], SNOW[0]), mix(colour[1], SNOW[1]), mix(colour[2], SNOW[2])];
     let alpha = alpha + (0.35 + pos * 0.08 - alpha) * snow;
     Some((colour, alpha * fade))
 }
@@ -542,19 +458,9 @@ fn cubic_weights(g: f32, n: usize) -> [(usize, f32); 4] {
     let i = (g.floor() as isize).min(n as isize - 2);
     let t = g - i as f32;
     let (t2, t3) = (t * t, t * t * t);
-    let w = [
-        -0.5 * t3 + t2 - 0.5 * t,
-        1.5 * t3 - 2.5 * t2 + 1.0,
-        -1.5 * t3 + 2.0 * t2 + 0.5 * t,
-        0.5 * t3 - 0.5 * t2,
-    ];
+    let w = [-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2];
     let idx = |k: isize| (i + k).clamp(0, n as isize - 1) as usize;
-    [
-        (idx(-1), w[0]),
-        (idx(0), w[1]),
-        (idx(1), w[2]),
-        (idx(2), w[3]),
-    ]
+    [(idx(-1), w[0]), (idx(0), w[1]), (idx(1), w[2]), (idx(2), w[3])]
 }
 
 fn blend(dst: &mut Rgba, src: [u8; 3], alpha: f32) {
@@ -572,8 +478,7 @@ pub fn render_gif(data: &RadarData, utc_offset_seconds: i32) -> Result<Vec<u8>> 
         let n = data.frames.len();
         for (i, frame) in data.frames.iter().enumerate() {
             let mut px = draw_frame(data, frame, i, n, utc_offset_seconds);
-            let mut gif_frame =
-                gif::Frame::from_rgba_speed(WIDTH as u16, HEIGHT as u16, px.as_flattened_mut(), 10);
+            let mut gif_frame = gif::Frame::from_rgba_speed(WIDTH as u16, HEIGHT as u16, px.as_flattened_mut(), 10);
             // In hundredths of a second; hold the last frame longer before looping.
             gif_frame.delay = if i + 1 == n { 250 } else { 120 };
             encoder.write_frame(&gif_frame)?;
@@ -582,22 +487,12 @@ pub fn render_gif(data: &RadarData, utc_offset_seconds: i32) -> Result<Vec<u8>> 
     Ok(out)
 }
 
-fn draw_frame(
-    data: &RadarData,
-    frame: &Frame,
-    index: usize,
-    count: usize,
-    utc_offset_seconds: i32,
-) -> Vec<Rgba> {
+fn draw_frame(data: &RadarData, frame: &Frame, index: usize, count: usize, utc_offset_seconds: i32) -> Vec<Rgba> {
     let mut px = data.base.clone();
 
     // Precipitation: bicubic interpolation between grid points, of the rate
     // and of the share of snow.
-    let snow: Vec<f32> = frame
-        .code
-        .iter()
-        .map(|&c| if is_snow(c) { 1.0 } else { 0.0 })
-        .collect();
+    let snow: Vec<f32> = frame.code.iter().map(|&c| if is_snow(c) { 1.0 } else { 0.0 }).collect();
     let sx = (COLS - 1) as f32 / (WIDTH - 1) as f32;
     let sy = (ROWS - 1) as f32 / (HEIGHT - 1) as f32;
     for y in 0..HEIGHT {
@@ -613,9 +508,7 @@ fn draw_frame(
                 }
                 sum.max(0.0)
             };
-            if let Some((colour, alpha)) =
-                precip_colour(sample(&frame.rate), sample(&snow).min(1.0))
-            {
+            if let Some((colour, alpha)) = precip_colour(sample(&frame.rate), sample(&snow).min(1.0)) {
                 blend(&mut px[y * WIDTH + x], colour, alpha);
             }
         }
@@ -678,14 +571,12 @@ fn draw_marker(px: &mut [Rgba], cx: i32, cy: i32) {
 /// Lightning bolt centred on (cx, cy), yellow with a dark outline.
 fn draw_bolt(px: &mut [Rgba], cx: i32, cy: i32) {
     const BOLT: [&str; 11] = [
-        "....###", "...###.", "..###..", ".###...", "#######", "...###.", "..###..", ".###...",
-        ".##....", "##.....", "#......",
+        "....###", "...###.", "..###..", ".###...", "#######", "...###.", "..###..", ".###...", ".##....", "##.....",
+        "#......",
     ];
     let (x0, y0) = (cx - 3, cy - 5);
     let on = |x: i32, y: i32| {
-        BOLT.get(y as usize)
-            .and_then(|r| r.as_bytes().get(x as usize))
-            .is_some_and(|&b| b == b'#' && x >= 0 && y >= 0)
+        BOLT.get(y as usize).and_then(|r| r.as_bytes().get(x as usize)).is_some_and(|&b| b == b'#' && x >= 0 && y >= 0)
     };
     for y in -1..=11 {
         for x in -1..=7 {
@@ -729,15 +620,7 @@ fn draw_label(px: &mut [Rgba], text: &str) {
     const SCALE: i32 = 2;
     const ADVANCE: i32 = 6 * SCALE;
     let n = text.chars().count() as i32;
-    fill_rect(
-        px,
-        8,
-        8,
-        n * ADVANCE - SCALE + 16,
-        7 * SCALE + 12,
-        [0x10, 0x10, 0x14],
-        0.75,
-    );
+    fill_rect(px, 8, 8, n * ADVANCE - SCALE + 16, 7 * SCALE + 12, [0x10, 0x10, 0x14], 0.75);
     draw_text(px, 16, 14, text, SCALE);
 }
 
@@ -780,13 +663,7 @@ fn draw_legend(px: &mut [Rgba]) {
     }
     let text_x = |s: &str| bar_x - 4 - (6 * s.len() as i32 - 1);
     draw_text(px, text_x(&top_label), bar_y, &top_label, 1);
-    draw_text(
-        px,
-        text_x(&bottom_label),
-        bar_y + BAR_H - 7,
-        &bottom_label,
-        1,
-    );
+    draw_text(px, text_x(&bottom_label), bar_y + BAR_H - 7, &bottom_label, 1);
 }
 
 /// One segment per frame along the bottom edge; the current one is bright.
@@ -795,11 +672,7 @@ fn draw_progress(px: &mut [Rgba], index: usize, count: usize) {
     let w = (WIDTH as i32 - 2 * margin - gap * (count as i32 - 1)) / count as i32;
     for i in 0..count as i32 {
         let x = margin + i * (w + gap);
-        let (colour, alpha) = if i as usize == index {
-            ([255, 255, 255], 0.95)
-        } else {
-            ([0x90, 0x90, 0x98], 0.5)
-        };
+        let (colour, alpha) = if i as usize == index { ([255, 255, 255], 0.95) } else { ([0x90, 0x90, 0x98], 0.5) };
         fill_rect(px, x, HEIGHT as i32 - margin - h, w, h, colour, alpha);
     }
 }
@@ -813,10 +686,7 @@ mod tests {
         for (lat, lng) in [(41.15, -8.61), (-22.9, -43.2), (60.0, 179.9), (0.0, 0.0)] {
             let (x, y) = to_world(lat, lng);
             let (la, ln) = from_world(x, y);
-            assert!(
-                (la - lat).abs() < 1e-9 && (ln - lng).abs() < 1e-9,
-                "{lat},{lng} -> {la},{ln}"
-            );
+            assert!((la - lat).abs() < 1e-9 && (ln - lng).abs() < 1e-9, "{lat},{lng} -> {la},{ln}");
         }
         // Zoom 8: Greenwich/equator is the centre of a 65536 px world.
         assert_eq!(to_world(0.0, 0.0), (32768.0, 32768.0));
@@ -836,10 +706,7 @@ mod tests {
     #[test]
     fn colours() {
         assert!(precip_colour(0.02, 0.0).is_none());
-        assert!(
-            precip_colour(0.05, 0.0).unwrap().1 < RAIN_BANDS[0].2,
-            "fades in"
-        );
+        assert!(precip_colour(0.05, 0.0).unwrap().1 < RAIN_BANDS[0].2, "fades in");
         assert_eq!(precip_colour(0.5, 0.0).unwrap().0, RAIN_BANDS[1].1);
         // Halfway (in log space) between two stops: a blend of both colours.
         let mid = precip_colour((2.0f32 * 4.0).sqrt(), 0.0).unwrap().0;
@@ -870,9 +737,7 @@ mod tests {
     }
 
     fn sample() -> Vec<Frame> {
-        let points = (0..COLS * ROWS)
-            .map(|_| point("2026-11-18T20:15", 2.0, 80))
-            .collect();
+        let points = (0..COLS * ROWS).map(|_| point("2026-11-18T20:15", 2.0, 80)).collect();
         frames_from(points).unwrap()
     }
 
@@ -882,10 +747,7 @@ mod tests {
         assert_eq!(frames.len(), 4);
         assert_eq!(frames[0].rate[0], 2.0, "15-minute total scaled to mm/h");
         // 21:00–22:00 is the entry stamped 22:00, and so on.
-        let starts: Vec<_> = frames[1..]
-            .iter()
-            .map(|f| f.time.format("%H:%M").to_string())
-            .collect();
+        let starts: Vec<_> = frames[1..].iter().map(|f| f.time.format("%H:%M").to_string()).collect();
         assert_eq!(starts, ["21:00", "22:00", "23:00"]);
         assert_eq!(frames[1].rate[0], 2.0);
         assert_eq!(frames[2].code[0], 95);
@@ -895,52 +757,23 @@ mod tests {
     #[test]
     fn gate() {
         use crate::commands::weather::RainOutlook;
-        let dry = RainOutlook {
-            max_chance: Some(10.0),
-            total_mm: 0.0,
-        };
+        let dry = RainOutlook { max_chance: Some(10.0), total_mm: 0.0 };
         assert!(!rain_expected_with(3, dry, 20.0));
-        assert!(rain_expected_with(
-            3,
-            RainOutlook {
-                max_chance: Some(20.0),
-                ..dry
-            },
-            20.0
-        ));
-        assert!(rain_expected_with(
-            3,
-            RainOutlook {
-                total_mm: 0.2,
-                ..dry
-            },
-            20.0
-        ));
+        assert!(rain_expected_with(3, RainOutlook { max_chance: Some(20.0), ..dry }, 20.0));
+        assert!(rain_expected_with(3, RainOutlook { total_mm: 0.2, ..dry }, 20.0));
         assert!(rain_expected_with(61, dry, 20.0), "raining now");
-        assert!(
-            !rain_expected_with(45, dry, 20.0),
-            "fog isn't precipitation"
-        );
-        assert!(
-            !rain_expected_with(0, RainOutlook::default(), 20.0),
-            "no data, no rain"
-        );
+        assert!(!rain_expected_with(45, dry, 20.0), "fog isn't precipitation");
+        assert!(!rain_expected_with(0, RainOutlook::default(), 20.0), "no data, no rain");
     }
 
     #[test]
     fn dry_frames_follow_the_clock() {
         let now = NaiveDateTime::parse_from_str("2026-11-18T20:47", "%Y-%m-%dT%H:%M").unwrap();
         let frames = dry_frames(now);
-        let times: Vec<_> = frames
-            .iter()
-            .map(|f| f.time.format("%H:%M").to_string())
-            .collect();
+        let times: Vec<_> = frames.iter().map(|f| f.time.format("%H:%M").to_string()).collect();
         assert_eq!(times, ["20:47", "21:00", "22:00", "23:00"]);
         assert!(frames.iter().all(|f| f.rate.iter().all(|&r| r == 0.0)));
-        let data = RadarData {
-            base: vec![[40, 40, 40, 255]; WIDTH * HEIGHT],
-            frames,
-        };
+        let data = RadarData { base: vec![[40, 40, 40, 255]; WIDTH * HEIGHT], frames };
         assert_eq!(&render_gif(&data, 0).unwrap()[..6], b"GIF89a");
     }
 
@@ -951,15 +784,10 @@ mod tests {
 
     #[test]
     fn renders_a_gif() {
-        let data = RadarData {
-            base: vec![[40, 40, 40, 255]; WIDTH * HEIGHT],
-            frames: sample(),
-        };
+        let data = RadarData { base: vec![[40, 40, 40, 255]; WIDTH * HEIGHT], frames: sample() };
         let gif = render_gif(&data, 3600).unwrap();
         assert_eq!(&gif[..6], b"GIF89a");
-        let mut decoder = gif::DecodeOptions::new()
-            .read_info(Cursor::new(&gif))
-            .unwrap();
+        let mut decoder = gif::DecodeOptions::new().read_info(Cursor::new(&gif)).unwrap();
         let mut n = 0;
         while decoder.read_next_frame().unwrap().is_some() {
             n += 1;
@@ -976,26 +804,15 @@ mod tests {
 async fn live_render() {
     let lat = std::env::var("RADAR_LAT").map_or(41.15, |v| v.parse().unwrap());
     let lng = std::env::var("RADAR_LNG").map_or(-8.61, |v| v.parse().unwrap());
-    let loc = Location {
-        lat,
-        lng,
-        formatted: "test".into(),
-    };
+    let loc = Location { lat, lng, formatted: "test".into() };
     let started = Instant::now();
     let current = super::weather::get_current(&loc).await.unwrap();
     let wet = rain_expected(&current);
-    println!(
-        "outlook {:?}, code {}, grid fetched: {wet}",
-        current.rain_outlook, current.weathercode
-    );
+    println!("outlook {:?}, code {}, grid fetched: {wet}", current.rain_outlook, current.weathercode);
     let data = fetch(&loc, wet).await.unwrap();
     let fetched = started.elapsed();
     let gif = render_gif(&data, 0).unwrap();
-    println!(
-        "fetch {fetched:?}, total {:?}, {} KiB",
-        started.elapsed(),
-        gif.len() / 1024
-    );
+    println!("fetch {fetched:?}, total {:?}, {} KiB", started.elapsed(), gif.len() / 1024);
     let out = std::env::var("RADAR_OUT").unwrap_or("radar.gif".into());
     // Also each frame as a PNG, for viewers that don't animate.
     for (i, frame) in data.frames.iter().enumerate() {
@@ -1003,10 +820,7 @@ async fn live_render() {
         let file = std::fs::File::create(format!("{out}.{i}.png")).unwrap();
         let mut enc = png::Encoder::new(std::io::BufWriter::new(file), WIDTH as u32, HEIGHT as u32);
         enc.set_color(png::ColorType::Rgba);
-        enc.write_header()
-            .unwrap()
-            .write_image_data(px.as_flattened())
-            .unwrap();
+        enc.write_header().unwrap().write_image_data(px.as_flattened()).unwrap();
     }
     std::fs::write(out, gif).unwrap();
 }

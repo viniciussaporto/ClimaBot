@@ -147,9 +147,7 @@ impl Store {
     pub async fn connect(uri: &str, database: &str) -> Result<Self> {
         let client = Client::with_uri_str(uri).await.context("parsing MONGODB_URI")?;
         let db = client.database(database);
-        db.run_command(doc! { "ping": 1 })
-            .await
-            .with_context(|| format!("cannot reach MongoDB at {}", redact(uri)))?;
+        db.run_command(doc! { "ping": 1 }).await.with_context(|| format!("cannot reach MongoDB at {}", redact(uri)))?;
 
         let store = Self {
             products: db.collection("products"),
@@ -258,19 +256,14 @@ impl Store {
             Err(e) if is_duplicate_key(&e) => return Ok(AddOutcome::AlreadyTracked),
             Err(e) => return Err(e.into()),
         }
-        self.history
-            .insert_one(PriceEntry { product_id: product.id, price, currency, observed_at: now })
-            .await?;
+        self.history.insert_one(PriceEntry { product_id: product.id, price, currency, observed_at: now }).await?;
         Ok(AddOutcome::Added)
     }
 
     /// Delete a product owned by `user_id`. Returns whether it existed.
     pub async fn remove_product(&self, user_id: u64, product_id: ObjectId) -> Result<bool> {
-        let deleted = self
-            .products
-            .delete_one(doc! { "_id": product_id, "user_id": user_id as i64 })
-            .await?
-            .deleted_count;
+        let deleted =
+            self.products.delete_one(doc! { "_id": product_id, "user_id": user_id as i64 }).await?.deleted_count;
         if deleted > 0 {
             self.history.delete_many(doc! { "product_id": product_id }).await?;
         }
@@ -366,10 +359,7 @@ impl Store {
     /// Remember the fetch method that just worked for `host`.
     pub async fn save_fetch_method(&self, host: &str, method: &str) -> Result<()> {
         self.fetch_methods
-            .update_one(
-                doc! { "_id": host },
-                doc! { "$set": { "method": method, "updated_at": DateTime::now() } },
-            )
+            .update_one(doc! { "_id": host }, doc! { "$set": { "method": method, "updated_at": DateTime::now() } })
             .upsert(true)
             .await?;
         Ok(())
@@ -440,7 +430,10 @@ mod tests {
     fn next_slot_keeps_phase() {
         let t0 = DateTime::from_millis(10 * H + 17 * 60_000); // 10:17
         // On time or slightly late: the following hour.
-        assert_eq!(next_slot(t0, DateTime::from_millis(t0.timestamp_millis() + 5_000)).timestamp_millis(), t0.timestamp_millis() + H);
+        assert_eq!(
+            next_slot(t0, DateTime::from_millis(t0.timestamp_millis() + 5_000)).timestamp_millis(),
+            t0.timestamp_millis() + H
+        );
         // Hours late (e.g. bot was down): the next future slot, same minute.
         let late = DateTime::from_millis(t0.timestamp_millis() + 3 * H + 10 * 60_000);
         assert_eq!(next_slot(t0, late).timestamp_millis(), t0.timestamp_millis() + 4 * H);
@@ -469,9 +462,18 @@ mod tests {
     fn schedule_keeps_the_hourly_anchor() {
         let t0 = DateTime::from_millis(10 * H + 17 * 60_000); // slot 10:17
         let mut p = TrackedProduct {
-            id: ObjectId::new(), user_id: 1, url: "u".into(), name: "n".into(), currency: None,
-            last_price: None, created_at: t0, last_checked: None, next_check_at: t0, slot_at: Some(t0),
-            failures: 0, lease_until: None,
+            id: ObjectId::new(),
+            user_id: 1,
+            url: "u".into(),
+            name: "n".into(),
+            currency: None,
+            last_price: None,
+            created_at: t0,
+            last_checked: None,
+            next_check_at: t0,
+            slot_at: Some(t0),
+            failures: 0,
+            lease_until: None,
         };
         // Checked 12 minutes early (negative jitter): the next slot is still 11:17.
         let (slot, next) = schedule_after(&p, DateTime::from_millis(t0.timestamp_millis() - 12 * 60_000));

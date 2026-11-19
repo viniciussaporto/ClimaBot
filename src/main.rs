@@ -10,11 +10,12 @@ mod usage;
 use anyhow::{Context as _, Result, anyhow};
 use pricetracker::store::Store;
 use serenity::{
+    Client,
     all::{
         Command, Context, EventHandler, GatewayIntents, Guild, GuildId, Interaction, Ready, ShardManager,
         UnavailableGuild,
     },
-    async_trait, Client,
+    async_trait,
 };
 use std::{
     collections::HashSet,
@@ -149,10 +150,7 @@ async fn main() -> Result<()> {
         warn!("OPENCAGEAPIKEY is not set: /weather and /forecast will fail");
     }
 
-    let metrics_port: u16 = env::var("METRICS_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(9464);
+    let metrics_port: u16 = env::var("METRICS_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(9464);
     metrics::start_metrics_server(metrics_port);
 
     let mongo = mongo_config();

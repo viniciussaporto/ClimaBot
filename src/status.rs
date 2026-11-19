@@ -64,8 +64,7 @@ pub async fn run_probes(store: Store, shard_manager: Arc<ShardManager>) {
                 false
             }
         };
-        *SNAPSHOT.write().unwrap_or_else(|p| p.into_inner()) =
-            Snapshot { discord, database, at: Some(Instant::now()) };
+        *SNAPSHOT.write().unwrap_or_else(|p| p.into_inner()) = Snapshot { discord, database, at: Some(Instant::now()) };
     }
 }
 
@@ -123,8 +122,8 @@ mod tests {
     #[test]
     fn body_has_the_ok_field_monitors_match() {
         let now = Instant::now();
-        let json = serde_json::to_string(&body(Snapshot { discord: true, database: true, at: Some(now) }, now))
-            .unwrap();
+        let json =
+            serde_json::to_string(&body(Snapshot { discord: true, database: true, at: Some(now) }, now)).unwrap();
         assert!(json.starts_with(r#"{"ok":true,"#), "{json}");
     }
 }

@@ -101,10 +101,7 @@ impl FootballStore {
     }
 
     pub async fn save(&self, doc: CacheDoc) -> Result<()> {
-        self.cache
-            .replace_one(doc! { "_id": &doc.key }, &doc)
-            .upsert(true)
-            .await?;
+        self.cache.replace_one(doc! { "_id": &doc.key }, &doc).upsert(true).await?;
         Ok(())
     }
 

@@ -6,10 +6,9 @@ use crate::pricetracker::{
 use anyhow::Result;
 use mongodb::bson::oid::ObjectId;
 use serenity::all::{
-    ButtonStyle, CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateActionRow,
-    CreateButton, CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter,
-    CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse, ResolvedOption,
-    ResolvedValue,
+    ButtonStyle, CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateActionRow, CreateButton,
+    CreateCommand, CreateCommandOption, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
+    CreateInteractionResponseMessage, EditInteractionResponse, ResolvedOption, ResolvedValue,
 };
 use tracing::{info, warn};
 
@@ -25,39 +24,26 @@ Price tracking has been tested and works on: **KaBuM**, **Amazon Brasil**, **Mag
 **Mercado Livre** isn't supported yet. Other shops may work, but that isn't guaranteed.";
 
 fn tested_sites_notice() -> CreateEmbed {
-    CreateEmbed::new()
-        .title("ℹ️ Supported shops")
-        .description(TESTED_SITES_NOTICE)
-        .color(0x95a5a6)
+    CreateEmbed::new().title("ℹ️ Supported shops").description(TESTED_SITES_NOTICE).color(0x95a5a6)
 }
 
 pub fn register() -> CreateCommand {
     let item = || {
-        CreateCommandOption::new(
-            CommandOptionType::String,
-            "item",
-            "Position shown in /pt list, or the product URL",
-        )
-        .required(true)
+        CreateCommandOption::new(CommandOptionType::String, "item", "Position shown in /pt list, or the product URL")
+            .required(true)
     };
     CreateCommand::new("pt")
         .description("Track product prices (checked about every hour)")
         .add_option(
-            CreateCommandOption::new(CommandOptionType::SubCommand, "add", "Start tracking a product")
-                .add_sub_option(
-                    CreateCommandOption::new(CommandOptionType::String, "url", "Product page URL")
-                        .required(true),
-                ),
+            CreateCommandOption::new(CommandOptionType::SubCommand, "add", "Start tracking a product").add_sub_option(
+                CreateCommandOption::new(CommandOptionType::String, "url", "Product page URL").required(true),
+            ),
         )
         .add_option(
             CreateCommandOption::new(CommandOptionType::SubCommand, "remove", "Stop tracking a product")
                 .add_sub_option(item()),
         )
-        .add_option(CreateCommandOption::new(
-            CommandOptionType::SubCommand,
-            "list",
-            "View your tracked products",
-        ))
+        .add_option(CreateCommandOption::new(CommandOptionType::SubCommand, "list", "View your tracked products"))
         .add_option(
             CreateCommandOption::new(CommandOptionType::SubCommand, "history", "View a product's price history")
                 .add_sub_option(item()),
@@ -119,9 +105,8 @@ async fn add(store: &Store, user_id: u64, raw_url: &str) -> Result<EditInteracti
         }
     };
 
-    let outcome = store
-        .add_product(user_id, url.clone(), product.name.clone(), product.price, product.currency.clone())
-        .await?;
+    let outcome =
+        store.add_product(user_id, url.clone(), product.name.clone(), product.price, product.currency.clone()).await?;
 
     Ok(match outcome {
         AddOutcome::Added => {
@@ -206,9 +191,8 @@ pub async fn handle_stop_button(ctx: &Context, comp: &ComponentInteraction, stor
         .emoji('🗑')
         .style(ButtonStyle::Secondary)
         .disabled(true);
-    let update = CreateInteractionResponseMessage::new()
-        .content(note)
-        .components(vec![CreateActionRow::Buttons(vec![done])]);
+    let update =
+        CreateInteractionResponseMessage::new().content(note).components(vec![CreateActionRow::Buttons(vec![done])]);
     comp.create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(update)).await?;
     Ok(())
 }
@@ -220,10 +204,7 @@ async fn list(store: &Store, user_id: u64) -> Result<EditInteractionResponse> {
     }
 
     let entries = products.iter().enumerate().map(|(i, p)| {
-        let price = p
-            .last_price
-            .map(|v| format_price(v, p.currency.as_deref()))
-            .unwrap_or_else(|| "–".into());
+        let price = p.last_price.map(|v| format_price(v, p.currency.as_deref())).unwrap_or_else(|| "–".into());
         let mut entry = format!(
             "**{}.** [{}]({})\n{} · next check <t:{}:R>",
             i + 1,

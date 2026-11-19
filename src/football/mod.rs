@@ -173,14 +173,23 @@ impl Football {
         let af_key = env_secret("API_FOOTBALL_KEY");
         let mut limits = vec![(
             Provider::SportScore,
-            Limits { daily: env_u32("SPORTSCORE_DAILY_BUDGET", 9000), per_minute: env_u32("SPORTSCORE_PER_MINUTE", 300) },
+            Limits {
+                daily: env_u32("SPORTSCORE_DAILY_BUDGET", 9000),
+                per_minute: env_u32("SPORTSCORE_PER_MINUTE", 300),
+            },
         )];
         if fd_token.is_some() {
             // No daily cap on the free tier; 10 per minute.
-            limits.push((Provider::FootballData, Limits { daily: env_u32("FOOTBALL_DATA_DAILY_BUDGET", 5000), per_minute: 9 }));
+            limits.push((
+                Provider::FootballData,
+                Limits { daily: env_u32("FOOTBALL_DATA_DAILY_BUDGET", 5000), per_minute: 9 },
+            ));
         }
         if af_key.is_some() {
-            limits.push((Provider::ApiFootball, Limits { daily: env_u32("API_FOOTBALL_DAILY_BUDGET", 100), per_minute: 9 }));
+            limits.push((
+                Provider::ApiFootball,
+                Limits { daily: env_u32("API_FOOTBALL_DAILY_BUDGET", 100), per_minute: 9 },
+            ));
         }
         let priority = match env::var("FOOTBALL_PRIORITY") {
             Ok(v) if !v.trim().is_empty() => v
@@ -453,43 +462,55 @@ impl Football {
             _ => Duration::from_secs(6 * 3600),
         };
         let key = fixtures_key(comp, date);
-        self.lookup("fixtures", &key, |_| ttl, Duration::from_secs(60 * 86400), move || async move {
-            match self.ss.fixtures(&self.up, comp, date, purpose).await {
-                Ok(f) => Ok((f, Provider::SportScore)),
-                Err(e) => match (&self.fd, comp.football_data) {
-                    (Some(fd), Some(code)) if e != FetchError::NotFound => {
-                        let f = fd.fixtures(&self.up, comp, code, date, purpose).await?;
-                        Ok((f, Provider::FootballData))
-                    }
-                    _ => Err(e),
-                },
-            }
-        })
+        self.lookup(
+            "fixtures",
+            &key,
+            |_| ttl,
+            Duration::from_secs(60 * 86400),
+            move || async move {
+                match self.ss.fixtures(&self.up, comp, date, purpose).await {
+                    Ok(f) => Ok((f, Provider::SportScore)),
+                    Err(e) => match (&self.fd, comp.football_data) {
+                        (Some(fd), Some(code)) if e != FetchError::NotFound => {
+                            let f = fd.fixtures(&self.up, comp, code, date, purpose).await?;
+                            Ok((f, Provider::FootballData))
+                        }
+                        _ => Err(e),
+                    },
+                }
+            },
+        )
         .await
     }
 
     /// Live matches in the tracked competitions.
     pub async fn live(&self, purpose: Purpose) -> FetchResult<Lookup<Vec<Fixture>>> {
-        self.lookup("live", "live", |_| Duration::from_secs(55), Duration::from_secs(86400), move || async move {
-            let (all, truncated) = self.ss.live(&self.up, purpose).await?;
-            let mut tracked: Vec<Fixture> = all.into_iter().filter(|f| !f.competition.is_empty()).collect();
-            if truncated {
-                // More live matches than one page: ask per competition that has
-                // matches on right now, so none of ours are cut off.
-                let mut seen: HashSet<String> = tracked.iter().map(|f| f.id.clone()).collect();
-                for comp in self.competitions_in_window() {
-                    if let Ok(extra) = self.ss.live_in(&self.up, comp, purpose).await {
-                        for f in extra {
-                            if seen.insert(f.id.clone()) {
-                                tracked.push(f);
+        self.lookup(
+            "live",
+            "live",
+            |_| Duration::from_secs(55),
+            Duration::from_secs(86400),
+            move || async move {
+                let (all, truncated) = self.ss.live(&self.up, purpose).await?;
+                let mut tracked: Vec<Fixture> = all.into_iter().filter(|f| !f.competition.is_empty()).collect();
+                if truncated {
+                    // More live matches than one page: ask per competition that has
+                    // matches on right now, so none of ours are cut off.
+                    let mut seen: HashSet<String> = tracked.iter().map(|f| f.id.clone()).collect();
+                    for comp in self.competitions_in_window() {
+                        if let Ok(extra) = self.ss.live_in(&self.up, comp, purpose).await {
+                            for f in extra {
+                                if seen.insert(f.id.clone()) {
+                                    tracked.push(f);
+                                }
                             }
                         }
                     }
                 }
-            }
-            tracked.sort_by(|a, b| (a.competition.as_str(), a.kickoff).cmp(&(b.competition.as_str(), b.kickoff)));
-            Ok((tracked, Provider::SportScore))
-        })
+                tracked.sort_by(|a, b| (a.competition.as_str(), a.kickoff).cmp(&(b.competition.as_str(), b.kickoff)));
+                Ok((tracked, Provider::SportScore))
+            },
+        )
         .await
     }
 
@@ -500,7 +521,11 @@ impl Football {
             Status::Live => Duration::from_secs(150),
             Status::Finished | Status::Cancelled => {
                 // Allow for late corrections in the first hours after the final whistle.
-                if now - d.fixture.kickoff < 4 * 3600 { Duration::from_secs(15 * 60) } else { Duration::from_secs(30 * 86400) }
+                if now - d.fixture.kickoff < 4 * 3600 {
+                    Duration::from_secs(15 * 60)
+                } else {
+                    Duration::from_secs(30 * 86400)
+                }
             }
             // Line-ups appear about an hour before kick-off.
             _ if (d.fixture.kickoff - now).abs() < 2 * 3600 => Duration::from_secs(10 * 60),
@@ -514,15 +539,23 @@ impl Football {
 
     pub async fn standings(&self, comp: &'static Competition, purpose: Purpose) -> FetchResult<Lookup<Standings>> {
         let key = format!("standings:{}", comp.key);
-        self.lookup("standings", &key, |_| Duration::from_secs(3 * 3600), Duration::from_secs(60 * 86400), move || async move {
-            match self.ss.standings(&self.up, comp, purpose).await {
-                Ok(s) if !s.groups.is_empty() => Ok((s, Provider::SportScore)),
-                result => match (&self.fd, comp.football_data) {
-                    (Some(fd), Some(code)) => Ok((fd.standings(&self.up, code, purpose).await?, Provider::FootballData)),
-                    _ => result.map(|s| (s, Provider::SportScore)),
-                },
-            }
-        })
+        self.lookup(
+            "standings",
+            &key,
+            |_| Duration::from_secs(3 * 3600),
+            Duration::from_secs(60 * 86400),
+            move || async move {
+                match self.ss.standings(&self.up, comp, purpose).await {
+                    Ok(s) if !s.groups.is_empty() => Ok((s, Provider::SportScore)),
+                    result => match (&self.fd, comp.football_data) {
+                        (Some(fd), Some(code)) => {
+                            Ok((fd.standings(&self.up, code, purpose).await?, Provider::FootballData))
+                        }
+                        _ => result.map(|s| (s, Provider::SportScore)),
+                    },
+                }
+            },
+        )
         .await
     }
 
@@ -533,48 +566,66 @@ impl Football {
         purpose: Purpose,
     ) -> FetchResult<Lookup<Vec<Scorer>>> {
         let key = format!("scorers:{}:{}", comp.key, if assists { "assists" } else { "goals" });
-        self.lookup("scorers", &key, |_| Duration::from_secs(6 * 3600), Duration::from_secs(60 * 86400), move || async move {
-            match self.ss.scorers(&self.up, comp, assists, purpose).await {
-                Ok(s) if !s.is_empty() => Ok((s, Provider::SportScore)),
-                result => match (&self.fd, comp.football_data) {
-                    (Some(fd), Some(code)) => {
-                        let mut s = fd.scorers(&self.up, code, purpose).await?;
-                        if assists {
-                            s.sort_by_key(|x| std::cmp::Reverse(x.assists.unwrap_or(0)));
-                            for (i, x) in s.iter_mut().enumerate() {
-                                x.rank = i as u32 + 1;
+        self.lookup(
+            "scorers",
+            &key,
+            |_| Duration::from_secs(6 * 3600),
+            Duration::from_secs(60 * 86400),
+            move || async move {
+                match self.ss.scorers(&self.up, comp, assists, purpose).await {
+                    Ok(s) if !s.is_empty() => Ok((s, Provider::SportScore)),
+                    result => match (&self.fd, comp.football_data) {
+                        (Some(fd), Some(code)) => {
+                            let mut s = fd.scorers(&self.up, code, purpose).await?;
+                            if assists {
+                                s.sort_by_key(|x| std::cmp::Reverse(x.assists.unwrap_or(0)));
+                                for (i, x) in s.iter_mut().enumerate() {
+                                    x.rank = i as u32 + 1;
+                                }
                             }
+                            Ok((s, Provider::FootballData))
                         }
-                        Ok((s, Provider::FootballData))
-                    }
-                    _ => result.map(|s| (s, Provider::SportScore)),
-                },
-            }
-        })
+                        _ => result.map(|s| (s, Provider::SportScore)),
+                    },
+                }
+            },
+        )
         .await
     }
 
     pub async fn team(&self, slug: &str, purpose: Purpose) -> FetchResult<Lookup<TeamSchedule>> {
         let key = format!("team:{slug}");
-        self.lookup("team", &key, |_| Duration::from_secs(6 * 3600), Duration::from_secs(30 * 86400), move || async move {
-            Ok((self.ss.team(&self.up, slug, purpose).await?, Provider::SportScore))
-        })
+        self.lookup(
+            "team",
+            &key,
+            |_| Duration::from_secs(6 * 3600),
+            Duration::from_secs(30 * 86400),
+            move || async move { Ok((self.ss.team(&self.up, slug, purpose).await?, Provider::SportScore)) },
+        )
         .await
     }
 
     pub async fn player(&self, slug: &str, purpose: Purpose) -> FetchResult<Lookup<PlayerProfile>> {
         let key = format!("player:{slug}");
-        self.lookup("player", &key, |_| Duration::from_secs(86400), Duration::from_secs(30 * 86400), move || async move {
-            Ok((self.ss.player(&self.up, slug, purpose).await?, Provider::SportScore))
-        })
+        self.lookup(
+            "player",
+            &key,
+            |_| Duration::from_secs(86400),
+            Duration::from_secs(30 * 86400),
+            move || async move { Ok((self.ss.player(&self.up, slug, purpose).await?, Provider::SportScore)) },
+        )
         .await
     }
 
     pub async fn search(&self, query: &str, purpose: Purpose) -> FetchResult<Lookup<SearchResults>> {
         let key = format!("search:{}", fold(query));
-        self.lookup("search", &key, |_| Duration::from_secs(86400), Duration::from_secs(7 * 86400), move || async move {
-            Ok((self.ss.search(&self.up, query, purpose).await?, Provider::SportScore))
-        })
+        self.lookup(
+            "search",
+            &key,
+            |_| Duration::from_secs(86400),
+            Duration::from_secs(7 * 86400),
+            move || async move { Ok((self.ss.search(&self.up, query, purpose).await?, Provider::SportScore)) },
+        )
         .await
     }
 
@@ -589,37 +640,47 @@ impl Football {
     ) -> FetchResult<Lookup<Squad>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("squad:{team_slug}");
-        self.lookup("squad", &key, |_| Duration::from_secs(7 * 86400), Duration::from_secs(60 * 86400), move || async move {
-            let map_key = format!("api_football:{team_slug}");
-            let known = match &self.store {
-                Some(s) => s.team_id(&map_key).await.ok().flatten().map(|d| d.api_football_id),
-                None => None,
-            };
-            let id = match known {
-                Some(id) => id,
-                None => {
-                    let candidates = af.search_teams(&self.up, team_name, purpose).await?;
-                    let team = providers::api_football::pick_team(&candidates, team_name, country)
-                        .ok_or(FetchError::NotFound)?;
-                    if let Some(s) = &self.store
-                        && let Err(e) = s.save_team_id(&map_key, team.id, &team.name).await
-                    {
-                        warn!(error = format!("{e:#}"), "Could not save API-Football team id");
+        self.lookup(
+            "squad",
+            &key,
+            |_| Duration::from_secs(7 * 86400),
+            Duration::from_secs(60 * 86400),
+            move || async move {
+                let map_key = format!("api_football:{team_slug}");
+                let known = match &self.store {
+                    Some(s) => s.team_id(&map_key).await.ok().flatten().map(|d| d.api_football_id),
+                    None => None,
+                };
+                let id = match known {
+                    Some(id) => id,
+                    None => {
+                        let candidates = af.search_teams(&self.up, team_name, purpose).await?;
+                        let team = providers::api_football::pick_team(&candidates, team_name, country)
+                            .ok_or(FetchError::NotFound)?;
+                        if let Some(s) = &self.store
+                            && let Err(e) = s.save_team_id(&map_key, team.id, &team.name).await
+                        {
+                            warn!(error = format!("{e:#}"), "Could not save API-Football team id");
+                        }
+                        team.id
                     }
-                    team.id
-                }
-            };
-            Ok((af.squad(&self.up, id, purpose).await?, Provider::ApiFootball))
-        })
+                };
+                Ok((af.squad(&self.up, id, purpose).await?, Provider::ApiFootball))
+            },
+        )
         .await
     }
 
     /// Head-to-head of two teams (SportScore slugs), in a stable key order.
     pub async fn h2h(&self, team1: &str, team2: &str, purpose: Purpose) -> FetchResult<Lookup<HeadToHead>> {
         let key = format!("h2h:{team1}:{team2}");
-        self.lookup("h2h", &key, |_| Duration::from_secs(12 * 3600), Duration::from_secs(30 * 86400), move || async move {
-            Ok((self.ss.h2h(&self.up, team1, team2, purpose).await?, Provider::SportScore))
-        })
+        self.lookup(
+            "h2h",
+            &key,
+            |_| Duration::from_secs(12 * 3600),
+            Duration::from_secs(30 * 86400),
+            move || async move { Ok((self.ss.h2h(&self.up, team1, team2, purpose).await?, Provider::SportScore)) },
+        )
         .await
     }
 
@@ -630,12 +691,18 @@ impl Football {
         let query = providers::api_football::profile_query(name).ok_or(FetchError::NotFound)?;
         let key = format!("players:{}", fold(name));
         let result = self
-            .lookup("players", &key, |_| Duration::from_secs(7 * 86400), Duration::from_secs(30 * 86400), move || async move {
-                let found = af.search_players(&self.up, &query, purpose).await?;
-                let mut ranked = providers::api_football::rank_players(found, name);
-                ranked.truncate(10);
-                Ok((ranked, Provider::ApiFootball))
-            })
+            .lookup(
+                "players",
+                &key,
+                |_| Duration::from_secs(7 * 86400),
+                Duration::from_secs(30 * 86400),
+                move || async move {
+                    let found = af.search_players(&self.up, &query, purpose).await?;
+                    let mut ranked = providers::api_football::rank_players(found, name);
+                    ranked.truncate(10);
+                    Ok((ranked, Provider::ApiFootball))
+                },
+            )
             .await?;
         for p in &result.value.data {
             self.remember_player(p).await;
@@ -657,9 +724,13 @@ impl Football {
     pub async fn absences(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Absence>>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("absences:{player}");
-        self.lookup("absences", &key, |_| Duration::from_secs(86400), Duration::from_secs(30 * 86400), move || async move {
-            Ok((af.sidelined(&self.up, player, purpose).await?, Provider::ApiFootball))
-        })
+        self.lookup(
+            "absences",
+            &key,
+            |_| Duration::from_secs(86400),
+            Duration::from_secs(30 * 86400),
+            move || async move { Ok((af.sidelined(&self.up, player, purpose).await?, Provider::ApiFootball)) },
+        )
         .await
     }
 
@@ -671,44 +742,67 @@ impl Football {
     pub async fn career_teams(&self, player: &PlayerRef, purpose: Purpose) -> FetchResult<Lookup<Vec<CareerTeam>>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("career_teams:{}", player.id);
-        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
-            Ok((af.player_teams(&self.up, player, purpose).await?, Provider::ApiFootball))
-        })
+        self.lookup(
+            "career",
+            &key,
+            |_| Duration::from_secs(14 * 86400),
+            Duration::from_secs(90 * 86400),
+            move || async move { Ok((af.player_teams(&self.up, player, purpose).await?, Provider::ApiFootball)) },
+        )
         .await
     }
 
     pub async fn transfers(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Transfer>>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("transfers:{player}");
-        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
-            Ok((af.transfers(&self.up, player, purpose).await?, Provider::ApiFootball))
-        })
+        self.lookup(
+            "career",
+            &key,
+            |_| Duration::from_secs(14 * 86400),
+            Duration::from_secs(90 * 86400),
+            move || async move { Ok((af.transfers(&self.up, player, purpose).await?, Provider::ApiFootball)) },
+        )
         .await
     }
 
     pub async fn trophies(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Trophy>>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("trophies:{player}");
-        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
-            Ok((af.trophies(&self.up, player, purpose).await?, Provider::ApiFootball))
-        })
+        self.lookup(
+            "career",
+            &key,
+            |_| Duration::from_secs(14 * 86400),
+            Duration::from_secs(90 * 86400),
+            move || async move { Ok((af.trophies(&self.up, player, purpose).await?, Provider::ApiFootball)) },
+        )
         .await
     }
 
     /// Season-by-season statistics for the seasons the free plan serves
     /// (`SEASONS_AVAILABLE`), limited to those the player played: one
     /// request per season, cached together for a month.
-    pub async fn season_lines(&self, player: &PlayerRef, played: &[i32], purpose: Purpose) -> FetchResult<Lookup<Vec<SeasonLine>>> {
+    pub async fn season_lines(
+        &self,
+        player: &PlayerRef,
+        played: &[i32],
+        purpose: Purpose,
+    ) -> FetchResult<Lookup<Vec<SeasonLine>>> {
         let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
         let key = format!("seasons:{}", player.id);
         let seasons: Vec<i32> = SEASONS_AVAILABLE.iter().copied().filter(|s| played.contains(s)).collect();
-        self.lookup("career", &key, |_| Duration::from_secs(30 * 86400), Duration::from_secs(90 * 86400), move || async move {
-            let mut lines = vec![];
-            for s in &seasons {
-                lines.extend(af.season(&self.up, player.id, *s, purpose).await?);
-            }
-            Ok((lines, Provider::ApiFootball))
-        })
+        self.lookup(
+            "career",
+            &key,
+            |_| Duration::from_secs(30 * 86400),
+            Duration::from_secs(90 * 86400),
+            move || async move {
+                let mut lines = vec![];
+                for s in &seasons {
+                    lines.extend(af.season(&self.up, player.id, *s, purpose).await?);
+                }
+                Ok((lines, Provider::ApiFootball))
+            },
+        )
         .await
     }
 
@@ -731,7 +825,8 @@ impl Football {
         let mut out: Vec<Fixture> = vec![];
         for c in COMPETITIONS {
             for d in 0..=days {
-                if let Some(list) = self.cached_now::<Vec<Fixture>>(&fixtures_key(c, today + chrono::Duration::days(d))) {
+                if let Some(list) = self.cached_now::<Vec<Fixture>>(&fixtures_key(c, today + chrono::Duration::days(d)))
+                {
                     out.extend(list.data);
                 }
             }

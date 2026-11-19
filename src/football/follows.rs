@@ -106,7 +106,8 @@ impl Subscription {
     /// Whether a fixture concerns this subscription: a followed team plays,
     /// or it's in a followed competition.
     pub fn concerns(&self, competition: &str, home: &str, away: &str) -> bool {
-        self.competitions.iter().any(|c| c == competition) || self.teams.iter().any(|t| t.name == home || t.name == away)
+        self.competitions.iter().any(|c| c == competition)
+            || self.teams.iter().any(|t| t.name == home || t.name == away)
     }
 
     pub fn follows_team(&self, home: &str, away: &str) -> bool {
@@ -160,17 +161,13 @@ impl FollowStore {
 
     /// Subscriptions with any notification switched on.
     pub async fn notifying(&self) -> Result<Vec<Subscription>> {
-        Ok(self
-            .col
-            .find(doc! { "$or": [ { "digest": true }, { "live_alerts": true } ] })
-            .await?
-            .try_collect()
-            .await?)
+        Ok(self.col.find(doc! { "$or": [ { "digest": true }, { "live_alerts": true } ] }).await?.try_collect().await?)
     }
 
     /// Every team someone follows (to keep their schedules fresh).
     pub async fn followed_team_slugs(&self) -> Result<Vec<String>> {
-        let subs: Vec<Subscription> = self.col.find(doc! { "teams.0": { "$exists": true } }).await?.try_collect().await?;
+        let subs: Vec<Subscription> =
+            self.col.find(doc! { "teams.0": { "$exists": true } }).await?.try_collect().await?;
         let mut slugs: Vec<String> = subs.into_iter().flat_map(|s| s.teams.into_iter().map(|t| t.slug)).collect();
         slugs.sort();
         slugs.dedup();

@@ -10,11 +10,7 @@ use super::football::{
     source_note, team_buttons, unavailable,
 };
 use crate::football::{
-    Football, SEASONS_AVAILABLE,
-    competitions::COMPETITIONS,
-    model::*,
-    providers::FetchError,
-    quota::Purpose,
+    Football, SEASONS_AVAILABLE, competitions::COMPETITIONS, model::*, providers::FetchError, quota::Purpose,
 };
 use anyhow::Result;
 use chrono::{NaiveDate, Utc};
@@ -23,8 +19,13 @@ use serenity::all::{
     CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption,
 };
 
-const VIEWS: [(&str, &str); 5] =
-    [("clubs", "Clubs"), ("seasons", "Seasons"), ("transfers", "Transfers"), ("trophies", "Trophies"), ("injuries", "Injuries")];
+const VIEWS: [(&str, &str); 5] = [
+    ("clubs", "Clubs"),
+    ("seasons", "Seasons"),
+    ("transfers", "Transfers"),
+    ("trophies", "Trophies"),
+    ("injuries", "Injuries"),
+];
 
 fn day(d: &str) -> String {
     NaiveDate::parse_from_str(d, "%Y-%m-%d").map(|d| d.format("%d %b %Y").to_string()).unwrap_or_else(|_| d.to_string())
@@ -50,7 +51,8 @@ fn view_buttons(id: i64, current: &str) -> Vec<CreateActionRow> {
 
 fn header(p: &PlayerRef) -> String {
     let birth = p.birth.as_deref().map(|b| format!("born {}", day(b)));
-    let parts: Vec<String> = [p.full_name.clone(), p.nationality.clone(), p.position.clone(), birth].into_iter().flatten().collect();
+    let parts: Vec<String> =
+        [p.full_name.clone(), p.nationality.clone(), p.position.clone(), birth].into_iter().flatten().collect();
     parts.join(" · ")
 }
 
@@ -64,7 +66,8 @@ fn player_embed(p: &PlayerRef, section: &str) -> CreateEmbed {
 
 fn candidate_label(p: &PlayerRef) -> String {
     let year = p.birth.as_deref().and_then(|b| b.get(..4));
-    let parts: Vec<&str> = [Some(p.name.as_str()), p.nationality.as_deref(), p.position.as_deref(), year].into_iter().flatten().collect();
+    let parts: Vec<&str> =
+        [Some(p.name.as_str()), p.nationality.as_deref(), p.position.as_deref(), year].into_iter().flatten().collect();
     clip(&parts.join(" · "), 100)
 }
 
@@ -91,11 +94,8 @@ pub(super) async fn career(fb: &Football, input: &str, view: &str) -> Result<Rep
     if !ambiguous {
         return show(fb, best.id, view).await;
     }
-    let options = found
-        .iter()
-        .take(10)
-        .map(|p| CreateSelectMenuOption::new(candidate_label(p), p.id.to_string()))
-        .collect();
+    let options =
+        found.iter().take(10).map(|p| CreateSelectMenuOption::new(candidate_label(p), p.id.to_string())).collect();
     let menu = CreateSelectMenu::new(format!("fbc:pick:{view}"), CreateSelectMenuKind::String { options })
         .placeholder("Which player?");
     Ok(Reply {
@@ -158,10 +158,19 @@ async fn clubs(fb: &Football, p: &PlayerRef) -> Reply {
     let mut clubs = clubs;
     clubs.sort_by_key(|t| std::cmp::Reverse(t.seasons.first().copied().unwrap_or(0)));
     let current = clubs.first().map(|t| t.team.clone());
-    let club_lines: Vec<String> = clubs.iter().map(|t| format!("**{}** · {}", t.team, season_span(&t.seasons))).collect();
+    let club_lines: Vec<String> =
+        clubs.iter().map(|t| format!("**{}** · {}", t.team, season_span(&t.seasons))).collect();
     let nat_lines: Vec<String> = national
         .iter()
-        .map(|t| format!("**{}** · {} season{} ({})", t.team, t.seasons.len(), if t.seasons.len() == 1 { "" } else { "s" }, season_span(&t.seasons)))
+        .map(|t| {
+            format!(
+                "**{}** · {} season{} ({})",
+                t.team,
+                t.seasons.len(),
+                if t.seasons.len() == 1 { "" } else { "s" },
+                season_span(&t.seasons)
+            )
+        })
         .collect();
     let mut e = player_embed(p, "career").description(format!(
         "{}\n{}\n\n{}",
@@ -171,7 +180,11 @@ async fn clubs(fb: &Football, p: &PlayerRef) -> Reply {
     ));
     e = e.field(
         "Clubs (seasons by start year)",
-        if club_lines.is_empty() { "None reported by the data source.".into() } else { clip(&club_lines.join("\n"), 1024) },
+        if club_lines.is_empty() {
+            "None reported by the data source.".into()
+        } else {
+            clip(&club_lines.join("\n"), 1024)
+        },
         false,
     );
     e = e.field(
@@ -255,9 +268,11 @@ async fn transfers(fb: &Football, p: &PlayerRef) -> Reply {
             format!("`{}` {} → **{}**{kind}", day(&t.date), t.from, t.to)
         })
         .collect();
-    let body = if lines.is_empty() { "No transfers reported by the data source.".to_string() } else { lines.join("\n") };
+    let body =
+        if lines.is_empty() { "No transfers reported by the data source.".to_string() } else { lines.join("\n") };
     Reply {
-        embed: player_embed(p, "transfers").description(clip(&format!("{}\n\n{body}\n\n{}", header(p), source_note(&lookup)), 4000)),
+        embed: player_embed(p, "transfers")
+            .description(clip(&format!("{}\n\n{body}\n\n{}", header(p), source_note(&lookup)), 4000)),
         rows: vec![],
     }
 }
@@ -413,7 +428,9 @@ pub(super) async fn team_injuries(fb: &Football, t: &TeamRef) -> Result<Reply> {
     }
     let squad = match fb.squad(&t.slug, &t.name, t.country, Purpose::User).await {
         Ok(l) => l,
-        Err(FetchError::NotFound) => return Ok(notice(format!("❌ The squad data source has no team matching **{}**.", t.name))),
+        Err(FetchError::NotFound) => {
+            return Ok(notice(format!("❌ The squad data source has no team matching **{}**.", t.name)));
+        }
         Err(e) => return Ok(unavailable("This squad", &e)),
     };
     let today = today();
@@ -442,17 +459,16 @@ pub(super) async fn team_injuries(fb: &Football, t: &TeamRef) -> Result<Reply> {
             }
         }
     }
-    let mut e = CreateEmbed::new()
-        .title(format!("🩹 {} · injuries and suspensions", t.name))
-        .color(COLOR)
-        .description(format!(
+    let mut e = CreateEmbed::new().title(format!("🩹 {} · injuries and suspensions", t.name)).color(COLOR).description(
+        format!(
             "ℹ️ The free data sources have **no current injury or suspension list** for teams, so this is \
              built player by player: pick a player below to check their availability (from their injury \
              history). Suspensions for accumulated cards are usually missing, and coverage of Brazilian \
              competitions is often incomplete.\n\nChecked so far: {checked} of {} players.\n\n{}",
             players.len(),
             Provider::ApiFootball.attribution()
-        ));
+        ),
+    );
     e = e.field(
         "Out right now (among checked players)",
         if out_lines.is_empty() { "Nobody reported out.".to_string() } else { clip(&out_lines.join("\n"), 1024) },
@@ -469,13 +485,17 @@ pub(super) async fn team_injuries(fb: &Football, t: &TeamRef) -> Result<Reply> {
                     Some(_) => " ✅",
                     None => "",
                 };
-                CreateSelectMenuOption::new(clip(&format!("{num}{}{mark}", p.name), 100), p.id.unwrap_or_default().to_string())
-                    .description(p.position.clone().unwrap_or_else(|| "Player".into()))
+                CreateSelectMenuOption::new(
+                    clip(&format!("{num}{}{mark}", p.name), 100),
+                    p.id.unwrap_or_default().to_string(),
+                )
+                .description(p.position.clone().unwrap_or_else(|| "Player".into()))
             })
             .collect();
         let placeholder = if i == 0 { "Check a player's availability…" } else { "…more players" };
         rows.push(CreateActionRow::SelectMenu(
-            CreateSelectMenu::new(format!("fbc:pick:injuries:{i}"), CreateSelectMenuKind::String { options }).placeholder(placeholder),
+            CreateSelectMenu::new(format!("fbc:pick:injuries:{i}"), CreateSelectMenuKind::String { options })
+                .placeholder(placeholder),
         ));
     }
     rows.extend(team_buttons(&t.slug, "injuries"));
@@ -514,8 +534,12 @@ pub(super) async fn compare(fb: &Football, args: &super::football::Args) -> Resu
         rec.team2_wins,
         source_note(&h)
     ));
-    let lines: Vec<String> =
-        rec.matches.iter().take(8).map(|f| format!("{} · {}", fixture_line(f, true), comp_label(&f.competition, &f.competition_name))).collect();
+    let lines: Vec<String> = rec
+        .matches
+        .iter()
+        .take(8)
+        .map(|f| format!("{} · {}", fixture_line(f, true), comp_label(&f.competition, &f.competition_name)))
+        .collect();
     e = e.field(
         "Recent meetings",
         if lines.is_empty() { "None in the data source.".into() } else { clip(&lines.join("\n"), 1024) },
@@ -527,7 +551,13 @@ pub(super) async fn compare(fb: &Football, args: &super::football::Args) -> Resu
             if let Some(st) = fb.cached_now::<Standings>(&format!("standings:{}", c.key)) {
                 for g in &st.data.groups {
                     if let Some(r) = g.rows.iter().find(|r| r.team_slug.as_deref() == Some(t.slug.as_str())) {
-                        s.push(format!("{} in {} · {} pts, {:+} GD", ordinal(r.position), c.name, r.points, r.goals_for - r.goals_against));
+                        s.push(format!(
+                            "{} in {} · {} pts, {:+} GD",
+                            ordinal(r.position),
+                            c.name,
+                            r.points,
+                            r.goals_for - r.goals_against
+                        ));
                     }
                 }
             }
