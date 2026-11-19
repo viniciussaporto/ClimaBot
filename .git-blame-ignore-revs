@@ -3,3 +3,6 @@
 
 # Format with rustfmt (max_width 120, Max heuristics)
 825cf968c81aad8159de3a208b3903015d49540f
+
+# Format the Grafana generators with Ruff
+72604b6e86f67fb037481d0f988b5157afd9ebde

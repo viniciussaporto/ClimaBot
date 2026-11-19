@@ -101,8 +101,7 @@ if [[ "$before" != "$after" ]]; then
         echo "Alert rules changed: restarting Grafana"
         docker restart "$grafana" >/dev/null
         healthy() {
-            local i
-            for i in $(seq 1 40); do
+            for _ in $(seq 1 40); do
                 curl -sf http://127.0.0.1:3000/api/health >/dev/null && return 0
                 sleep 3
             done

@@ -1,0 +1,58 @@
+# Formatting, lints and tests on every push to main/preprod and every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main, preprod]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: OpenSSL headers (native-tls)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Tests
+        # Tests that call real APIs are #[ignore]d and don't run here.
+        run: cargo test --locked
+
+  scripts:
+    name: Scripts (ruff, shellcheck, generated files)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Ruff
+        run: |
+          pip install ruff==0.16.2
+          ruff check deploy
+          ruff format --check deploy
+      - name: ShellCheck
+        run: shellcheck deploy/install.sh deploy/grafana/install.sh deploy/shell/climabot.sh deploy/climabot
+      - name: Grafana files match their generators
+        run: |
+          python deploy/grafana/build_dashboards.py
+          python deploy/grafana/build_alerts.py
+          git diff --exit-code deploy/grafana
