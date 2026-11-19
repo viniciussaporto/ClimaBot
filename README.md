@@ -46,51 +46,54 @@
 | | |
 | --- | --- |
 | 🌦️ **Weather** | Current conditions with an animated precipitation map (now plus the next 3 hours), and a 5-day forecast, for any place on Earth, in metric or imperial units. |
-| ⚽ **Football** | Live scores, fixtures, results, tables, top scorers, match events, line-ups, teams, squads and players. Covers the Brasileirão, Copa do Brasil, Libertadores, Sudamericana, Brazilian state championships and the main European leagues and cups. |
+| ⚽ **Football** | Live scores, fixtures, results, tables, top scorers, match events, line-ups, teams, squads, head-to-head, player careers and injuries. Follow teams and competitions for a personal feed and optional DM alerts; moderators can post daily summaries and live alerts in a channel. Covers the Brasileirão, Copa do Brasil, Libertadores, Sudamericana, Brazilian state championships and the main European leagues and cups. |
 | 🎭 **Roles** | A menu members use to pick their own roles. Roles that would be risky to hand out are never offered. |
 | 📦 **Price tracking** | Watch product pages in any currency and get a DM when the price changes. |
 | 🛠️ **Built to run unattended** | Prometheus metrics, a `/status` health endpoint, Grafana dashboards and alerts as code, JSON logs for Loki, a self-check command and a nightly self-update. |
 
 ## Commands
 
-All commands are slash commands. Options in `<angle brackets>` are required, `[square brackets]` optional. Football options autocomplete as you type.
+All commands are slash commands, grouped so that typing `/` shows only five: `/weather`, `/football`, `/roles`, `/pt` and `/help`. Options in `<angle brackets>` are required, `[square brackets]` optional. Football options autocomplete as you type, and buttons and menus under the replies switch views, so IDs never need typing.
 
 ### Weather
 
 | Command | What it does |
 | --- | --- |
-| `/weather <location> [units]` | Temperature, feels-like, humidity, clouds, wind and pressure, with an animated map of rain, snow and thunderstorms around the location |
-| `/forecast <location> [units]` | 5-day forecast: highs, lows and chance of rain (dates are day-first, e.g. `Tue, 29/09`) |
+| `/weather now <location> [units]` | Temperature, feels-like, humidity, clouds, wind and pressure, with an animated map of rain, snow and thunderstorms around the location |
+| `/weather forecast <location> [units]` | 5-day forecast: highs, lows and chance of rain (dates are day-first, e.g. `Tue, 29/09`) |
 
 `units` is **Metric** (°C, km/h, hPa) by default, or **Imperial** (°F, mph, inHg).
 
-### Football: live
+### Football
+
+`/football live` is refreshed every minute during matches. Every other reply comes from the cache, says how old its data is, and is never presented as live.
 
 | Command | What it does |
 | --- | --- |
-| `/live all [competition]` | Every live match in the followed competitions, grouped by competition |
-| `/live competition <competition>` | Live matches in one competition |
-| `/live match <match>` | One live match: score, status, clock and the latest events |
-
-### Football: everything else
-
-`/football` replies come from the cache and always say how old the data is. They are never presented as live.
-
-| Command | What it does |
-| --- | --- |
+| `/football live all [competition]` | Every live match in the followed competitions, grouped by competition |
+| `/football live competition <competition>` | Live matches in one competition |
+| `/football live match <match>` | One live match: score, status, clock and the latest events |
 | `/football competition list` | The competitions followed, and what is available for each |
 | `/football competition fixtures <competition> [date]` | Matches and results on a day: `today` (default), `tomorrow`, `yesterday` or `YYYY-MM-DD` |
 | `/football competition table <competition>` | Standings, or one table per group for competitions with groups |
 | `/football competition scorers <competition> [stat]` | Top goalscorers, or top assists |
-| `/football match details <match>` | Score, status, half-time score, key events, formations |
-| `/football match events <match>` | Full timeline: goals, cards, substitutions, VAR |
-| `/football match lineup <match>` | Starting XIs, substitutes, formations, coaches |
-| `/football match stats <match>` | Team statistics, when the data source has them |
+| `/football match details\|events\|lineup\|stats <match>` | Summary, full timeline, line-ups, team statistics; buttons switch between them |
 | `/football team info <team>` | League positions, form, recent results, next matches |
 | `/football team fixtures <team>` | All recent results and upcoming matches |
 | `/football team squad <team>` | Current registered players, by position |
+| `/football team injuries <team>` | Squad menu to check each player's availability (see [injuries](#injuries-careers-and-their-limits)) |
 | `/football team stats <team> <competition>` | The team's record in a competition: points, goals, per-game averages, form |
-| `/football player <name>` | A player's season statistics |
+| `/football team compare <team> <other>` | Head-to-head record, recent meetings, positions and form side by side |
+| `/football player stats <name>` | This season's statistics |
+| `/football player career <name>` | Clubs and national teams by season, season statistics, transfers, trophies |
+| `/football player injuries <name>` | Availability, current absence with its expected return, past injuries and suspensions |
+| `/football follow team <team>` | Follow or unfollow a team (also the **⭐ Follow** button under a team) |
+| `/football follow competition <competition>` | Follow or unfollow a competition |
+| `/football follow manage` | Menus and buttons for what you follow and your DM alerts (off by default) |
+| `/football follow feed` | Live, today's and upcoming matches, yesterday's results and table changes for what you follow |
+| `/football server setup` | Moderators: channel, competitions, time and on/off switches for server posts (off by default) |
+| `/football server team <team>` | Moderators: add or remove a team the server follows |
+| `/football server preview` | The daily summary this server would get |
 
 ### Roles, price tracking and help
 
@@ -101,7 +104,7 @@ All commands are slash commands. Options in `<angle brackets>` are required, `[s
 | `/pt list` | Your tracked products, current prices and next check time |
 | `/pt history <item>` | A product's price history, with its lowest and highest price |
 | `/pt remove <item>` | Stop tracking a product |
-| `/help <topic>` | `/help overview` for all commands, or how one works, where its data comes from and how its reply is built: `/help weather`, `forecast`, `live`, `football`, `roles`, `pt`, `about`. `/help status` shows live health of the bot and every API, and how much of each limit is used today |
+| `/help <topic>` | `/help overview` for all commands, or how one works, where its data comes from and how its reply is built: `/help weather`, `forecast`, `live`, `football`, `follow`, `server`, `roles`, `pt`, `about`. `/help server` walks moderators through setting up server posts; `/help status` shows live health of the bot and every API, and how much of each limit is used today |
 
 For `/pt history` and `/pt remove`, `item` is the position shown by `/pt list`, or the product URL.
 
@@ -132,7 +135,7 @@ flowchart LR
 
 - **Networks:** MongoDB sits on an internal network only the bot can reach. The browsers have internet access but can't reach MongoDB or the monitoring stack. Prometheus scrapes the bot over a shared `climabot-monitoring` network.
 - **Gateway intents:** only `GUILDS`. Slash commands and components need no privileged intents.
-- **Background jobs:** the price-check scheduler, the football scheduler, gateway latency sampling and the `/status` probes run as tokio tasks inside the bot process.
+- **Background jobs:** the price-check scheduler, the football scheduler and notifier, gateway latency sampling and the `/status` probes run as tokio tasks inside the bot process.
 - **Images:** the Docker image builds with OpenSSL (native-tls) and runs as an unprivileged user (uid 10001).
 
 ### Weather
@@ -152,8 +155,8 @@ Data sources:
 | Source | Used for | Free-tier limits |
 | --- | --- | --- |
 | [SportScore](https://sportscore.com/developers/) | Everything, including live scores, match events and line-ups. The primary source. | About 10,000 requests/day per IP. Attribution is required. |
-| [football-data.org](https://www.football-data.org/) | Backup for fixtures, tables and scorers of its 13 free competitions. Its free-tier scores are delayed, so it is never used for `/live`. | 10 requests/minute |
-| [API-Football](https://www.api-football.com/) | Squads. Its free plan can't read current-season fixtures. | 100 requests/day |
+| [football-data.org](https://www.football-data.org/) | Backup for fixtures, tables and scorers of its 13 free competitions. Its free-tier scores are delayed, so it is never used for live scores. | 10 requests/minute |
+| [API-Football](https://www.api-football.com/) | Squads, player careers, transfers, trophies and injury histories. Its free plan can't read current-season fixtures, injuries or player statistics. | 100 requests/day |
 
 **Competitions** (defined in [`src/football/competitions.rs`](src/football/competitions.rs)):
 
@@ -168,15 +171,19 @@ Data sources:
 flowchart LR
     S["Scheduler"] -->|budgeted requests| P["Providers"]
     P --> N["Normalize"] --> C[("Cache<br/>memory + MongoDB")]
-    U["/football, /live"] -->|read| C
+    U["/football commands"] -->|read| C
     U -.->|missing or too old:<br/>one shared refresh| P
+    S -->|kick-off, goal, full time| NT["Notifier"]
+    C -->|daily summaries| NT
+    NT -->|DMs, server channels| D((Discord))
 ```
 
 - **The scheduler** is the only routine caller:
-  - Fixture lists for today and tomorrow every 6 hours. Yesterday's results and every table once a day.
+  - Fixture lists for today and tomorrow every 6 hours. Once a day: yesterday's results, the fixtures of the week ahead, every table (keeping yesterday's for position changes) and the schedules of followed teams.
   - The live scoreboard about once a minute, but only while a followed match is about to start, under way or just ended. SportScore caches responses for 60 s, so polling faster gains nothing.
   - Match details every 2.5 minutes for live matches in the ⭐ priority competitions (`FOOTBALL_PRIORITY`), and for matches someone asked about in the last 20 minutes.
   - When a match leaves the live list, its final score, its competition's fixture list and its table are refreshed once.
+  - Changes between two live scoreboards (kick-offs, goals) and verified final scores go to the notifier.
 - **Commands** read the cache: memory first, then the `football_cache` collection in MongoDB, which survives restarts. If the data is missing or too old, they trigger a refresh. There is only one refresh per resource at a time, however many users ask.
 - **Budgets:** each provider has a daily request budget and a per-minute pace. Usage is persisted, so a restart doesn't reset it, and is corrected from the provider's own quota headers. As a budget runs low, optional work (tables, details) stops first and the live scoreboard last; part of the budget is kept for user requests.
 - **Failures:** rate limits, outages and rejected keys put the provider into a cooldown with exponential backoff, and the bot falls back to the backup source where one exists.
@@ -185,6 +192,18 @@ flowchart LR
   - If a refresh failed, the reply says so and shows the last saved copy with its age.
   - If nothing is cached, the reply says the data is unavailable.
   - Missing line-ups or statistics are reported as "not provided by the current data source". Data is never made up.
+
+**Following and notifications.** Users follow up to 25 teams and any competitions; a server, configured by its moderators, follows its own. The feed and the daily summary are built from the cache only, and live alerts come from the scheduler's scoreboard changes, so following more doesn't add requests.
+
+- **Everything is off by default.** A user switches on their own daily DM and live-alert DMs in `/football follow manage`; the bot sends a test DM first and refuses if DMs are closed. Server posts stay off until a moderator picks a channel and switches them on in `/football server setup`.
+- **Moderators** are members with Manage Server, Manage Channels, Moderate Members or Administrator. Others can only preview.
+- **Daily summary:** at the chosen UTC hour, once a day (remembered across restarts). **Live alerts:** kick-off, goals and full time, grouped into one message per update.
+
+**Injuries, careers and their limits.** These come from API-Football's free plan, which has no current-season injury list or player statistics:
+
+- **Injuries and suspensions** are read from each player's absence history (type, start, end or expected return). `/football team injuries` shows a menu of the squad to check players one by one; a whole-squad check would cost a day's requests. Coverage of Brazilian competitions is often incomplete, and suspensions for accumulated cards are usually missing: the reply warns when the newest entry is over a year old.
+- **Careers:** clubs and national teams by season, transfers with fees and trophies are complete; per-season statistics cover 2022–2024 only, and national-team appearance counts aren't available.
+- Each player costs a few requests the first time and is then cached for weeks.
 
 ### Price tracking
 
@@ -225,6 +244,7 @@ Everything lives in one MongoDB database (`MONGODB_DB`, default `climabot`):
 | `football_cache` | The latest normalized result of every football request, with source and fetch time; expires through a TTL index |
 | `football_usage`, `football_provider_health` | Requests per provider and UTC day; each provider's last known state |
 | `football_team_map` | Which API-Football team id each team is |
+| `football_follows` | What each user and server follows, their notification switches (all off by default), summary hour, server channel |
 
 ## Self-hosting
 
@@ -271,7 +291,7 @@ Everything is set in `.env`. [`.env.example`](.env.example) documents every opti
 | Variable | Purpose |
 | --- | --- |
 | `DISCORD_TOKEN` | Bot token (`TOKEN` is also accepted) |
-| `OPENCAGEAPIKEY` | OpenCage geocoding key, for `/weather` and `/forecast` |
+| `OPENCAGEAPIKEY` | OpenCage geocoding key, for `/weather` |
 
 **Weather**
 
@@ -388,9 +408,12 @@ cargo run                        # runs the bot with .env
 **Live tests.** These call the real APIs, so they are `#[ignore]`d by default:
 
 ```sh
-# Every /football and /live view against the real providers, checked against
+# Every /football view against the real providers, checked against
 # Discord's embed limits. Uses FOOTBALL_DATA_TOKEN / API_FOOTBALL_KEY if set.
 cargo test live_football -- --ignored --nocapture --test-threads=1
+
+# Career and injury views against API-Football (about 7 of its 100 daily requests)
+cargo test live_injuries -- --ignored --nocapture
 
 # Render a real precipitation map (plus a PNG per frame); RADAR_LAT / RADAR_LNG choose the place
 RADAR_OUT=map.gif cargo test --release live_render -- --ignored --nocapture
@@ -410,15 +433,18 @@ src/
 ├── commands/            Slash commands
 │   ├── mod.rs           Definitions and dispatch
 │   ├── help.rs          /help and its topics
-│   ├── weather.rs       /weather, /forecast (OpenCage, Open-Meteo)
+│   ├── weather.rs       /weather now, /weather forecast (OpenCage, Open-Meteo)
 │   ├── radar.rs         The animated precipitation map
-│   ├── football.rs      /football, /live: rendering, autocomplete, pagination
+│   ├── football.rs      /football: rendering, autocomplete, buttons, pagination
+│   ├── football_player.rs  Player careers and injuries, team injuries, head-to-head
+│   ├── football_follow.rs  Following, server setup, the feed and the notifier
 │   ├── roles.rs         /roles
 │   └── pricetracking.rs /pt
 ├── football/            Football data service
 │   ├── competitions.rs  The followed competitions
 │   ├── model.rs         Provider-neutral types (fixtures, events, tables…)
 │   ├── providers/       SportScore, football-data.org, API-Football adapters
+│   ├── follows.rs       Who follows what (users and servers)
 │   ├── quota.rs         Per-provider budgets, health, backoff
 │   ├── scheduler.rs     Background refreshes and live polling
 │   ├── store.rs         MongoDB persistence

@@ -143,6 +143,73 @@
           "isPaused": false
         },
         {
+          "uid": "cb-football-notify-errors",
+          "title": "Football notifications failing",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "ced6krlr4hgxsb",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(football_notifications_total{status=\"error\"}[6h])) / sum(increase(football_notifications_total[6h])) and on () sum(increase(football_notifications_total[6h])) >= 3",
+                "instant": true,
+                "range": false,
+                "intervalMs": 15000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "15m",
+          "labels": {
+            "severity": "info"
+          },
+          "annotations": {
+            "summary": "More than half of the football alerts and summaries failed in the last 6 hours",
+            "description": "Users or servers that switched notifications on aren't getting them.",
+            "runbook": "1. `climabot logs | grep -i 'not delivered'` shows the subscription (user:<id> or guild:<id>) and Discord's error.\n2. Missing Access / Missing Permissions: the bot can't post in the server's chosen channel; its moderators fix it in `/football server setup` (Send a test post shows the problem).\n3. Cannot send messages to this user: the user closed their DMs; nothing to do, they can turn the alerts off in `/football follow manage`.",
+            "value": "{{ with $values.A }}Failed: {{ humanizePercentage .Value }}{{ end }}",
+            "dashboard_url": "https://grafana.vinisaporto.de/d/ded6lbvrb7lkwc"
+          },
+          "notification_settings": {
+            "receiver": "Discord (info)",
+            "group_by": [
+              "alertname",
+              "grafana_folder"
+            ],
+            "repeat_interval": "24h",
+            "mute_time_intervals": [
+              "ClimaBot nightly update"
+            ]
+          },
+          "isPaused": false
+        },
+        {
           "uid": "cb-football-provider-down",
           "title": "Football data provider failing",
           "condition": "C",

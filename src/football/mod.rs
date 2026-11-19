@@ -15,6 +15,7 @@
 //! - API-Football: squads.
 
 pub mod competitions;
+pub mod follows;
 pub mod model;
 pub mod providers;
 pub mod quota;
@@ -101,6 +102,8 @@ struct MemEntry {
 }
 
 const MEM_LIMIT: usize = 4000;
+/// Seasons API-Football's free plan serves player statistics for.
+pub const SEASONS_AVAILABLE: [i32; 3] = [2024, 2023, 2022];
 /// A refresh triggered by a command never makes the user wait longer than this.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(12);
 /// Fixtures a user asked about stay "followed" (details polled while live) this long.
@@ -116,6 +119,43 @@ pub struct Football {
     locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     demand: Mutex<HashMap<String, Instant>>,
     priority: HashSet<String>,
+    /// Who follows what (None without a database, e.g. in tests).
+    pub follows: OnceLock<follows::FollowStore>,
+    /// Live-match changes seen by the scheduler, for the notifier.
+    events_tx: tokio::sync::mpsc::UnboundedSender<LiveEvent>,
+    events_rx: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<LiveEvent>>>,
+}
+
+/// A change the scheduler noticed in the live scoreboard.
+#[derive(Clone, Debug)]
+pub struct LiveEvent {
+    pub kind: LiveEventKind,
+    pub fixture: Fixture,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LiveEventKind {
+    Kickoff,
+    Goal,
+    FullTime,
+}
+
+/// What changed between two live scoreboards: kick-offs and goals. (Full
+/// time is reported after the final score is verified.)
+pub fn live_changes(before: &HashMap<String, Fixture>, now: &[Fixture]) -> Vec<LiveEvent> {
+    let mut out = vec![];
+    for f in now {
+        match before.get(&f.id) {
+            None => out.push(LiveEvent { kind: LiveEventKind::Kickoff, fixture: f.clone() }),
+            Some(old) => {
+                let total = |x: &Fixture| x.home_score.unwrap_or(0) + x.away_score.unwrap_or(0);
+                if total(f) > total(old) {
+                    out.push(LiveEvent { kind: LiveEventKind::Goal, fixture: f.clone() });
+                }
+            }
+        }
+    }
+    out
 }
 
 fn env_u32(name: &str, default: u32) -> u32 {
@@ -157,6 +197,7 @@ impl Football {
                 .collect(),
             _ => COMPETITIONS.iter().filter(|c| c.priority).map(|c| c.key.to_string()).collect(),
         };
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             up: Upstream::new(limits, store.clone()),
             ss: SportScore::new(env_secret("SPORTSCORE_API_KEY")),
@@ -167,7 +208,26 @@ impl Football {
             locks: Mutex::new(HashMap::new()),
             demand: Mutex::new(HashMap::new()),
             priority,
+            follows: OnceLock::new(),
+            events_tx,
+            events_rx: Mutex::new(Some(events_rx)),
         }
+    }
+
+    /// Hand live-match changes to the notifier (dropped when none is running).
+    pub fn publish_events(&self, events: Vec<LiveEvent>) {
+        for e in events {
+            let _ = self.events_tx.send(e);
+        }
+    }
+
+    /// The notifier's end of the live-event channel (only the first caller gets it).
+    pub fn take_events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<LiveEvent>> {
+        self.events_rx.lock().unwrap_or_else(|e| e.into_inner()).take()
+    }
+
+    pub fn has_careers(&self) -> bool {
+        self.af.is_some()
     }
 
     pub fn has_squads(&self) -> bool {
@@ -554,6 +614,133 @@ impl Football {
         .await
     }
 
+    /// Head-to-head of two teams (SportScore slugs), in a stable key order.
+    pub async fn h2h(&self, team1: &str, team2: &str, purpose: Purpose) -> FetchResult<Lookup<HeadToHead>> {
+        let key = format!("h2h:{team1}:{team2}");
+        self.lookup("h2h", &key, |_| Duration::from_secs(12 * 3600), Duration::from_secs(30 * 86400), move || async move {
+            Ok((self.ss.h2h(&self.up, team1, team2, purpose).await?, Provider::SportScore))
+        })
+        .await
+    }
+
+    /// API-Football players matching a name, best first (at most 10). Each
+    /// one is remembered so later views can show who it is.
+    pub async fn find_players(&self, name: &str, purpose: Purpose) -> FetchResult<Lookup<Vec<PlayerRef>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let query = providers::api_football::profile_query(name).ok_or(FetchError::NotFound)?;
+        let key = format!("players:{}", fold(name));
+        let result = self
+            .lookup("players", &key, |_| Duration::from_secs(7 * 86400), Duration::from_secs(30 * 86400), move || async move {
+                let found = af.search_players(&self.up, &query, purpose).await?;
+                let mut ranked = providers::api_football::rank_players(found, name);
+                ranked.truncate(10);
+                Ok((ranked, Provider::ApiFootball))
+            })
+            .await?;
+        for p in &result.value.data {
+            self.remember_player(p).await;
+        }
+        Ok(result)
+    }
+
+    pub async fn remember_player(&self, p: &PlayerRef) {
+        let value = Cached { data: p.clone(), provider: Provider::ApiFootball, fetched_at: Utc::now().timestamp() };
+        self.put(&format!("player_ref:{}", p.id), &value, Duration::from_secs(90 * 86400)).await;
+    }
+
+    /// A player seen in a search or a squad (cache only).
+    pub async fn player_ref(&self, id: i64) -> Option<PlayerRef> {
+        self.cached::<PlayerRef>(&format!("player_ref:{id}")).await.map(|c| c.data)
+    }
+
+    /// Injuries, illnesses and suspensions of a player, newest first.
+    pub async fn absences(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Absence>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let key = format!("absences:{player}");
+        self.lookup("absences", &key, |_| Duration::from_secs(86400), Duration::from_secs(30 * 86400), move || async move {
+            Ok((af.sidelined(&self.up, player, purpose).await?, Provider::ApiFootball))
+        })
+        .await
+    }
+
+    /// Absences already cached (never calls the provider).
+    pub fn cached_absences(&self, player: i64) -> Option<Cached<Vec<Absence>>> {
+        self.cached_now(&format!("absences:{player}"))
+    }
+
+    pub async fn career_teams(&self, player: &PlayerRef, purpose: Purpose) -> FetchResult<Lookup<Vec<CareerTeam>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let key = format!("career_teams:{}", player.id);
+        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
+            Ok((af.player_teams(&self.up, player, purpose).await?, Provider::ApiFootball))
+        })
+        .await
+    }
+
+    pub async fn transfers(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Transfer>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let key = format!("transfers:{player}");
+        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
+            Ok((af.transfers(&self.up, player, purpose).await?, Provider::ApiFootball))
+        })
+        .await
+    }
+
+    pub async fn trophies(&self, player: i64, purpose: Purpose) -> FetchResult<Lookup<Vec<Trophy>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let key = format!("trophies:{player}");
+        self.lookup("career", &key, |_| Duration::from_secs(14 * 86400), Duration::from_secs(90 * 86400), move || async move {
+            Ok((af.trophies(&self.up, player, purpose).await?, Provider::ApiFootball))
+        })
+        .await
+    }
+
+    /// Season-by-season statistics for the seasons the free plan serves
+    /// (`SEASONS_AVAILABLE`), limited to those the player played: one
+    /// request per season, cached together for a month.
+    pub async fn season_lines(&self, player: &PlayerRef, played: &[i32], purpose: Purpose) -> FetchResult<Lookup<Vec<SeasonLine>>> {
+        let af = self.af.as_ref().ok_or(FetchError::Blocked(quota::Blocked::NotConfigured))?;
+        let key = format!("seasons:{}", player.id);
+        let seasons: Vec<i32> = SEASONS_AVAILABLE.iter().copied().filter(|s| played.contains(s)).collect();
+        self.lookup("career", &key, |_| Duration::from_secs(30 * 86400), Duration::from_secs(90 * 86400), move || async move {
+            let mut lines = vec![];
+            for s in &seasons {
+                lines.extend(af.season(&self.up, player.id, *s, purpose).await?);
+            }
+            Ok((lines, Provider::ApiFootball))
+        })
+        .await
+    }
+
+    /// Before the daily table refresh: keep the current table as yesterday's,
+    /// so position changes can be shown.
+    pub async fn keep_previous_standings(&self, comp: &Competition) {
+        let key = format!("standings:{}", comp.key);
+        if let Some(cur) = self.cached::<Standings>(&key).await
+            && cur.age() > Duration::from_secs(12 * 3600)
+        {
+            self.put(&format!("standings_prev:{}", comp.key), &cur, Duration::from_secs(30 * 86400)).await;
+            self.expire(&key);
+        }
+    }
+
+    /// Fixtures from today up to `days` ahead in the tracked competitions
+    /// (cache only), sorted by kick-off.
+    pub fn upcoming_fixtures(&self, days: i64) -> Vec<Fixture> {
+        let today = Utc::now().date_naive();
+        let mut out: Vec<Fixture> = vec![];
+        for c in COMPETITIONS {
+            for d in 0..=days {
+                if let Some(list) = self.cached_now::<Vec<Fixture>>(&fixtures_key(c, today + chrono::Duration::days(d))) {
+                    out.extend(list.data);
+                }
+            }
+        }
+        out.sort_by_key(|f| f.kickoff);
+        out.dedup_by(|a, b| a.id == b.id);
+        out
+    }
+
     pub async fn api_football_status(&self) -> Option<FetchResult<String>> {
         Some(self.af.as_ref()?.status(&self.up).await)
     }
@@ -657,6 +844,7 @@ pub async fn init(db: &mongodb::Database) -> Arc<Football> {
         priority = fb.priority.len(),
         "Football data service ready"
     );
+    let _ = fb.follows.set(follows::FollowStore::new(db));
     let _ = FOOTBALL.set(fb.clone());
     tokio::spawn(scheduler::run(fb.clone()));
     fb

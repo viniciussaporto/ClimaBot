@@ -227,6 +227,9 @@ pub struct TeamSchedule {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SquadPlayer {
+    /// API-Football player id (missing in squads cached by older versions).
+    #[serde(default)]
+    pub id: Option<i64>,
     pub name: String,
     pub number: Option<u32>,
     pub position: Option<String>,
@@ -248,6 +251,86 @@ pub struct PlayerProfile {
     pub competition: Option<String>,
     /// Statistic name and value, in the source's order.
     pub stats: Vec<(String, String)>,
+}
+
+/// A player as API-Football knows them (for careers and absences).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlayerRef {
+    pub id: i64,
+    pub name: String,
+    pub full_name: Option<String>,
+    pub nationality: Option<String>,
+    pub birth: Option<String>,
+    pub position: Option<String>,
+    pub photo: Option<String>,
+}
+
+/// One injury, illness or suspension, as reported by the source.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Absence {
+    pub kind: String,
+    /// YYYY-MM-DD
+    pub start: Option<String>,
+    /// YYYY-MM-DD; None while it's ongoing with no known return date.
+    pub end: Option<String>,
+}
+
+impl Absence {
+    pub fn is_suspension(&self) -> bool {
+        let k = self.kind.to_lowercase();
+        k.contains("suspen") || k.contains("red card") || k.contains("yellow card")
+    }
+
+    /// Whether it covers the day `today` (YYYY-MM-DD; such dates compare as strings).
+    pub fn is_current(&self, today: &str) -> bool {
+        self.start.as_deref().is_some_and(|s| s <= today) && self.end.as_deref().is_none_or(|e| e >= today)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CareerTeam {
+    pub team: String,
+    /// Seasons by start year, newest first.
+    pub seasons: Vec<i32>,
+    pub national: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Transfer {
+    pub date: String,
+    pub from: String,
+    pub to: String,
+    /// Fee or kind ("€ 80M", "Loan", "Free").
+    pub kind: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Trophy {
+    pub competition: String,
+    pub country: String,
+    pub season: String,
+    pub place: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SeasonLine {
+    pub season: i32,
+    pub team: String,
+    pub competition: String,
+    pub appearances: Option<u32>,
+    pub minutes: Option<u32>,
+    pub goals: Option<u32>,
+    pub assists: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HeadToHead {
+    pub team1: String,
+    pub team2: String,
+    pub team1_wins: u32,
+    pub team2_wins: u32,
+    pub draws: u32,
+    pub matches: Vec<Fixture>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

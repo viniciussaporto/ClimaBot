@@ -2392,6 +2392,71 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Follow notifications",
+      "description": "Live alerts and daily summaries sent to users (DM) and server channels.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (kind, status) (increase(football_notifications_total{}[$__interval]))",
+          "legendFormat": "{{kind}} · {{status}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data in this time range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 36,
+      "gridPos": {
+        "x": 16,
+        "y": 68,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
       "type": "bargauge",
       "title": "Providers up",
       "description": "1 = usable, 0 = in a cooldown (rate limit, outage) or the key was rejected.",
@@ -2454,10 +2519,10 @@
         "minVizHeight": 16,
         "maxVizHeight": 40
       },
-      "id": 36,
+      "id": 37,
       "gridPos": {
-        "x": 16,
-        "y": 68,
+        "x": 0,
+        "y": 76,
         "w": 8,
         "h": 8
       }
@@ -2467,10 +2532,10 @@
       "title": "Resources",
       "collapsed": false,
       "panels": [],
-      "id": 37,
+      "id": 38,
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 84,
         "w": 24,
         "h": 1
       }
@@ -2533,10 +2598,10 @@
           "sort": "desc"
         }
       },
-      "id": 38,
+      "id": 39,
       "gridPos": {
         "x": 0,
-        "y": 77,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2599,10 +2664,10 @@
           "sort": "desc"
         }
       },
-      "id": 39,
+      "id": 40,
       "gridPos": {
         "x": 8,
-        "y": 77,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2674,10 +2739,10 @@
         "minVizHeight": 16,
         "maxVizHeight": 40
       },
-      "id": 40,
+      "id": 41,
       "gridPos": {
         "x": 16,
-        "y": 77,
+        "y": 85,
         "w": 8,
         "h": 8
       }
@@ -2750,10 +2815,10 @@
           "sort": "desc"
         }
       },
-      "id": 41,
+      "id": 42,
       "gridPos": {
         "x": 0,
-        "y": 85,
+        "y": 93,
         "w": 8,
         "h": 8
       }
@@ -2826,10 +2891,10 @@
           "sort": "desc"
         }
       },
-      "id": 42,
+      "id": 43,
       "gridPos": {
         "x": 8,
-        "y": 85,
+        "y": 93,
         "w": 8,
         "h": 8
       }
@@ -2912,10 +2977,10 @@
           "sort": "desc"
         }
       },
-      "id": 43,
+      "id": 44,
       "gridPos": {
         "x": 16,
-        "y": 85,
+        "y": 93,
         "w": 8,
         "h": 8
       }
@@ -2982,10 +3047,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 44,
+      "id": 45,
       "gridPos": {
         "x": 0,
-        "y": 93,
+        "y": 101,
         "w": 8,
         "h": 6
       }
@@ -3052,10 +3117,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 45,
+      "id": 46,
       "gridPos": {
         "x": 8,
-        "y": 93,
+        "y": 101,
         "w": 8,
         "h": 6
       }
@@ -3122,10 +3187,10 @@
         "showThresholdMarkers": true,
         "showThresholdLabels": false
       },
-      "id": 46,
+      "id": 47,
       "gridPos": {
         "x": 16,
-        "y": 93,
+        "y": 101,
         "w": 8,
         "h": 6
       }
@@ -3135,10 +3200,10 @@
       "title": "Logs",
       "collapsed": false,
       "panels": [],
-      "id": 47,
+      "id": 48,
       "gridPos": {
         "x": 0,
-        "y": 99,
+        "y": 107,
         "w": 24,
         "h": 1
       }
@@ -3261,10 +3326,10 @@
           "sort": "desc"
         }
       },
-      "id": 48,
+      "id": 49,
       "gridPos": {
         "x": 0,
-        "y": 100,
+        "y": 108,
         "w": 24,
         "h": 6
       }
@@ -3299,10 +3364,10 @@
         "showCommonLabels": false,
         "prettifyLogMessage": false
       },
-      "id": 49,
+      "id": 50,
       "gridPos": {
         "x": 0,
-        "y": 106,
+        "y": 114,
         "w": 24,
         "h": 10
       }
@@ -3337,10 +3402,10 @@
         "showCommonLabels": false,
         "prettifyLogMessage": false
       },
-      "id": 50,
+      "id": 51,
       "gridPos": {
         "x": 0,
-        "y": 116,
+        "y": 124,
         "w": 24,
         "h": 12
       }

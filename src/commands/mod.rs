@@ -1,4 +1,6 @@
 pub mod football;
+pub mod football_follow;
+pub mod football_player;
 pub mod help;
 pub mod pricetracking;
 pub mod radar;
@@ -52,33 +54,40 @@ pub fn definitions() -> Vec<CreateCommand> {
             .add_string_choice("Imperial (°F, mph, inHg)", "imperial")
     };
 
+    let weather_sub = |name: &str, desc: &str, what: &str| {
+        CreateCommandOption::new(CommandOptionType::SubCommand, name, desc)
+            .add_sub_option(location(what))
+            .add_sub_option(units())
+    };
+
     vec![
         CreateCommand::new("weather")
-            .description("Get the weather information for a location")
-            .add_option(location("weather information"))
-            .add_option(units()),
-        CreateCommand::new("forecast")
-            .description("Get a 5-day weather forecast for a location")
-            .add_option(location("weather forecast"))
-            .add_option(units()),
+            .description("Weather: conditions now with a rain map, or a 5-day forecast")
+            .add_option(weather_sub("now", "Current conditions and a precipitation map", "weather information"))
+            .add_option(weather_sub("forecast", "5-day forecast: highs, lows, chance of rain", "weather forecast")),
+        football::register(),
         CreateCommand::new("roles")
             .description("Manage self-assignable roles in this server")
             .contexts(vec![InteractionContext::Guild]),
         pricetracking::register(),
         help::register(),
     ]
-    .into_iter()
-    .chain(football::register())
-    .collect()
 }
 
 // ─────────────────────────────────────────────
 //  Dispatch
 // ─────────────────────────────────────────────
 
+/// A string option, at the top level or inside the chosen subcommand.
 fn string_option<'a>(cmd: &'a CommandInteraction, name: &str) -> Option<&'a str> {
-    cmd.data
-        .options
+    use serenity::all::CommandDataOptionValue;
+    let top = &cmd.data.options;
+    let nested = top.iter().find_map(|o| match &o.value {
+        CommandDataOptionValue::SubCommand(opts) => Some(opts.as_slice()),
+        _ => None,
+    });
+    nested
+        .unwrap_or(top.as_slice())
         .iter()
         .find(|o| o.name == name)
         .and_then(|o| o.value.as_str())
@@ -86,8 +95,16 @@ fn string_option<'a>(cmd: &'a CommandInteraction, name: &str) -> Option<&'a str>
         .filter(|s| !s.is_empty())
 }
 
+/// The first subcommand's name (`/weather now` → "now").
+fn subcommand(cmd: &CommandInteraction) -> Option<&str> {
+    cmd.data.options.first().map(|o| o.name.as_str())
+}
+
 pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Store) {
-    let name = cmd.data.name.as_str();
+    let name = match (cmd.data.name.as_str(), subcommand(cmd)) {
+        ("weather", Some("forecast")) => "forecast",
+        (n, _) => n,
+    };
     let label = match name {
         "pt" => "pricetracking",
         other => other,
@@ -103,7 +120,6 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
         "pt" => pricetracking::handle(ctx, cmd, store).await,
         "help" => help::handle(ctx, cmd).await,
         "football" => football::handle_football(ctx, cmd).await,
-        "live" => football::handle_live(ctx, cmd).await,
         _ => Err(anyhow!("unknown command")),
     };
 
@@ -116,7 +132,7 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
                 "forecast" => "❌ Unable to retrieve forecast information.",
                 "roles" => "❌ Failed to process roles command. Check that I have the **Manage Roles** permission.",
                 "pt" => "⚠️ Something went wrong with price tracking.",
-                "football" | "live" => "⚠️ Something went wrong fetching football data.",
+                "football" => "⚠️ Something went wrong fetching football data.",
                 _ => "❌ Something went wrong.",
             };
             reply_error(ctx, cmd, message).await;
@@ -147,7 +163,7 @@ async fn reply_error(ctx: &Context, cmd: &CommandInteraction, message: &str) {
     }
 }
 
-/// Suggestions while a user types a `/football` or `/live` option. Read
+/// Suggestions while a user types a `/football` option. Read
 /// from the cache only, so it answers within Discord's 3-second limit.
 pub async fn handle_autocomplete(ctx: &Context, cmd: &CommandInteraction) {
     if let Err(e) = football::handle_autocomplete(ctx, cmd).await {
@@ -158,8 +174,8 @@ pub async fn handle_autocomplete(ctx: &Context, cmd: &CommandInteraction) {
 pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction, store: &Store) {
     let id = comp.data.custom_id.as_str();
 
-    if id.starts_with(football::PAGE_PREFIX) {
-        let status = match football::handle_page(ctx, comp).await {
+    if id.starts_with("fb") {
+        let status = match football::handle_component(ctx, comp).await {
             Ok(()) => "success",
             Err(e) => {
                 error!(error = format!("{e:#}"), custom_id = id, "Football page button failed");
@@ -215,7 +231,7 @@ pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction, store:
 }
 
 // ─────────────────────────────────────────────
-//  /weather, /forecast
+//  /weather now, /weather forecast
 // ─────────────────────────────────────────────
 
 /// Reply for a location OpenCage could not resolve. Not a bot failure, so the

@@ -1,5 +1,5 @@
 //! `/football` (fixtures, results, tables, scorers, teams, squads, players,
-//! match details: cached, may be minutes old) and `/live` (the live
+//! match details: cached, may be minutes old) and `/football live` (the live
 //! scoreboard and live match details).
 //!
 //! Commands only read the football service's cache. When the cached copy is
@@ -25,9 +25,9 @@ use serenity::all::{
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::info;
 
-pub const PAGE_PREFIX: &str = "fb:";
-const COLOR: u32 = 0x2ecc71;
-const LIVE_COLOR: u32 = 0xe74c3c;
+const PAGE_PREFIX: &str = "fb:";
+pub(super) const COLOR: u32 = 0x2ecc71;
+pub(super) const LIVE_COLOR: u32 = 0xe74c3c;
 const PAGE_CHARS: usize = 3300;
 const PAGE_LINES: usize = 24;
 /// Live data older than this is labelled as cached.
@@ -37,37 +37,50 @@ const LIVE_FRESH: Duration = Duration::from_secs(3 * 60);
 //  Definitions
 // ─────────────────────────────────────────────
 
-fn opt(kind: CommandOptionType, name: &str, desc: &str) -> CreateCommandOption {
+pub(super) fn opt(kind: CommandOptionType, name: &str, desc: &str) -> CreateCommandOption {
     CreateCommandOption::new(kind, name, desc)
 }
 
-fn fixture_opt() -> CreateCommandOption {
+pub(super) fn fixture_opt() -> CreateCommandOption {
     opt(CommandOptionType::String, "fixture", "The match: type a team name and pick it from the list")
         .required(true)
         .set_autocomplete(true)
 }
 
-fn team_opt() -> CreateCommandOption {
+pub(super) fn team_opt() -> CreateCommandOption {
     opt(CommandOptionType::String, "team", "The team: type its name").required(true).set_autocomplete(true)
 }
 
-fn competition_opt(required: bool) -> CreateCommandOption {
+pub(super) fn competition_opt(required: bool) -> CreateCommandOption {
     opt(CommandOptionType::String, "competition", "The competition: type its name")
         .required(required)
         .set_autocomplete(true)
 }
 
-fn sub(name: &str, desc: &str, options: Vec<CreateCommandOption>) -> CreateCommandOption {
+pub(super) fn sub(name: &str, desc: &str, options: Vec<CreateCommandOption>) -> CreateCommandOption {
     options.into_iter().fold(opt(CommandOptionType::SubCommand, name, desc), |o, s| o.add_sub_option(s))
 }
 
-fn group(name: &str, desc: &str, subs: Vec<CreateCommandOption>) -> CreateCommandOption {
+pub(super) fn group(name: &str, desc: &str, subs: Vec<CreateCommandOption>) -> CreateCommandOption {
     subs.into_iter().fold(opt(CommandOptionType::SubCommandGroup, name, desc), |o, s| o.add_sub_option(s))
 }
 
-pub fn register() -> Vec<CreateCommand> {
-    let football = CreateCommand::new("football")
-        .description("Football fixtures, results, tables, teams and players (not live: see /live)")
+fn player_opt() -> CreateCommandOption {
+    opt(CommandOptionType::String, "name", "The player: type a name").required(true).set_autocomplete(true)
+}
+
+pub fn register() -> CreateCommand {
+    CreateCommand::new("football")
+        .description("Football: live scores, fixtures, tables, teams, players, following and alerts")
+        .add_option(group(
+            "live",
+            "Live scores, refreshed every minute during matches",
+            vec![
+                sub("all", "All live matches, by competition", vec![competition_opt(false)]),
+                sub("competition", "Live matches in one competition", vec![competition_opt(true)]),
+                sub("match", "One live match: score, clock, latest events", vec![fixture_opt()]),
+            ],
+        ))
         .add_option(group(
             "match",
             "A match: score, events, line-ups, statistics",
@@ -80,12 +93,23 @@ pub fn register() -> Vec<CreateCommand> {
         ))
         .add_option(group(
             "team",
-            "A team: info, squad, fixtures, statistics",
+            "A team: info, fixtures, squad, injuries, statistics, comparison",
             vec![
                 sub("info", "League positions, recent results and next matches", vec![team_opt()]),
-                sub("squad", "Current registered players by position", vec![team_opt()]),
                 sub("fixtures", "Recent results and upcoming matches", vec![team_opt()]),
+                sub("squad", "Current registered players by position", vec![team_opt()]),
+                sub("injuries", "Injured and suspended players, where the data source has them", vec![team_opt()]),
                 sub("stats", "The team's record in a competition", vec![team_opt(), competition_opt(true)]),
+                sub(
+                    "compare",
+                    "Head-to-head record and current form of two teams",
+                    vec![
+                        team_opt(),
+                        opt(CommandOptionType::String, "other", "The other team: type its name")
+                            .required(true)
+                            .set_autocomplete(true),
+                    ],
+                ),
             ],
         ))
         .add_option(group(
@@ -114,32 +138,47 @@ pub fn register() -> Vec<CreateCommand> {
                 ),
             ],
         ))
-        .add_option(sub(
+        .add_option(group(
             "player",
-            "A player's season statistics",
-            vec![opt(CommandOptionType::String, "name", "The player: type a name").required(true).set_autocomplete(true)],
-        ));
-
-    let live = CreateCommand::new("live")
-        .description("Live football scores")
-        .add_option(sub("all", "All live matches, by competition", vec![competition_opt(false)]))
-        .add_option(sub("match", "One live match: score, clock, latest events", vec![fixture_opt()]))
-        .add_option(sub("competition", "Live matches in one competition", vec![competition_opt(true)]));
-
-    vec![football, live]
+            "A player: season statistics, career, injuries",
+            vec![
+                sub("stats", "This season's statistics", vec![player_opt()]),
+                sub("career", "Clubs, seasons, transfers, trophies, national team", vec![player_opt()]),
+                sub("injuries", "Availability, current and past injuries and suspensions", vec![player_opt()]),
+            ],
+        ))
+        .add_option(group(
+            "follow",
+            "Follow teams and competitions: your feed and optional DMs",
+            vec![
+                sub("team", "Follow or unfollow a team", vec![team_opt()]),
+                sub("competition", "Follow or unfollow a competition", vec![competition_opt(true)]),
+                sub("manage", "What you follow, and your DM alerts (off by default)", vec![]),
+                sub("feed", "Live, today, upcoming, yesterday's results and table changes for what you follow", vec![]),
+            ],
+        ))
+        .add_option(group(
+            "server",
+            "Server-wide football posts (moderators; off by default)",
+            vec![
+                sub("setup", "Channel, daily summary, live alerts and competitions for this server", vec![]),
+                sub("team", "Add or remove a team the server follows", vec![team_opt()]),
+                sub("preview", "Show the daily summary this server would get", vec![]),
+            ],
+        ))
 }
 
 // ─────────────────────────────────────────────
 //  Option parsing
 // ─────────────────────────────────────────────
 
-struct Args {
-    path: Vec<String>,
-    values: HashMap<String, String>,
+pub(super) struct Args {
+    pub(super) path: Vec<String>,
+    pub(super) values: HashMap<String, String>,
 }
 
 impl Args {
-    fn from(cmd: &CommandInteraction) -> Self {
+    pub(super) fn from(cmd: &CommandInteraction) -> Self {
         fn walk(opts: &[ResolvedOption], path: &mut Vec<String>, values: &mut HashMap<String, String>) {
             for o in opts {
                 match &o.value {
@@ -159,15 +198,15 @@ impl Args {
         a
     }
 
-    fn get(&self, name: &str) -> Option<&str> {
+    pub(super) fn get(&self, name: &str) -> Option<&str> {
         self.values.get(name).map(String::as_str)
     }
 }
 
 /// A reply: embed plus optional page buttons.
-struct Reply {
-    embed: CreateEmbed,
-    rows: Vec<CreateActionRow>,
+pub(super) struct Reply {
+    pub(super) embed: CreateEmbed,
+    pub(super) rows: Vec<CreateActionRow>,
 }
 
 impl From<CreateEmbed> for Reply {
@@ -176,11 +215,11 @@ impl From<CreateEmbed> for Reply {
     }
 }
 
-fn service() -> Result<Arc<Football>> {
+pub(super) fn service() -> Result<Arc<Football>> {
     football::get().ok_or_else(|| anyhow!("football service not started"))
 }
 
-fn notice(text: impl Into<String>) -> Reply {
+pub(super) fn notice(text: impl Into<String>) -> Reply {
     CreateEmbed::new().description(text.into()).color(0x95a5a6).into()
 }
 
@@ -190,11 +229,39 @@ fn notice(text: impl Into<String>) -> Reply {
 
 pub async fn handle_football(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
     let fb = service()?;
-    cmd.defer(&ctx.http).await?;
     let args = Args::from(cmd);
+    if !matches!(args.path.first().map(String::as_str), Some("follow" | "server")) {
+        cmd.defer(&ctx.http).await?;
+    }
     let path: Vec<&str> = args.path.iter().map(String::as_str).collect();
     let reply = match path.as_slice() {
+        ["live", "all"] => match args.get("competition") {
+            None => live_list(&fb, None, 0).await,
+            Some(_) => match pick_competition(&args) {
+                Ok(c) => live_list(&fb, Some(c), 0).await,
+                Err(r) => Ok(r),
+            },
+        },
+        ["live", "competition"] => match pick_competition(&args) {
+            Ok(c) => live_list(&fb, Some(c), 0).await,
+            Err(r) => Ok(r),
+        },
+        ["live", "match"] => match_view(&fb, &args, "live", true).await,
         ["match", view] => match_view(&fb, &args, view, false).await,
+        ["team", "injuries"] => match resolve_team(&fb, args.get("team").unwrap_or_default()).await {
+            Ok(t) => super::football_player::team_injuries(&fb, &t).await,
+            Err(r) => Ok(r),
+        },
+        ["team", "compare"] => super::football_player::compare(&fb, &args).await,
+        ["player", "stats"] => player(&fb, args.get("name").unwrap_or_default()).await,
+        ["player", "career"] => super::football_player::career(&fb, args.get("name").unwrap_or_default(), "clubs").await,
+        ["player", "injuries"] => {
+            super::football_player::career(&fb, args.get("name").unwrap_or_default(), "injuries").await
+        }
+        ["follow", ..] | ["server", ..] => {
+            // These reply on their own (ephemeral panels, permission checks).
+            return super::football_follow::handle(ctx, cmd, &fb, &args).await;
+        }
         ["team", "info"] => team_info(&fb, &args).await,
         ["team", "squad"] => team_squad(&fb, &args).await,
         ["team", "fixtures"] => match resolve_team(&fb, args.get("team").unwrap_or_default()).await {
@@ -215,7 +282,6 @@ pub async fn handle_football(ctx: &Context, cmd: &CommandInteraction) -> Result<
             Ok(c) => scorers(&fb, c, args.get("stat") == Some("assists")).await,
             Err(r) => Ok(r),
         },
-        ["player"] => player(&fb, args.get("name").unwrap_or_default()).await,
         _ => Err(anyhow!("unknown /football subcommand {:?}", args.path)),
     }?;
     send(ctx, cmd, reply).await?;
@@ -223,49 +289,39 @@ pub async fn handle_football(ctx: &Context, cmd: &CommandInteraction) -> Result<
     Ok(())
 }
 
-pub async fn handle_live(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
-    let fb = service()?;
-    cmd.defer(&ctx.http).await?;
-    let args = Args::from(cmd);
-    let reply = match args.path.first().map(String::as_str) {
-        Some("all") => match args.get("competition") {
-            None => live_list(&fb, None, 0).await,
-            Some(_) => match pick_competition(&args) {
-                Ok(c) => live_list(&fb, Some(c), 0).await,
-                Err(r) => Ok(r),
-            },
-        },
-        Some("competition") => match pick_competition(&args) {
-            Ok(c) => live_list(&fb, Some(c), 0).await,
-            Err(r) => Ok(r),
-        },
-        Some("match") => match_view(&fb, &args, "live", true).await,
-        _ => Err(anyhow!("unknown /live subcommand")),
-    }?;
-    send(ctx, cmd, reply).await?;
-    info!(command = "live", path = args.path.join(" "), "Live reply delivered");
-    Ok(())
-}
-
-async fn send(ctx: &Context, cmd: &CommandInteraction, reply: Reply) -> Result<()> {
+pub(super) async fn send(ctx: &Context, cmd: &CommandInteraction, reply: Reply) -> Result<()> {
     cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(reply.embed).components(reply.rows))
         .await?;
     Ok(())
 }
 
-/// Page buttons: `fb:<kind>:<arg>:<arg>:<page>`.
-pub async fn handle_page(ctx: &Context, comp: &ComponentInteraction) -> Result<()> {
+/// Every football component: `fb:` page buttons, `fbm:` match views, `fbt:`
+/// team views, `fbc:` player views, `fbf:` follows, `fbs:` server setup.
+pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction) -> Result<()> {
     let fb = service()?;
-    let parts: Vec<&str> = comp.data.custom_id.trim_start_matches(PAGE_PREFIX).split(':').collect();
-    let page = |i: usize| parts.get(i).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-    let reply = match parts.as_slice() {
-        ["la", c, _] => live_list(&fb, competitions::by_key(c), page(2)).await?,
-        ["cf", c, d, _] => match (competitions::by_key(c), NaiveDate::parse_from_str(d, "%Y-%m-%d")) {
-            (Some(c), Ok(d)) => competition_fixtures(&fb, c, d, page(3)).await?,
-            _ => notice("This list has expired: run the command again."),
-        },
-        ["tf", slug, _] => team_fixtures(&fb, slug, page(2)).await?,
-        _ => notice("This list has expired: run the command again."),
+    let id = comp.data.custom_id.as_str();
+    if id.starts_with("fbf:") || id.starts_with("fbs:") {
+        return super::football_follow::handle_component(ctx, comp, &fb).await;
+    }
+    let reply = if let Some(rest) = id.strip_prefix("fbm:") {
+        // fbm:<view>:<live 0|1>:<slug>
+        let mut it = rest.splitn(3, ':');
+        let (view, live, slug) = (it.next().unwrap_or("details"), it.next() == Some("1"), it.next().unwrap_or(""));
+        match_reply(&fb, slug, view, live).await?
+    } else if let Some(rest) = id.strip_prefix("fbt:") {
+        // fbt:<view>:<slug>
+        let (view, slug) = rest.split_once(':').unwrap_or(("info", rest));
+        let t = team_from_slug(&fb, slug).await;
+        match view {
+            "fixtures" => team_fixtures(&fb, &t.slug, 0).await?,
+            "squad" => team_squad_ref(&fb, &t).await?,
+            "injuries" => super::football_player::team_injuries(&fb, &t).await?,
+            _ => team_info_ref(&fb, &t).await?,
+        }
+    } else if id.starts_with("fbc:") {
+        super::football_player::handle_component(&fb, comp).await?
+    } else {
+        page(&fb, id).await?
     };
     comp.create_response(
         &ctx.http,
@@ -277,11 +333,26 @@ pub async fn handle_page(ctx: &Context, comp: &ComponentInteraction) -> Result<(
     Ok(())
 }
 
+/// Page buttons: `fb:<kind>:<arg>:<arg>:<page>`.
+async fn page(fb: &Football, id: &str) -> Result<Reply> {
+    let parts: Vec<&str> = id.trim_start_matches(PAGE_PREFIX).split(':').collect();
+    let page = |i: usize| parts.get(i).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+    Ok(match parts.as_slice() {
+        ["la", c, _] => live_list(fb, competitions::by_key(c), page(2)).await?,
+        ["cf", c, d, _] => match (competitions::by_key(c), NaiveDate::parse_from_str(d, "%Y-%m-%d")) {
+            (Some(c), Ok(d)) => competition_fixtures(fb, c, d, page(3)).await?,
+            _ => notice("This list has expired: run the command again."),
+        },
+        ["tf", slug, _] => team_fixtures(fb, slug, page(2)).await?,
+        _ => notice("This list has expired: run the command again."),
+    })
+}
+
 // ─────────────────────────────────────────────
 //  Autocomplete (cache only: never calls a provider)
 // ─────────────────────────────────────────────
 
-fn clip(s: &str, max: usize) -> String {
+pub(super) fn clip(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
@@ -289,11 +360,11 @@ fn clip(s: &str, max: usize) -> String {
     }
 }
 
-fn utc_label(t: i64) -> String {
+pub(super) fn utc_label(t: i64) -> String {
     DateTime::from_timestamp(t, 0).map(|d| d.format("%a %d %b %H:%M UTC").to_string()).unwrap_or_default()
 }
 
-fn comp_label(key: &str, fallback: &str) -> String {
+pub(super) fn comp_label(key: &str, fallback: &str) -> String {
     competitions::by_key(key).map(|c| c.name.to_string()).unwrap_or_else(|| fallback.to_string())
 }
 
@@ -333,7 +404,7 @@ pub fn autocomplete_choices(fb: &Football, option: &str, typed: &str) -> Vec<Aut
                 out.push(AutocompleteChoice::new(name, f.slug));
             }
         }
-        "team" => {
+        "team" | "other" => {
             for (name, slug, c) in fb.known_teams() {
                 if (q.is_empty() || football::fold(&name).contains(&q)) && slug.len() <= 100 {
                     out.push(AutocompleteChoice::new(clip(&format!("{name} · {}", c.name), 100), slug));
@@ -379,7 +450,7 @@ pub async fn handle_autocomplete(ctx: &Context, cmd: &CommandInteraction) -> Res
 // ─────────────────────────────────────────────
 
 /// What a user should know when data couldn't be fetched.
-fn explain(e: &FetchError) -> String {
+pub(super) fn explain(e: &FetchError) -> String {
     match e {
         FetchError::Blocked(Blocked::Budget) => {
             "the data provider's request budget for today is used up; automatic refresh resumes when the quota resets (00:00 UTC)".into()
@@ -400,14 +471,14 @@ fn explain(e: &FetchError) -> String {
     }
 }
 
-fn unavailable(what: &str, e: &FetchError) -> Reply {
+pub(super) fn unavailable(what: &str, e: &FetchError) -> Reply {
     notice(format!("⚠️ {what} is temporarily unavailable: {}, and no cached copy exists.", explain(e)))
 }
 
 /// Source and freshness footer for `/football` replies (cached data, not live).
-fn source_note<T>(l: &Lookup<T>) -> String {
+pub(super) fn source_note<T>(l: &Lookup<T>) -> String {
     let v = &l.value;
-    let mut s = format!("🕒 Updated <t:{}:R> · not live (use `/live` for live scores)", v.fetched_at);
+    let mut s = format!("🕒 Updated <t:{}:R> · not live (use `/football live` for live scores)", v.fetched_at);
     if v.provider == Provider::FootballData {
         s.push_str("\n⏳ football-data.org scores on the free tier may be delayed.");
     }
@@ -422,8 +493,8 @@ fn source_note<T>(l: &Lookup<T>) -> String {
     s
 }
 
-/// Freshness for `/live` replies.
-fn live_note<T>(l: &Lookup<T>) -> String {
+/// Freshness for `/football live` replies.
+pub(super) fn live_note<T>(l: &Lookup<T>) -> String {
     let v = &l.value;
     let mut s = if l.stale || v.age() > LIVE_FRESH {
         format!(
@@ -450,14 +521,14 @@ fn friendly_note(n: &str) -> String {
     }
 }
 
-fn score_text(f: &Fixture) -> String {
+pub(super) fn score_text(f: &Fixture) -> String {
     match f.score() {
         Some((h, a)) => format!("{h}–{a}"),
         None => "vs".into(),
     }
 }
 
-fn fixture_line(f: &Fixture, with_date: bool) -> String {
+pub(super) fn fixture_line(f: &Fixture, with_date: bool) -> String {
     let when = if with_date { format!("<t:{}:f>", f.kickoff) } else { format!("<t:{}:t>", f.kickoff) };
     match f.status {
         Status::Live => format!("🔴 **{} {} {}** · {}", f.home, score_text(f), f.away, f.status_text),
@@ -471,7 +542,7 @@ fn fixture_line(f: &Fixture, with_date: bool) -> String {
 
 /// Split blocks (heading, lines) into pages, repeating a heading that
 /// continues onto the next page.
-fn paginate(blocks: &[(String, Vec<String>)], page: usize) -> (String, usize) {
+pub(super) fn paginate(blocks: &[(String, Vec<String>)], page: usize) -> (String, usize) {
     let mut pages: Vec<String> = vec![];
     let mut cur = String::new();
     let mut lines = 0;
@@ -503,7 +574,7 @@ fn paginate(blocks: &[(String, Vec<String>)], page: usize) -> (String, usize) {
     (pages.get(page.min(total - 1)).cloned().unwrap_or_default(), total)
 }
 
-fn page_buttons(prefix: &str, page: usize, total: usize) -> Vec<CreateActionRow> {
+pub(super) fn page_buttons(prefix: &str, page: usize, total: usize) -> Vec<CreateActionRow> {
     if total <= 1 {
         return vec![];
     }
@@ -526,7 +597,7 @@ fn page_buttons(prefix: &str, page: usize, total: usize) -> Vec<CreateActionRow>
 
 // The error is the reply to send; it's built once per command.
 #[allow(clippy::result_large_err)]
-fn pick_competition(args: &Args) -> Result<&'static Competition, Reply> {
+pub(super) fn pick_competition(args: &Args) -> Result<&'static Competition, Reply> {
     let typed = args.get("competition").unwrap_or_default();
     competitions::find(typed).ok_or_else(|| {
         notice(format!(
@@ -538,7 +609,7 @@ fn pick_competition(args: &Args) -> Result<&'static Competition, Reply> {
 
 // The error is the reply to send; it's built once per command.
 #[allow(clippy::result_large_err)]
-fn parse_date(input: Option<&str>) -> Result<NaiveDate, Reply> {
+pub(super) fn parse_date(input: Option<&str>) -> Result<NaiveDate, Reply> {
     let today = Utc::now().date_naive();
     let Some(s) = input else { return Ok(today) };
     let s = s.trim().to_lowercase();
@@ -645,6 +716,33 @@ async fn match_view(fb: &Football, args: &Args, view: &str, live_cmd: bool) -> R
     let Some(slug) = resolve_fixture(fb, input) else {
         return Ok(notice("❌ I couldn't find that match. Start typing a team name and pick the match from the list."));
     };
+    match_reply(fb, &slug, view, live_cmd).await
+}
+
+/// Buttons under a match: switch between its views.
+fn match_buttons(slug: &str, current: &str, live_cmd: bool) -> Vec<CreateActionRow> {
+    // custom_id is limited to 100 characters.
+    if slug.len() > 88 {
+        return vec![];
+    }
+    let l = if live_cmd { 1 } else { 0 };
+    let first = if live_cmd { ("live", "🔴 Live") } else { ("details", "Summary") };
+    let views = [first, ("events", "Events"), ("lineup", "Line-ups"), ("stats", "Stats")];
+    vec![CreateActionRow::Buttons(
+        views
+            .iter()
+            .map(|(v, label)| {
+                CreateButton::new(format!("fbm:{v}:{l}:{slug}"))
+                    .label(*label)
+                    .style(if *v == current { ButtonStyle::Primary } else { ButtonStyle::Secondary })
+                    .disabled(*v == current)
+            })
+            .collect(),
+    )]
+}
+
+pub(super) async fn match_reply(fb: &Football, slug: &str, view: &str, live_cmd: bool) -> Result<Reply> {
+    let slug = slug.to_string();
     let lookup = match fb.match_detail(&slug, Purpose::User).await {
         Ok(l) => l,
         Err(FetchError::NotFound) => {
@@ -679,9 +777,9 @@ async fn match_view(fb: &Football, args: &Args, view: &str, live_cmd: bool) -> R
         };
         let embed = CreateEmbed::new()
             .title(match_title(f))
-            .description(format!("ℹ️ This match isn't live. {state}\nUse `/football match details` for the full report.\n\n{}", live_note(&lookup)))
+            .description(format!("ℹ️ This match isn't live. {state}\nThe buttons below show the full report.\n\n{}", live_note(&lookup)))
             .color(COLOR);
-        return Ok(embed.into());
+        return Ok(Reply { embed, rows: match_buttons(&slug, "", false) });
     }
 
     let mut embed = CreateEmbed::new()
@@ -764,7 +862,7 @@ async fn match_view(fb: &Football, args: &Args, view: &str, live_cmd: bool) -> R
         }
         _ => header.clone(),
     };
-    Ok(embed.description(format!("{body}\n\n{note}")).into())
+    Ok(Reply { embed: embed.description(format!("{body}\n\n{note}")), rows: match_buttons(&slug, view, live_cmd) })
 }
 
 // ─────────────────────────────────────────────
@@ -999,14 +1097,14 @@ async fn scorers(fb: &Football, c: &'static Competition, assists: bool) -> Resul
 //  Teams
 // ─────────────────────────────────────────────
 
-struct TeamRef {
-    name: String,
-    slug: String,
-    country: &'static str,
+pub(super) struct TeamRef {
+    pub(super) name: String,
+    pub(super) slug: String,
+    pub(super) country: &'static str,
 }
 
 /// A team from autocomplete (a slug in a cached table) or typed text (looked up).
-async fn resolve_team(fb: &Football, input: &str) -> Result<TeamRef, Reply> {
+pub(super) async fn resolve_team(fb: &Football, input: &str) -> Result<TeamRef, Reply> {
     let known = fb.known_teams();
     if let Some((name, slug, c)) = known.iter().find(|(_, s, _)| s == input) {
         return Ok(TeamRef { name: name.clone(), slug: slug.clone(), country: c.country });
@@ -1026,7 +1124,7 @@ async fn resolve_team(fb: &Football, input: &str) -> Result<TeamRef, Reply> {
 
 /// The search result closest to what was typed: the exact name, then a name
 /// starting with it, then the shortest name containing it, then the first.
-fn best_match<'a>(results: &'a [(String, String)], typed: &str) -> Option<&'a (String, String)> {
+pub(super) fn best_match<'a>(results: &'a [(String, String)], typed: &str) -> Option<&'a (String, String)> {
     let q = football::fold(typed);
     let base = |n: &str| football::fold(n.split(" - ").next().unwrap_or(n));
     results
@@ -1037,11 +1135,11 @@ fn best_match<'a>(results: &'a [(String, String)], typed: &str) -> Option<&'a (S
         .or_else(|| results.first())
 }
 
-fn plural(n: u32, word: &str) -> String {
+pub(super) fn plural(n: u32, word: &str) -> String {
     if n == 1 { format!("{n} {word}") } else { format!("{n} {word}s") }
 }
 
-fn ordinal(n: u32) -> String {
+pub(super) fn ordinal(n: u32) -> String {
     let suffix = match (n % 10, n % 100) {
         (_, 11..=13) => "th",
         (1, _) => "st",
@@ -1052,7 +1150,7 @@ fn ordinal(n: u32) -> String {
     format!("{n}{suffix}")
 }
 
-fn result_letter(f: &Fixture, team: &str) -> Option<char> {
+pub(super) fn result_letter(f: &Fixture, team: &str) -> Option<char> {
     let (h, a) = f.score()?;
     let home = f.home == team;
     Some(match (h.cmp(&a), home) {
@@ -1063,10 +1161,42 @@ fn result_letter(f: &Fixture, team: &str) -> Option<char> {
 }
 
 async fn team_info(fb: &Football, args: &Args) -> Result<Reply> {
-    let t = match resolve_team(fb, args.get("team").unwrap_or_default()).await {
-        Ok(t) => t,
-        Err(r) => return Ok(r),
-    };
+    match resolve_team(fb, args.get("team").unwrap_or_default()).await {
+        Ok(t) => team_info_ref(fb, &t).await,
+        Err(r) => Ok(r),
+    }
+}
+
+/// A team known only by its slug (from a button): its name from the cached
+/// tables or schedule.
+pub(super) async fn team_from_slug(fb: &Football, slug: &str) -> TeamRef {
+    if let Some((name, slug, c)) = fb.known_teams().into_iter().find(|(_, s, _)| s == slug) {
+        return TeamRef { name, slug, country: c.country };
+    }
+    let name = fb.cached::<TeamSchedule>(&format!("team:{slug}")).await.map(|t| t.data.name).unwrap_or_else(|| slug.to_string());
+    TeamRef { name, slug: slug.to_string(), country: "" }
+}
+
+/// Buttons under a team: switch view, follow.
+pub(super) fn team_buttons(slug: &str, current: &str) -> Vec<CreateActionRow> {
+    if slug.len() > 80 {
+        return vec![];
+    }
+    let views = [("info", "Info"), ("fixtures", "Fixtures"), ("squad", "Squad"), ("injuries", "Injuries")];
+    let mut buttons: Vec<CreateButton> = views
+        .iter()
+        .map(|(v, label)| {
+            CreateButton::new(format!("fbt:{v}:{slug}"))
+                .label(*label)
+                .style(if *v == current { ButtonStyle::Primary } else { ButtonStyle::Secondary })
+                .disabled(*v == current)
+        })
+        .collect();
+    buttons.push(CreateButton::new(format!("fbf:toggle:{slug}")).label("⭐ Follow / unfollow").style(ButtonStyle::Success));
+    vec![CreateActionRow::Buttons(buttons)]
+}
+
+pub(super) async fn team_info_ref(fb: &Football, t: &TeamRef) -> Result<Reply> {
     let lookup = match fb.team(&t.slug, Purpose::User).await {
         Ok(l) => l,
         Err(e) => return Ok(unavailable("This team", &e)),
@@ -1112,10 +1242,10 @@ async fn team_info(fb: &Football, args: &Args) -> Result<Reply> {
             false,
         )
         .description(source_note(&lookup));
-    Ok(embed.into())
+    Ok(Reply { embed, rows: team_buttons(&t.slug, "info") })
 }
 
-async fn team_fixtures(fb: &Football, slug: &str, page: usize) -> Result<Reply> {
+pub(super) async fn team_fixtures(fb: &Football, slug: &str, page: usize) -> Result<Reply> {
     let lookup = match fb.team(slug, Purpose::User).await {
         Ok(l) => l,
         Err(e) => return Ok(unavailable("This team's fixtures", &e)),
@@ -1137,10 +1267,12 @@ async fn team_fixtures(fb: &Football, slug: &str, page: usize) -> Result<Reply> 
         .title(format!("📅 {}", team.name))
         .description(format!("{text}\n{}", source_note(&lookup)))
         .color(COLOR);
-    Ok(Reply { embed, rows: page_buttons(&format!("tf:{slug}"), page, total) })
+    let mut rows = page_buttons(&format!("tf:{slug}"), page, total);
+    rows.extend(team_buttons(slug, "fixtures"));
+    Ok(Reply { embed, rows })
 }
 
-fn position_rank(p: Option<&str>) -> (u8, String) {
+pub(super) fn position_rank(p: Option<&str>) -> (u8, String) {
     let p = p.unwrap_or("Other");
     let rank = match p {
         "Goalkeeper" => 0,
@@ -1153,13 +1285,16 @@ fn position_rank(p: Option<&str>) -> (u8, String) {
 }
 
 async fn team_squad(fb: &Football, args: &Args) -> Result<Reply> {
+    match resolve_team(fb, args.get("team").unwrap_or_default()).await {
+        Ok(t) => team_squad_ref(fb, &t).await,
+        Err(r) => Ok(r),
+    }
+}
+
+pub(super) async fn team_squad_ref(fb: &Football, t: &TeamRef) -> Result<Reply> {
     if !fb.has_squads() {
         return Ok(notice("⚠️ Squads aren't available on this bot (no API-Football key is configured)."));
     }
-    let t = match resolve_team(fb, args.get("team").unwrap_or_default()).await {
-        Ok(t) => t,
-        Err(r) => return Ok(r),
-    };
     let lookup = match fb.squad(&t.slug, &t.name, t.country, Purpose::User).await {
         Ok(l) => l,
         Err(FetchError::NotFound) => {
@@ -1193,7 +1328,7 @@ async fn team_squad(fb: &Football, args: &Args) -> Result<Reply> {
             .collect();
         embed = embed.field(format!("{name}s"), clip(&lines.join("\n"), 1024), true);
     }
-    Ok(embed.into())
+    Ok(Reply { embed, rows: team_buttons(&t.slug, "squad") })
 }
 
 async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
@@ -1261,7 +1396,7 @@ async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
 //  Players
 // ─────────────────────────────────────────────
 
-async fn player(fb: &Football, input: &str) -> Result<Reply> {
+pub(super) async fn player(fb: &Football, input: &str) -> Result<Reply> {
     let input = input.trim();
     let mut lookup = if !input.contains(' ') { fb.player(input, Purpose::User).await } else { Err(FetchError::NotFound) };
     if matches!(lookup, Err(FetchError::NotFound)) {
@@ -1318,8 +1453,8 @@ mod tests {
 
     #[test]
     fn definitions_fit_discord_limits() {
-        for cmd in register() {
-            let v = serde_json::to_value(&cmd).unwrap();
+        {
+            let v = serde_json::to_value(register()).unwrap();
             let name = v["name"].as_str().unwrap();
             assert!(v["description"].as_str().unwrap().len() <= 100, "{name}");
             fn check(opts: &serde_json::Value) {
@@ -1476,12 +1611,43 @@ mod tests {
         if fb.has_squads() {
             check_limits("squad", &team_squad(&fb, &args(&["team", "squad"], &[("team", "flamengo-rj")])).await.unwrap());
         }
+        if fb.has_careers() {
+            use crate::commands::football_player as fp;
+            let first = fp::career(&fb, "Neymar", "clubs").await.unwrap();
+            check_limits("career (search)", &first);
+            // Whichever player the search picked (or the first in the menu).
+            let id = fb.find_players("Neymar", Purpose::User).await.unwrap().value.data[0].id;
+            for view in ["clubs", "seasons", "transfers", "trophies", "injuries"] {
+                let r = fp::show(&fb, id, view).await.unwrap();
+                assert!(r.rows.len() <= 5);
+                check_limits(&format!("career {view}"), &r);
+            }
+            let ambiguous = fp::career(&fb, "Pedro", "injuries").await.unwrap();
+            check_limits("career ambiguous", &ambiguous);
+            let fla = team_from_slug(&fb, "flamengo-rj").await;
+            let inj = fp::team_injuries(&fb, &fla).await.unwrap();
+            assert!(inj.rows.len() <= 5);
+            check_limits("team injuries", &inj);
+            check_limits(
+                "compare",
+                &fp::compare(&fb, &args(&["team", "compare"], &[("team", "flamengo-rj"), ("other", "palmeiras-sp")])).await.unwrap(),
+            );
+        }
+        {
+            use crate::football::follows::{FollowedTeam, Owner, Subscription};
+            let mut sub = Subscription::new(Owner::User(1));
+            sub.toggle_team(FollowedTeam { slug: "flamengo-rj".into(), name: "Flamengo - RJ".into() });
+            sub.toggle_competition("brazilian-serie-a");
+            sub.toggle_competition("english-premier-league");
+            let embed = crate::commands::football_follow::feed_embed(&fb, &sub, "⭐ Your football").await;
+            check_limits("feed", &Reply { embed, rows: vec![] });
+        }
         check_limits("player", &player(&fb, "kevin-viveros").await.unwrap());
         check_limits("player typed", &player(&fb, "Lionel Messi").await.unwrap());
 
         // A finished Premier League match and one from the fixture list.
         for view in ["details", "events", "lineup", "stats"] {
-            let r = match_view(&fb, &args(&["match", view], &[("fixture", "bournemouth-afc-vs-ipswich-town")]), view, false).await.unwrap();
+            let r = match_reply(&fb, "bournemouth-afc-vs-ipswich-town", view, false).await.unwrap();
             check_limits(&format!("match {view}"), &r);
         }
         check_limits("live match (finished)", &match_view(&fb, &args(&["match"], &[("fixture", "bournemouth-afc-vs-ipswich-town")]), "live", true).await.unwrap());

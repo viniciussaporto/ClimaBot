@@ -374,6 +374,10 @@ def climabot():
                      [target(f"histogram_quantile(0.95, sum by (le, provider) "
                              f"({rate('football_api_request_duration_seconds_bucket')}))", "{{provider}}")],
                      unit="s"), 8, 8)
+    L.add(timeseries("Follow notifications",
+                     [target(f"sum by (kind, status) ({inc('football_notifications_total')})", "{{kind}} · {{status}}")],
+                     bars=True, stack=True, legend_calcs=("sum",),
+                     desc="Live alerts and daily summaries sent to users (DM) and server channels."), 8, 8)
     L.add(bargauge("Providers up", "football_provider_up", "{{provider}}", max_=1, sort=False,
                    steps=(("red", None), ("green", 1)),
                    desc="1 = usable, 0 = in a cooldown (rate limit, outage) or the key was rejected."), 8, 8)
