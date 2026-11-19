@@ -7,7 +7,10 @@
 use super::{FetchError, FetchResult, Upstream, num, str_or_empty, text, unix, unum};
 use crate::football::{
     competitions::{self, Competition},
-    model::*,
+    model::{
+        Event, EventKind, Fixture, HeadToHead, LineupPlayer, Lineups, MatchDetail, PlayerProfile, Provider, Scorer,
+        SearchResults, Side, StandingGroup, StandingRow, Standings, Stat, Status, TeamLineup, TeamSchedule,
+    },
     quota::Purpose,
 };
 use chrono::NaiveDate;
@@ -40,10 +43,7 @@ impl SportScore {
         date: NaiveDate,
         purpose: Purpose,
     ) -> FetchResult<Vec<Fixture>> {
-        let path = format!(
-            "/api/v1/fixtures/?sport=football&date={date}&competition={}&limit={LIST_LIMIT}",
-            comp.key
-        );
+        let path = format!("/api/v1/fixtures/?sport=football&date={date}&competition={}&limit={LIST_LIMIT}", comp.key);
         Ok(parse_matches(&self.get(up, "fixtures", &path, purpose).await?))
     }
 
@@ -58,10 +58,7 @@ impl SportScore {
 
     /// Live matches of one competition (used when the global list is truncated).
     pub async fn live_in(&self, up: &Upstream, comp: &Competition, purpose: Purpose) -> FetchResult<Vec<Fixture>> {
-        let path = format!(
-            "/api/v1/fixtures/?sport=football&status=live&competition={}&limit={LIST_LIMIT}",
-            comp.key
-        );
+        let path = format!("/api/v1/fixtures/?sport=football&status=live&competition={}&limit={LIST_LIMIT}", comp.key);
         Ok(parse_matches(&self.get(up, "live", &path, purpose).await?))
     }
 
@@ -99,11 +96,8 @@ impl SportScore {
 
     /// Recent meetings of two teams (by slug) and the win/draw summary.
     pub async fn h2h(&self, up: &Upstream, team1: &str, team2: &str, purpose: Purpose) -> FetchResult<HeadToHead> {
-        let path = format!(
-            "/api/v1/h2h/?sport=football&team1={}&team2={}&limit=10",
-            urlencode(team1),
-            urlencode(team2)
-        );
+        let path =
+            format!("/api/v1/h2h/?sport=football&team1={}&team2={}&limit=10", urlencode(team1), urlencode(team2));
         Ok(parse_h2h(&self.get(up, "h2h", &path, purpose).await?))
     }
 
@@ -372,10 +366,7 @@ pub fn parse_player(v: &Value) -> FetchResult<PlayerProfile> {
         photo: text(&p["logo"]),
         team: text(&s["team"]),
         competition: text(&s["competition"]),
-        stats: PLAYER_STATS
-            .iter()
-            .filter_map(|(k, label)| text(&s[*k]).map(|v| (label.to_string(), v)))
-            .collect(),
+        stats: PLAYER_STATS.iter().filter_map(|(k, label)| text(&s[*k]).map(|v| (label.to_string(), v))).collect(),
     })
 }
 

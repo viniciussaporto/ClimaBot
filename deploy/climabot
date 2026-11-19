@@ -17,6 +17,7 @@
 
 set -euo pipefail
 
+# shellcheck source=/dev/null
 [[ -r /etc/default/climabot ]] && . /etc/default/climabot
 
 RUST_DIR=${CLIMABOT_RUST_DIR:-/root/climabot-rust}         # git checkout + compose project
@@ -147,6 +148,8 @@ cmd_logs() {
 # Filled by /pt add (MongoDB `failed_sites`, one entry per shop).
 cmd_failed_sites() {
     [[ -n "$(rust_compose ps -q --status running mongo 2>/dev/null)" ]] || die "MongoDB is not running"
+    # JavaScript for mongosh: single quotes keep the shell out of it.
+    # shellcheck disable=SC2016
     rust_compose exec -T mongo mongosh climabot --quiet --eval '
         const sites = db.failed_sites.find().sort({ last_seen: -1 }).toArray();
         if (!sites.length) { print("No failed sites recorded."); quit(); }

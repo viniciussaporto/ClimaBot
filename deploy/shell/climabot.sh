@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # /etc/profile.d/climabot.sh - climabot shortcuts + SSH login banner
 # Installed by deploy/install.sh (source: deploy/shell/climabot.sh). Edit there, not in /etc.
 # Bash-only, interactive-only. Also sourced from /etc/bash.bashrc (non-login shells).
@@ -42,6 +43,8 @@ cb_banner() {
 
 for entry in "${CB_CMDS[@]}"; do
   IFS='|' read -r name desc cmd <<< "$entry"
+  # Expanding now is the point: each alias gets its own command.
+  # shellcheck disable=SC2139
   [ -n "$cmd" ] && alias "$name=$cmd"
 done
 unset entry name desc cmd

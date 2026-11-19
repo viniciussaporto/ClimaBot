@@ -26,8 +26,7 @@ pub enum Listing {
 }
 
 pub fn is_mercadolivre(host: &str) -> bool {
-    host.split('.')
-        .any(|label| label == "mercadolivre" || label == "mercadolibre")
+    host.split('.').any(|label| label == "mercadolivre" || label == "mercadolibre")
 }
 
 /// Find an ML id (`MLB123…`, `MLA-123…`) in `s`, normalised without the dash.
@@ -96,6 +95,8 @@ struct Item {
     currency_id: Option<String>,
 }
 
+// `client_id` / `client_secret` are the OAuth terms Mercado Livre uses.
+#[allow(clippy::struct_field_names)]
 pub struct Client {
     client_id: String,
     client_secret: String,
@@ -128,7 +129,7 @@ impl Client {
             ])
             .send()
             .await
-            .and_then(|r| r.error_for_status())
+            .and_then(reqwest::Response::error_for_status)
             .map_err(api_error)?
             .json()
             .await
@@ -146,7 +147,7 @@ impl Client {
             .bearer_auth(token)
             .send()
             .await
-            .and_then(|r| r.error_for_status())
+            .and_then(reqwest::Response::error_for_status)
             .map_err(api_error)?
             .json()
             .await
@@ -193,10 +194,7 @@ pub static CLIENT: LazyLock<Option<Client>> = LazyLock::new(|| {
     Some(Client {
         client_id: id.trim().to_string(),
         client_secret: secret.trim().to_string(),
-        http: reqwest::Client::builder()
-            .timeout(Duration::from_secs(15))
-            .build()
-            .expect("failed to build HTTP client"),
+        http: reqwest::Client::builder().timeout(Duration::from_secs(15)).build().expect("failed to build HTTP client"),
         token: Mutex::new(None),
     })
 });

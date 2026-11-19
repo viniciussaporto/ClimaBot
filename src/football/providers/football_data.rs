@@ -5,7 +5,11 @@
 //! tables and scorers — never for `/live`.
 
 use super::{FetchResult, Upstream, num, str_or_empty, text, unix, unum};
-use crate::football::{competitions::Competition, model::*, quota::Purpose};
+use crate::football::{
+    competitions::Competition,
+    model::{Fixture, Provider, Scorer, StandingGroup, StandingRow, Standings, Status},
+    quota::Purpose,
+};
 use chrono::NaiveDate;
 use serde_json::Value;
 

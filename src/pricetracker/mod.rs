@@ -1,8 +1,8 @@
 pub mod currency;
-pub mod solver;
 pub mod mercadolivre;
 pub mod scrape;
 mod sites;
+pub mod solver;
 pub mod store;
 
 use crate::metrics;
@@ -13,9 +13,9 @@ use std::{
     time::Duration,
 };
 // tokio's clock (identical in production) so tests can run on virtual time.
-use tokio::time::Instant;
 use store::{Store, TrackedProduct};
 use tokio::sync::{Mutex, Semaphore};
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 pub use currency::format as format_price;
@@ -173,10 +173,7 @@ async fn check_and_record(store: &Store, http: &Http, product: &TrackedProduct) 
         Ok(found) => {
             // Keep the currency we already know if the page stopped showing one.
             let currency = found.currency.clone().or_else(|| product.currency.clone());
-            match store
-                .record_check(product, &found.name, found.price, currency.as_deref())
-                .await
-            {
+            match store.record_check(product, &found.name, found.price, currency.as_deref()).await {
                 Ok(Some(old)) => {
                     metrics::PRICE_CHECK_COUNTER.with_label_values(&["changed"]).inc();
                     info!(url = %product.url, old, new = found.price, "Price change detected");
@@ -212,28 +209,13 @@ async fn check_and_record(store: &Store, http: &Http, product: &TrackedProduct) 
     }
 }
 
-async fn notify_change(
-    http: &Http,
-    product: &TrackedProduct,
-    name: &str,
-    old: f64,
-    new: f64,
-    currency: Option<&str>,
-) {
-    let (icon, verb, color) = if new < old {
-        ("📉", "dropped", 0x2ecc71)
-    } else {
-        ("📈", "went up", 0xe74c3c)
-    };
+async fn notify_change(http: &Http, product: &TrackedProduct, name: &str, old: f64, new: f64, currency: Option<&str>) {
+    let (icon, verb, color) = if new < old { ("📉", "dropped", 0x2ecc71) } else { ("📈", "went up", 0xe74c3c) };
     let pct = (new - old) / old * 100.0;
     let embed = CreateEmbed::new()
         .title(format!("{icon} Price {verb}: {name}"))
         .url(&product.url)
-        .description(format!(
-            "**{}** → **{}** ({pct:+.1}%)",
-            format_price(old, currency),
-            format_price(new, currency)
-        ))
+        .description(format!("**{}** → **{}** ({pct:+.1}%)", format_price(old, currency), format_price(new, currency)))
         .color(color);
     send_dm(http, product, embed).await;
 }

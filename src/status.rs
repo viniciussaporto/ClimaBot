@@ -64,7 +64,7 @@ pub async fn run_probes(store: Store, shard_manager: Arc<ShardManager>) {
                 false
             }
         };
-        *SNAPSHOT.write().unwrap_or_else(|p| p.into_inner()) =
+        *SNAPSHOT.write().unwrap_or_else(std::sync::PoisonError::into_inner) =
             Snapshot { discord, database, at: Some(Instant::now()) };
     }
 }
@@ -72,7 +72,7 @@ pub async fn run_probes(store: Store, shard_manager: Arc<ShardManager>) {
 /// (Discord connected, MongoDB answering), from the latest probe; both false
 /// when the probe is stuck or hasn't run yet.
 pub fn current() -> (bool, bool) {
-    let b = body(*SNAPSHOT.read().unwrap_or_else(|p| p.into_inner()), Instant::now());
+    let b = body(*SNAPSHOT.read().unwrap_or_else(std::sync::PoisonError::into_inner), Instant::now());
     (b.discord, b.database)
 }
 
@@ -88,7 +88,7 @@ fn body(snapshot: Snapshot, now: Instant) -> Body {
 
 /// `200 {"ok":true,…}` when everything is healthy, `503 {"ok":false,…}` otherwise.
 pub async fn handler() -> impl IntoResponse {
-    let snapshot = *SNAPSHOT.read().unwrap_or_else(|p| p.into_inner());
+    let snapshot = *SNAPSHOT.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     let body = body(snapshot, Instant::now());
     let code = if body.ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
     (
@@ -123,8 +123,8 @@ mod tests {
     #[test]
     fn body_has_the_ok_field_monitors_match() {
         let now = Instant::now();
-        let json = serde_json::to_string(&body(Snapshot { discord: true, database: true, at: Some(now) }, now))
-            .unwrap();
+        let json =
+            serde_json::to_string(&body(Snapshot { discord: true, database: true, at: Some(now) }, now)).unwrap();
         assert!(json.starts_with(r#"{"ok":true,"#), "{json}");
     }
 }

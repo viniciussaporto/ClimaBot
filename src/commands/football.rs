@@ -10,7 +10,10 @@
 use crate::football::{
     self, Football, Lookup,
     competitions::{self, COMPETITIONS, Competition, Kind},
-    model::*,
+    model::{
+        Event, EventKind, Fixture, MatchDetail, Provider, Scorer, Side, SquadPlayer, StandingRow, Standings, Status,
+        TeamLineup, TeamSchedule,
+    },
     providers::FetchError,
     quota::{Blocked, Purpose},
 };
@@ -58,11 +61,11 @@ pub(super) fn competition_opt(required: bool) -> CreateCommandOption {
 }
 
 pub(super) fn sub(name: &str, desc: &str, options: Vec<CreateCommandOption>) -> CreateCommandOption {
-    options.into_iter().fold(opt(CommandOptionType::SubCommand, name, desc), |o, s| o.add_sub_option(s))
+    options.into_iter().fold(opt(CommandOptionType::SubCommand, name, desc), CreateCommandOption::add_sub_option)
 }
 
 pub(super) fn group(name: &str, desc: &str, subs: Vec<CreateCommandOption>) -> CreateCommandOption {
-    subs.into_iter().fold(opt(CommandOptionType::SubCommandGroup, name, desc), |o, s| o.add_sub_option(s))
+    subs.into_iter().fold(opt(CommandOptionType::SubCommandGroup, name, desc), CreateCommandOption::add_sub_option)
 }
 
 fn player_opt() -> CreateCommandOption {
@@ -122,7 +125,11 @@ pub fn register() -> CreateCommand {
                     "Matches and results on a day",
                     vec![
                         competition_opt(true),
-                        opt(CommandOptionType::String, "date", "today, tomorrow, yesterday or YYYY-MM-DD (default: today)"),
+                        opt(
+                            CommandOptionType::String,
+                            "date",
+                            "today, tomorrow, yesterday or YYYY-MM-DD (default: today)",
+                        ),
                     ],
                 ),
                 sub("table", "Standings", vec![competition_opt(true)]),
@@ -179,7 +186,7 @@ pub(super) struct Args {
 
 impl Args {
     pub(super) fn from(cmd: &CommandInteraction) -> Self {
-        fn walk(opts: &[ResolvedOption], path: &mut Vec<String>, values: &mut HashMap<String, String>) {
+        fn walk(opts: &[ResolvedOption<'_>], path: &mut Vec<String>, values: &mut HashMap<String, String>) {
             for o in opts {
                 match &o.value {
                     ResolvedValue::SubCommandGroup(sub) | ResolvedValue::SubCommand(sub) => {
@@ -254,11 +261,13 @@ pub async fn handle_football(ctx: &Context, cmd: &CommandInteraction) -> Result<
         },
         ["team", "compare"] => super::football_player::compare(&fb, &args).await,
         ["player", "stats"] => player(&fb, args.get("name").unwrap_or_default()).await,
-        ["player", "career"] => super::football_player::career(&fb, args.get("name").unwrap_or_default(), "clubs").await,
+        ["player", "career"] => {
+            super::football_player::career(&fb, args.get("name").unwrap_or_default(), "clubs").await
+        }
         ["player", "injuries"] => {
             super::football_player::career(&fb, args.get("name").unwrap_or_default(), "injuries").await
         }
-        ["follow", ..] | ["server", ..] => {
+        ["follow" | "server", ..] => {
             // These reply on their own (ephemeral panels, permission checks).
             return super::football_follow::handle(ctx, cmd, &fb, &args).await;
         }
@@ -290,8 +299,7 @@ pub async fn handle_football(ctx: &Context, cmd: &CommandInteraction) -> Result<
 }
 
 pub(super) async fn send(ctx: &Context, cmd: &CommandInteraction, reply: Reply) -> Result<()> {
-    cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(reply.embed).components(reply.rows))
-        .await?;
+    cmd.edit_response(&ctx.http, EditInteractionResponse::new().embed(reply.embed).components(reply.rows)).await?;
     Ok(())
 }
 
@@ -353,11 +361,7 @@ async fn page(fb: &Football, id: &str) -> Result<Reply> {
 // ─────────────────────────────────────────────
 
 pub(super) fn clip(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        format!("{}…", s.chars().take(max - 1).collect::<String>())
-    }
+    if s.chars().count() <= max { s.to_string() } else { format!("{}…", s.chars().take(max - 1).collect::<String>()) }
 }
 
 pub(super) fn utc_label(t: i64) -> String {
@@ -365,7 +369,7 @@ pub(super) fn utc_label(t: i64) -> String {
 }
 
 pub(super) fn comp_label(key: &str, fallback: &str) -> String {
-    competitions::by_key(key).map(|c| c.name.to_string()).unwrap_or_else(|| fallback.to_string())
+    competitions::by_key(key).map_or_else(|| fallback.to_string(), |c| c.name.to_string())
 }
 
 pub fn autocomplete_choices(fb: &Football, option: &str, typed: &str) -> Vec<AutocompleteChoice> {
@@ -389,8 +393,13 @@ pub fn autocomplete_choices(fb: &Football, option: &str, typed: &str) -> Vec<Aut
                 .filter(|f| !f.slug.is_empty() && f.slug.len() <= 100)
                 .filter(|f| {
                     q.is_empty()
-                        || football::fold(&format!("{} {} {}", f.home, f.away, comp_label(&f.competition, &f.competition_name)))
-                            .contains(&q)
+                        || football::fold(&format!(
+                            "{} {} {}",
+                            f.home,
+                            f.away,
+                            comp_label(&f.competition, &f.competition_name)
+                        ))
+                        .contains(&q)
                 })
                 .collect();
             list.sort_by_key(|f| (f.status != Status::Live, (f.kickoff - now).abs()));
@@ -485,7 +494,7 @@ pub(super) fn source_note<T>(l: &Lookup<T>) -> String {
     if l.stale {
         s.push_str(&format!(
             "\n⚠️ Couldn't refresh: {}. Showing the last saved copy.",
-            l.note.as_deref().map(friendly_note).unwrap_or("unknown error".into())
+            l.note.as_deref().map_or("unknown error".into(), friendly_note)
         ));
     }
     s.push('\n');
@@ -680,10 +689,7 @@ fn event_line(e: &Event, d: &MatchDetail) -> String {
         EventKind::YellowCard => format!("🟨 {who}"),
         EventKind::SecondYellow => format!("🟨🟥 {who}"),
         EventKind::RedCard => format!("🟥 {who}"),
-        EventKind::Substitution => format!(
-            "🔄 ⬆ {} ⬇ {who}",
-            e.player_in.as_deref().unwrap_or("–")
-        ),
+        EventKind::Substitution => format!("🔄 ⬆ {} ⬇ {who}", e.player_in.as_deref().unwrap_or("–")),
         EventKind::Var => format!("📺 VAR{}", if e.player.is_empty() { String::new() } else { format!(" · {who}") }),
         EventKind::Other(k) => format!("• {k} {who}"),
     };
@@ -694,10 +700,8 @@ fn lineup_field(t: &TeamLineup, starting: bool) -> String {
     let players = if starting { &t.starting } else { &t.substitutes };
     let mut s = String::new();
     if starting {
-        let head: Vec<String> = [t.formation.clone(), t.coach.as_ref().map(|c| format!("Coach: {c}"))]
-            .into_iter()
-            .flatten()
-            .collect();
+        let head: Vec<String> =
+            [t.formation.clone(), t.coach.as_ref().map(|c| format!("Coach: {c}"))].into_iter().flatten().collect();
         if !head.is_empty() {
             s.push_str(&format!("**{}**\n", head.join(" · ")));
         }
@@ -725,7 +729,7 @@ fn match_buttons(slug: &str, current: &str, live_cmd: bool) -> Vec<CreateActionR
     if slug.len() > 88 {
         return vec![];
     }
-    let l = if live_cmd { 1 } else { 0 };
+    let l = i32::from(live_cmd);
     let first = if live_cmd { ("live", "🔴 Live") } else { ("details", "Summary") };
     let views = [first, ("events", "Events"), ("lineup", "Line-ups"), ("stats", "Stats")];
     vec![CreateActionRow::Buttons(
@@ -777,14 +781,16 @@ pub(super) async fn match_reply(fb: &Football, slug: &str, view: &str, live_cmd:
         };
         let embed = CreateEmbed::new()
             .title(match_title(f))
-            .description(format!("ℹ️ This match isn't live. {state}\nThe buttons below show the full report.\n\n{}", live_note(&lookup)))
+            .description(format!(
+                "ℹ️ This match isn't live. {state}\nThe buttons below show the full report.\n\n{}",
+                live_note(&lookup)
+            ))
             .color(COLOR);
         return Ok(Reply { embed, rows: match_buttons(&slug, "", false) });
     }
 
-    let mut embed = CreateEmbed::new()
-        .title(match_title(f))
-        .color(if f.status == Status::Live { LIVE_COLOR } else { COLOR });
+    let mut embed =
+        CreateEmbed::new().title(match_title(f)).color(if f.status == Status::Live { LIVE_COLOR } else { COLOR });
     let note = if live_cmd { live_note(&lookup) } else { source_note(&lookup) };
 
     let body = match view {
@@ -795,7 +801,11 @@ pub(super) async fn match_reply(fb: &Football, slug: &str, view: &str, live_cmd:
                 .filter(|e| {
                     matches!(
                         e.kind,
-                        EventKind::Goal | EventKind::OwnGoal | EventKind::PenaltyGoal | EventKind::RedCard | EventKind::SecondYellow
+                        EventKind::Goal
+                            | EventKind::OwnGoal
+                            | EventKind::PenaltyGoal
+                            | EventKind::RedCard
+                            | EventKind::SecondYellow
                     )
                 })
                 .map(|e| event_line(e, d))
@@ -826,7 +836,10 @@ pub(super) async fn match_reply(fb: &Football, slug: &str, view: &str, live_cmd:
         }
         "events" => {
             if d.events.is_empty() {
-                format!("{header}\n\nNo events reported by the data source{}.", if f.status == Status::Upcoming { " yet" } else { "" })
+                format!(
+                    "{header}\n\nNo events reported by the data source{}.",
+                    if f.status == Status::Upcoming { " yet" } else { "" }
+                )
             } else {
                 let lines: Vec<String> = d.events.iter().map(|e| event_line(e, d)).collect();
                 clip(&format!("{header}\n\n{}", lines.join("\n")), 3500)
@@ -852,12 +865,18 @@ pub(super) async fn match_reply(fb: &Football, slug: &str, view: &str, live_cmd:
                 format!("{header}\n\n📊 Match statistics are not provided by the current data source for this match.")
             } else {
                 let w = d.stats.iter().map(|s| s.name.chars().count()).max().unwrap_or(10).min(22);
-                let rows: Vec<String> = d
-                    .stats
-                    .iter()
-                    .map(|s| format!("{:>7}  {:<w$}  {:<7}", s.home, clip(&s.name, w), s.away))
-                    .collect();
-                clip(&format!("{header}\n```\n{:>7}  {:<w$}  {}\n{}\n```", clip(&f.home, 7), "", clip(&f.away, 7), rows.join("\n")), 3800)
+                let rows: Vec<String> =
+                    d.stats.iter().map(|s| format!("{:>7}  {:<w$}  {:<7}", s.home, clip(&s.name, w), s.away)).collect();
+                clip(
+                    &format!(
+                        "{header}\n```\n{:>7}  {:<w$}  {}\n{}\n```",
+                        clip(&f.home, 7),
+                        "",
+                        clip(&f.away, 7),
+                        rows.join("\n")
+                    ),
+                    3800,
+                )
             }
         }
         _ => header.clone(),
@@ -896,12 +915,22 @@ async fn live_list(fb: &Football, filter: Option<&'static Competition>, page: us
             .recent_fixtures()
             .into_iter()
             .map(|(f, _)| f)
-            .filter(|f| f.status == Status::Upcoming && f.kickoff > now && filter.is_none_or(|c| f.competition == c.key))
+            .filter(|f| {
+                f.status == Status::Upcoming && f.kickoff > now && filter.is_none_or(|c| f.competition == c.key)
+            })
             .min_by_key(|f| f.kickoff);
         let next = next
-            .map(|f| format!("\nNext kick-off: **{} vs {}** ({}) <t:{}:R>", f.home, f.away, comp_label(&f.competition, ""), f.kickoff))
+            .map(|f| {
+                format!(
+                    "\nNext kick-off: **{} vs {}** ({}) <t:{}:R>",
+                    f.home,
+                    f.away,
+                    comp_label(&f.competition, ""),
+                    f.kickoff
+                )
+            })
             .unwrap_or_default();
-        let scope = filter.map(|c| c.name).unwrap_or("the competitions I follow");
+        let scope = filter.map_or("the competitions I follow", |c| c.name);
         return Ok(CreateEmbed::new()
             .title(title)
             .description(format!("No live matches in {scope} right now.{next}\n\n{note}"))
@@ -910,9 +939,10 @@ async fn live_list(fb: &Football, filter: Option<&'static Competition>, page: us
     }
     let mut blocks: Vec<(String, Vec<String>)> = vec![];
     for f in &matches {
-        let heading = competitions::by_key(&f.competition)
-            .map(|c| format!("{} {}", c.region.split(' ').next().unwrap_or(""), c.name))
-            .unwrap_or_else(|| f.competition_name.clone());
+        let heading = competitions::by_key(&f.competition).map_or_else(
+            || f.competition_name.clone(),
+            |c| format!("{} {}", c.region.split(' ').next().unwrap_or(""), c.name),
+        );
         match blocks.iter_mut().find(|(h, _)| *h == heading) {
             Some((_, lines)) => lines.push(fixture_line(f, false)),
             None => blocks.push((heading, vec![fixture_line(f, false)])),
@@ -923,7 +953,7 @@ async fn live_list(fb: &Football, filter: Option<&'static Competition>, page: us
         .title(format!("{title} ({})", matches.len()))
         .description(format!("{text}\n{note}"))
         .color(LIVE_COLOR);
-    Ok(Reply { embed, rows: page_buttons(&format!("la:{}", filter.map(|c| c.key).unwrap_or("-")), page, total) })
+    Ok(Reply { embed, rows: page_buttons(&format!("la:{}", filter.map_or("-", |c| c.key)), page, total) })
 }
 
 // ─────────────────────────────────────────────
@@ -931,15 +961,12 @@ async fn live_list(fb: &Football, filter: Option<&'static Competition>, page: us
 // ─────────────────────────────────────────────
 
 fn competition_list(fb: &Football) -> Reply {
-    let mut embed = CreateEmbed::new()
-        .title("🏆 Competitions I follow")
-        .color(COLOR)
-        .description(format!(
-            "Fixtures, results, live scores, match events and line-ups for all of them. \
+    let mut embed = CreateEmbed::new().title("🏆 Competitions I follow").color(COLOR).description(format!(
+        "Fixtures, results, live scores, match events and line-ups for all of them. \
              ⭐ = match details followed live by default.{}\n\n{}",
-            if fb.has_squads() { " Squads for every team." } else { "" },
-            Provider::SportScore.attribution()
-        ));
+        if fb.has_squads() { " Squads for every team." } else { "" },
+        Provider::SportScore.attribution()
+    ));
     let mut regions: Vec<&str> = vec![];
     for c in COMPETITIONS {
         if !regions.contains(&c.region) {
@@ -980,7 +1007,7 @@ async fn competition_fixtures(fb: &Football, c: &'static Competition, date: Naiv
         && live.fetched_at > lookup.value.fetched_at
         && live.age() < LIVE_FRESH
     {
-        for f in list.iter_mut() {
+        for f in &mut list {
             if let Some(l) = live.data.iter().find(|l| l.id == f.id) {
                 *f = l.clone();
             }
@@ -1051,7 +1078,8 @@ async fn table(fb: &Football, c: &'static Competition) -> Result<Reply> {
             }
             z
         };
-        let zones = if zones.is_empty() { String::new() } else { format!("\nZones from position {}", zones.join(" · ")) };
+        let zones =
+            if zones.is_empty() { String::new() } else { format!("\nZones from position {}", zones.join(" · ")) };
         embed = embed.description(clip(&format!("{}{zones}\n\n{note}", table_block(&g.rows)), 4000));
     } else {
         for g in s.groups.iter().take(24) {
@@ -1069,7 +1097,12 @@ async fn scorers(fb: &Football, c: &'static Competition, assists: bool) -> Resul
         Err(e) => return Ok(unavailable("This list", &e)),
     };
     let note = source_note(&lookup);
-    let title = format!("{} {} · {}", if assists { "🅰️" } else { "⚽" }, if assists { "Top assists" } else { "Top scorers" }, c.name);
+    let title = format!(
+        "{} {} · {}",
+        if assists { "🅰️" } else { "⚽" },
+        if assists { "Top assists" } else { "Top scorers" },
+        c.name
+    );
     let lines: Vec<String> = lookup
         .value
         .data
@@ -1077,14 +1110,21 @@ async fn scorers(fb: &Football, c: &'static Competition, assists: bool) -> Resul
         .take(15)
         .map(|s| {
             let main = if assists { s.assists } else { s.goals };
-            let other = if assists { s.goals.map(|g| format!(", {}", plural(g, "goal"))) } else { s.assists.map(|a| format!(", {}", plural(a, "assist"))) };
-            let games = s.matches.map(|m| format!(" in {}", plural(m, "match").replace("matchs", "matches"))).unwrap_or_default();
+            let other = if assists {
+                s.goals.map(|g| format!(", {}", plural(g, "goal")))
+            } else {
+                s.assists.map(|a| format!(", {}", plural(a, "assist")))
+            };
+            let games = s
+                .matches
+                .map(|m| format!(" in {}", plural(m, "match").replace("matchs", "matches")))
+                .unwrap_or_default();
             format!(
                 "**{}.** {} · {} — **{}**{}{games}",
                 s.rank,
                 s.player,
                 s.team.split(" - ").next().unwrap_or(&s.team),
-                main.map(|m| m.to_string()).unwrap_or("–".into()),
+                main.map_or("–".into(), |m| m.to_string()),
                 other.unwrap_or_default()
             )
         })
@@ -1110,7 +1150,9 @@ pub(super) async fn resolve_team(fb: &Football, input: &str) -> Result<TeamRef, 
         return Ok(TeamRef { name: name.clone(), slug: slug.clone(), country: c.country });
     }
     let q = football::fold(input);
-    if let Some((name, slug, c)) = known.iter().find(|(n, _, _)| football::fold(n.split(" - ").next().unwrap_or(n)) == q) {
+    if let Some((name, slug, c)) =
+        known.iter().find(|(n, _, _)| football::fold(n.split(" - ").next().unwrap_or(n)) == q)
+    {
         return Ok(TeamRef { name: name.clone(), slug: slug.clone(), country: c.country });
     }
     match fb.search(input, Purpose::User).await {
@@ -1137,6 +1179,12 @@ pub(super) fn best_match<'a>(results: &'a [(String, String)], typed: &str) -> Op
 
 pub(super) fn plural(n: u32, word: &str) -> String {
     if n == 1 { format!("{n} {word}") } else { format!("{n} {word}s") }
+}
+
+/// Discord only shows image URLs it can load; some provider logos point at
+/// half-downloaded files (`.crdownload`).
+fn is_png(url: &str) -> bool {
+    std::path::Path::new(url).extension().is_some_and(|e| e.eq_ignore_ascii_case("png"))
 }
 
 pub(super) fn ordinal(n: u32) -> String {
@@ -1173,7 +1221,8 @@ pub(super) async fn team_from_slug(fb: &Football, slug: &str) -> TeamRef {
     if let Some((name, slug, c)) = fb.known_teams().into_iter().find(|(_, s, _)| s == slug) {
         return TeamRef { name, slug, country: c.country };
     }
-    let name = fb.cached::<TeamSchedule>(&format!("team:{slug}")).await.map(|t| t.data.name).unwrap_or_else(|| slug.to_string());
+    let name =
+        fb.cached::<TeamSchedule>(&format!("team:{slug}")).await.map_or_else(|| slug.to_string(), |t| t.data.name);
     TeamRef { name, slug: slug.to_string(), country: "" }
 }
 
@@ -1192,7 +1241,9 @@ pub(super) fn team_buttons(slug: &str, current: &str) -> Vec<CreateActionRow> {
                 .disabled(*v == current)
         })
         .collect();
-    buttons.push(CreateButton::new(format!("fbf:toggle:{slug}")).label("⭐ Follow / unfollow").style(ButtonStyle::Success));
+    buttons.push(
+        CreateButton::new(format!("fbf:toggle:{slug}")).label("⭐ Follow / unfollow").style(ButtonStyle::Success),
+    );
     vec![CreateActionRow::Buttons(buttons)]
 }
 
@@ -1208,19 +1259,30 @@ pub(super) async fn team_info_ref(fb: &Football, t: &TeamRef) -> Result<Reply> {
         if let Some(s) = fb.cached_now::<Standings>(&format!("standings:{}", c.key)) {
             for g in &s.data.groups {
                 if let Some(r) = g.rows.iter().find(|r| r.team_slug.as_deref() == Some(t.slug.as_str())) {
-                    let grp = if g.name.is_empty() || c.kind != Kind::Groups { String::new() } else { format!(" ({})", g.name) };
-                    positions.push(format!("**{}** in {}{grp} · {} pts from {} games", ordinal(r.position), c.name, r.points, r.played));
+                    let grp = if g.name.is_empty() || c.kind != Kind::Groups {
+                        String::new()
+                    } else {
+                        format!(" ({})", g.name)
+                    };
+                    positions.push(format!(
+                        "**{}** in {}{grp} · {} pts from {} games",
+                        ordinal(r.position),
+                        c.name,
+                        r.points,
+                        r.played
+                    ));
                 }
             }
         }
     }
     let recent: Vec<&Fixture> = team.matches.iter().filter(|m| m.status == Status::Finished).rev().take(5).collect();
-    let next: Vec<&Fixture> = team.matches.iter().filter(|m| m.kickoff > now - 3 * 3600 && !m.status.is_terminal()).take(5).collect();
+    let next: Vec<&Fixture> =
+        team.matches.iter().filter(|m| m.kickoff > now - 3 * 3600 && !m.status.is_terminal()).take(5).collect();
     let line = |f: &Fixture| format!("{} · {}", fixture_line(f, true), comp_label(&f.competition, &f.competition_name));
     let form: String = recent.iter().rev().filter_map(|f| result_letter(f, &team.name)).collect();
     let mut embed = CreateEmbed::new().title(format!("🛡️ {}", team.name)).color(COLOR);
     if let Some(logo) = &team.logo
-        && logo.ends_with(".png")
+        && is_png(logo)
     {
         embed = embed.thumbnail(logo);
     }
@@ -1233,12 +1295,20 @@ pub(super) async fn team_info_ref(fb: &Football, t: &TeamRef) -> Result<Reply> {
     embed = embed
         .field(
             "Recent results",
-            if recent.is_empty() { "None in the data source's recent list.".into() } else { clip(&recent.iter().map(|f| line(f)).collect::<Vec<_>>().join("\n"), 1024) },
+            if recent.is_empty() {
+                "None in the data source's recent list.".into()
+            } else {
+                clip(&recent.iter().map(|f| line(f)).collect::<Vec<_>>().join("\n"), 1024)
+            },
             false,
         )
         .field(
             "Next matches",
-            if next.is_empty() { "None scheduled in the data source.".into() } else { clip(&next.iter().map(|f| line(f)).collect::<Vec<_>>().join("\n"), 1024) },
+            if next.is_empty() {
+                "None scheduled in the data source.".into()
+            } else {
+                clip(&next.iter().map(|f| line(f)).collect::<Vec<_>>().join("\n"), 1024)
+            },
             false,
         )
         .description(source_note(&lookup));
@@ -1252,7 +1322,8 @@ pub(super) async fn team_fixtures(fb: &Football, slug: &str, page: usize) -> Res
     };
     let team = &lookup.value.data;
     let now = Utc::now().timestamp();
-    let (past, future): (Vec<&Fixture>, Vec<&Fixture>) = team.matches.iter().partition(|f| f.kickoff < now - 3 * 3600 || f.status == Status::Finished);
+    let (past, future): (Vec<&Fixture>, Vec<&Fixture>) =
+        team.matches.iter().partition(|f| f.kickoff < now - 3 * 3600 || f.status == Status::Finished);
     let fmt = |f: &&Fixture| format!("{} · {}", fixture_line(f, true), comp_label(&f.competition, &f.competition_name));
     let mut blocks = vec![];
     if !future.is_empty() {
@@ -1312,16 +1383,18 @@ pub(super) async fn team_squad_ref(fb: &Football, t: &TeamRef) -> Result<Reply> 
         }
     }
     by_pos.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut embed = CreateEmbed::new()
-        .title(format!("👥 {} · squad", t.name))
-        .color(COLOR)
-        .description(format!("{} players (as registered at {}).\n\n{}", squad.players.len(), lookup.value.provider, source_note(&lookup)));
+    let mut embed = CreateEmbed::new().title(format!("👥 {} · squad", t.name)).color(COLOR).description(format!(
+        "{} players (as registered at {}).\n\n{}",
+        squad.players.len(),
+        lookup.value.provider,
+        source_note(&lookup)
+    ));
     for ((_, name), mut players) in by_pos {
         players.sort_by_key(|p| p.number.unwrap_or(999));
         let lines: Vec<String> = players
             .iter()
             .map(|p| {
-                let n = p.number.map(|n| format!("`{n:>2}` ")).unwrap_or_else(|| "`  ` ".into());
+                let n = p.number.map_or_else(|| "`  ` ".into(), |n| format!("`{n:>2}` "));
                 let age = p.age.map(|a| format!(" · {a}")).unwrap_or_default();
                 format!("{n}{}{age}", p.name)
             })
@@ -1348,7 +1421,10 @@ async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
     let row = lookup.value.data.groups.iter().find_map(|g| {
         g.rows
             .iter()
-            .find(|r| r.team_slug.as_deref() == Some(t.slug.as_str()) || football::fold(r.team.split(" - ").next().unwrap_or(&r.team)) == wanted)
+            .find(|r| {
+                r.team_slug.as_deref() == Some(t.slug.as_str())
+                    || football::fold(r.team.split(" - ").next().unwrap_or(&r.team)) == wanted
+            })
             .map(|r| (g.name.clone(), r.clone()))
     });
     let Some((group, r)) = row else {
@@ -1357,7 +1433,7 @@ async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
             t.name, c.name
         )));
     };
-    let games = r.played.max(1) as f64;
+    let games = f64::from(r.played.max(1));
     let form = match fb.team(&t.slug, Purpose::User).await {
         Ok(l) => {
             let name = l.value.data.name.clone();
@@ -1378,11 +1454,23 @@ async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
     let mut embed = CreateEmbed::new()
         .title(format!("📈 {} · {}", t.name, c.name))
         .color(COLOR)
-        .field("Position", format!("{}{}", ordinal(r.position), if group.is_empty() { String::new() } else { format!(" ({group})") }), true)
+        .field(
+            "Position",
+            format!("{}{}", ordinal(r.position), if group.is_empty() { String::new() } else { format!(" ({group})") }),
+            true,
+        )
         .field("Points", format!("{} ({:.2} per game)", r.points, r.points as f64 / games), true)
         .field("Played", format!("{} · {}W {}D {}L", r.played, r.won, r.drawn, r.lost), true)
-        .field("Goals", format!("{} scored, {} conceded ({:+})", r.goals_for, r.goals_against, r.goals_for - r.goals_against), true)
-        .field("Per game", format!("{:.2} scored, {:.2} conceded", r.goals_for as f64 / games, r.goals_against as f64 / games), true);
+        .field(
+            "Goals",
+            format!("{} scored, {} conceded ({:+})", r.goals_for, r.goals_against, r.goals_for - r.goals_against),
+            true,
+        )
+        .field(
+            "Per game",
+            format!("{:.2} scored, {:.2} conceded", r.goals_for as f64 / games, r.goals_against as f64 / games),
+            true,
+        );
     if !form.is_empty() {
         embed = embed.field("Form (last 5)", format!("`{form}`"), true);
     }
@@ -1398,7 +1486,8 @@ async fn team_stats(fb: &Football, args: &Args) -> Result<Reply> {
 
 pub(super) async fn player(fb: &Football, input: &str) -> Result<Reply> {
     let input = input.trim();
-    let mut lookup = if !input.contains(' ') { fb.player(input, Purpose::User).await } else { Err(FetchError::NotFound) };
+    let mut lookup =
+        if input.contains(' ') { Err(FetchError::NotFound) } else { fb.player(input, Purpose::User).await };
     if matches!(lookup, Err(FetchError::NotFound)) {
         lookup = match fb.search(input, Purpose::User).await {
             Ok(s) => match best_match(&s.value.data.players, input) {
@@ -1410,13 +1499,15 @@ pub(super) async fn player(fb: &Football, input: &str) -> Result<Reply> {
     }
     let lookup = match lookup {
         Ok(l) => l,
-        Err(FetchError::NotFound) => return Ok(notice(format!("❌ I couldn't find a player called **{}**.", clip(input, 60)))),
+        Err(FetchError::NotFound) => {
+            return Ok(notice(format!("❌ I couldn't find a player called **{}**.", clip(input, 60))));
+        }
         Err(e) => return Ok(unavailable("This player", &e)),
     };
     let p = &lookup.value.data;
     let mut embed = CreateEmbed::new().title(format!("👤 {}", p.name)).color(COLOR);
     if let Some(photo) = &p.photo
-        && photo.ends_with(".png")
+        && is_png(photo)
     {
         embed = embed.thumbnail(photo);
     }
@@ -1428,7 +1519,10 @@ pub(super) async fn player(fb: &Football, input: &str) -> Result<Reply> {
     for (k, v) in p.stats.iter().take(24) {
         embed = embed.field(k, v, true);
     }
-    Ok(embed.description(format!("{text}\n{}", source_note(&lookup))).footer(CreateEmbedFooter::new("Statistics for the player's current main competition")).into())
+    Ok(embed
+        .description(format!("{text}\n{}", source_note(&lookup)))
+        .footer(CreateEmbedFooter::new("Statistics for the player's current main competition"))
+        .into())
 }
 
 #[cfg(test)]
@@ -1451,29 +1545,31 @@ mod tests {
         }
     }
 
-    #[test]
-    fn definitions_fit_discord_limits() {
-        {
-            let v = serde_json::to_value(register()).unwrap();
-            let name = v["name"].as_str().unwrap();
-            assert!(v["description"].as_str().unwrap().len() <= 100, "{name}");
-            fn check(opts: &serde_json::Value) {
-                let opts = opts.as_array().map(Vec::as_slice).unwrap_or_default();
-                assert!(opts.len() <= 25);
-                for o in opts {
-                    let n = o["name"].as_str().unwrap();
-                    assert!(n.len() <= 32 && n.chars().all(|c| c.is_ascii_lowercase() || c == '-' || c == '_'), "{n}");
-                    assert!(o["description"].as_str().unwrap().len() <= 100, "{n}");
-                    check(&o["options"]);
-                }
-            }
-            check(&v["options"]);
+    /// Discord's limits on names (lowercase, 32 chars), descriptions (100)
+    /// and options per level (25), at every level of the command.
+    fn check_options(opts: &serde_json::Value) {
+        let opts = opts.as_array().map(Vec::as_slice).unwrap_or_default();
+        assert!(opts.len() <= 25);
+        for o in opts {
+            let n = o["name"].as_str().unwrap();
+            assert!(n.len() <= 32 && n.chars().all(|c| c.is_ascii_lowercase() || c == '-' || c == '_'), "{n}");
+            assert!(o["description"].as_str().unwrap().len() <= 100, "{n}");
+            check_options(&o["options"]);
         }
     }
 
     #[test]
+    fn definitions_fit_discord_limits() {
+        let v = serde_json::to_value(register()).unwrap();
+        assert!(v["description"].as_str().unwrap().len() <= 100);
+        check_options(&v["options"]);
+    }
+
+    #[test]
     fn fixture_lines() {
-        assert!(fixture_line(&fixture(Status::Live, Some((1, 0))), false).contains("**Flamengo - RJ 1–0 Palmeiras - SP**"));
+        assert!(
+            fixture_line(&fixture(Status::Live, Some((1, 0))), false).contains("**Flamengo - RJ 1–0 Palmeiras - SP**")
+        );
         assert!(fixture_line(&fixture(Status::Finished, Some((2, 2))), false).contains("FT"));
         assert!(fixture_line(&fixture(Status::Upcoming, None), false).contains("<t:1795000000:t>"));
     }
@@ -1490,7 +1586,8 @@ mod tests {
         let (last, _) = paginate(&blocks, 99);
         assert!(last.contains("line 59"));
         assert!(page_buttons("la:-", 0, 1).is_empty());
-        let ids: Vec<String> = (0..3).map(|p| format!("{PAGE_PREFIX}cf:brazilian-campeonato-mineiro-division-1:2026-11-22:{p}")).collect();
+        let ids: Vec<String> =
+            (0..3).map(|p| format!("{PAGE_PREFIX}cf:brazilian-campeonato-mineiro-division-1:2026-11-22:{p}")).collect();
         assert!(ids.iter().all(|i| i.len() <= 100));
     }
 
@@ -1555,7 +1652,11 @@ mod tests {
         for f in &fields {
             let (n, val) = (f["name"].as_str().unwrap(), f["value"].as_str().unwrap());
             assert!(!n.is_empty() && n.chars().count() <= 256, "{label}: field name");
-            assert!(!val.is_empty() && val.chars().count() <= 1024, "{label}: field '{n}' value {}", val.chars().count());
+            assert!(
+                !val.is_empty() && val.chars().count() <= 1024,
+                "{label}: field '{n}' value {}",
+                val.chars().count()
+            );
             total += n.chars().count() + val.chars().count();
         }
         assert!(total <= 6000, "{label}: embed total {total}");
@@ -1568,7 +1669,7 @@ mod tests {
 
     fn args(path: &[&str], values: &[(&str, &str)]) -> Args {
         Args {
-            path: path.iter().map(|s| s.to_string()).collect(),
+            path: path.iter().map(ToString::to_string).collect(),
             values: values.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
         }
     }
@@ -1578,7 +1679,7 @@ mod tests {
     /// costs 2 API-Football calls the first time). Run with
     /// `cargo test live_football -- --ignored --nocapture --test-threads=1`.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "calls the real football APIs"]
     async fn live_football() {
         let fb = Football::from_env(None);
         let serie_a = competitions::by_key("brazilian-serie-a").unwrap();
@@ -1595,7 +1696,10 @@ mod tests {
         check_limits("competition list", &competition_list(&fb));
         check_limits("live all", &live_list(&fb, None, 0).await.unwrap());
         check_limits("live serie a", &live_list(&fb, Some(serie_a), 0).await.unwrap());
-        check_limits("fixtures 2026-11-22", &competition_fixtures(&fb, serie_a, NaiveDate::from_ymd_opt(2026, 11, 22).unwrap(), 0).await.unwrap());
+        check_limits(
+            "fixtures 2026-11-22",
+            &competition_fixtures(&fb, serie_a, NaiveDate::from_ymd_opt(2026, 11, 22).unwrap(), 0).await.unwrap(),
+        );
         check_limits("table", &table(&fb, serie_a).await.unwrap());
         check_limits("table groups", &table(&fb, libertadores).await.unwrap());
         check_limits("table cup", &table(&fb, competitions::by_key("brazilian-cup").unwrap()).await.unwrap());
@@ -1606,10 +1710,21 @@ mod tests {
         assert!(!teams.is_empty(), "Flamengo is in a cached table");
         check_limits("team info", &team_info(&fb, &args(&["team", "info"], &[("team", "flamengo-rj")])).await.unwrap());
         check_limits("team fixtures", &team_fixtures(&fb, "flamengo-rj", 0).await.unwrap());
-        check_limits("team stats", &team_stats(&fb, &args(&["team", "stats"], &[("team", "flamengo-rj"), ("competition", "brazilian-serie-a")])).await.unwrap());
+        check_limits(
+            "team stats",
+            &team_stats(
+                &fb,
+                &args(&["team", "stats"], &[("team", "flamengo-rj"), ("competition", "brazilian-serie-a")]),
+            )
+            .await
+            .unwrap(),
+        );
         check_limits("team typed", &team_info(&fb, &args(&["team", "info"], &[("team", "Benfica")])).await.unwrap());
         if fb.has_squads() {
-            check_limits("squad", &team_squad(&fb, &args(&["team", "squad"], &[("team", "flamengo-rj")])).await.unwrap());
+            check_limits(
+                "squad",
+                &team_squad(&fb, &args(&["team", "squad"], &[("team", "flamengo-rj")])).await.unwrap(),
+            );
         }
         if fb.has_careers() {
             use crate::commands::football_player as fp;
@@ -1630,7 +1745,9 @@ mod tests {
             check_limits("team injuries", &inj);
             check_limits(
                 "compare",
-                &fp::compare(&fb, &args(&["team", "compare"], &[("team", "flamengo-rj"), ("other", "palmeiras-sp")])).await.unwrap(),
+                &fp::compare(&fb, &args(&["team", "compare"], &[("team", "flamengo-rj"), ("other", "palmeiras-sp")]))
+                    .await
+                    .unwrap(),
             );
         }
         {
@@ -1650,15 +1767,28 @@ mod tests {
             let r = match_reply(&fb, "bournemouth-afc-vs-ipswich-town", view, false).await.unwrap();
             check_limits(&format!("match {view}"), &r);
         }
-        check_limits("live match (finished)", &match_view(&fb, &args(&["match"], &[("fixture", "bournemouth-afc-vs-ipswich-town")]), "live", true).await.unwrap());
+        check_limits(
+            "live match (finished)",
+            &match_view(&fb, &args(&["match"], &[("fixture", "bournemouth-afc-vs-ipswich-town")]), "live", true)
+                .await
+                .unwrap(),
+        );
         let picks = autocomplete_choices(&fb, "fixture", "");
         println!("fixture choices: {}", picks.len());
-        if let Some(live) = fb.cached_now::<Vec<Fixture>>("live").and_then(|l| l.data.into_iter().find(|f| !f.slug.is_empty())) {
-            check_limits("live match", &match_view(&fb, &args(&["match"], &[("fixture", &live.slug)]), "live", true).await.unwrap());
+        if let Some(live) =
+            fb.cached_now::<Vec<Fixture>>("live").and_then(|l| l.data.into_iter().find(|f| !f.slug.is_empty()))
+        {
+            check_limits(
+                "live match",
+                &match_view(&fb, &args(&["match"], &[("fixture", &live.slug)]), "live", true).await.unwrap(),
+            );
         }
-        check_limits("unknown match", &match_view(&fb, &args(&["match"], &[("fixture", "no-such-match-zzz")]), "details", false).await.unwrap());
+        check_limits(
+            "unknown match",
+            &match_view(&fb, &args(&["match"], &[("fixture", "no-such-match-zzz")]), "details", false).await.unwrap(),
+        );
         if let Ok(token) = std::env::var("FOOTBALL_DATA_TOKEN") {
-            let fd = crate::football::providers::football_data::FootballData::new(token);
+            let fd = football::providers::football_data::FootballData::new(token);
             let day = NaiveDate::from_ymd_opt(2026, 11, 5).unwrap();
             let m = fd.fixtures(&fb.up, serie_a, "BSA", day, Purpose::User).await.unwrap();
             assert!(!m.is_empty() && m.iter().all(|f| f.status == Status::Finished && f.score().is_some()));
@@ -1668,7 +1798,12 @@ mod tests {
             assert!(!s.groups.is_empty());
             let sc = fd.scorers(&fb.up, "PL", Purpose::User).await.unwrap();
             assert!(!sc.is_empty());
-            println!("football-data.org: {} BSA results, {} BSA table(s), PL top scorer {}", m.len(), s.groups.len(), sc[0].player);
+            println!(
+                "football-data.org: {} BSA results, {} BSA table(s), PL top scorer {}",
+                m.len(),
+                s.groups.len(),
+                sc[0].player
+            );
         }
         for p in Provider::ALL {
             fb.up.with_gate(p, |g| println!("{}: {} calls used, health {}", p.id(), g.used, g.health.id()));

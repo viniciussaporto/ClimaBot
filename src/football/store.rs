@@ -101,17 +101,14 @@ impl FootballStore {
     }
 
     pub async fn save(&self, doc: CacheDoc) -> Result<()> {
-        self.cache
-            .replace_one(doc! { "_id": &doc.key }, &doc)
-            .upsert(true)
-            .await?;
+        self.cache.replace_one(doc! { "_id": &doc.key }, &doc).upsert(true).await?;
         Ok(())
     }
 
     /// Requests already made today, per provider.
     pub async fn usage_today(&self, provider: Provider, day: &str) -> Result<u32> {
         let id = format!("{}:{day}", provider.id());
-        Ok(self.usage.find_one(doc! { "_id": id }).await?.map(|d| d.used.max(0) as u32).unwrap_or(0))
+        Ok(self.usage.find_one(doc! { "_id": id }).await?.map_or(0, |d| d.used.max(0) as u32))
     }
 
     pub fn save_usage(&self, provider: Provider, used: u32) {
@@ -123,7 +120,7 @@ impl FootballStore {
                 id: format!("{}:{day}", provider.id()),
                 provider: provider.id().into(),
                 day,
-                used: used as i64,
+                used: i64::from(used),
                 updated_at: bson_time(now),
             };
             // `used` only grows within a day, so a late write can't undercount

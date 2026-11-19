@@ -16,15 +16,15 @@ use crate::{
         Football, LiveEvent, LiveEventKind,
         competitions::{self, COMPETITIONS, Kind},
         follows::{FollowStore, FollowedTeam, Owner, Subscription},
-        model::*,
+        model::{Fixture, Provider, Standings, Status, TeamSchedule},
     },
     metrics,
 };
 use anyhow::{Result, anyhow};
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use serenity::all::{
-    ButtonStyle, ChannelId, ChannelType, CommandInteraction, ComponentInteraction, ComponentInteractionDataKind, Context,
-    CreateActionRow, CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
+    ButtonStyle, ChannelId, ChannelType, CommandInteraction, ComponentInteraction, ComponentInteractionDataKind,
+    Context, CreateActionRow, CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
     CreateInteractionResponseMessage, CreateMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption,
     EditInteractionResponse, Http, Permissions, UserId,
 };
@@ -60,7 +60,7 @@ pub(super) async fn handle(ctx: &Context, cmd: &CommandInteraction, fb: &Footbal
         ["follow", "team"] => match resolve_team(fb, args.get("team").unwrap_or_default()).await {
             Ok(t) => {
                 let mut sub = store.get(Owner::User(cmd.user.id.get())).await?;
-                let text = toggle_team(&mut sub, t.slug.clone(), t.name.clone(), "You");
+                let text = toggle_team(&mut sub, t.slug.clone(), &t.name, "You");
                 save(store, &mut sub, cmd.user.id.get()).await?;
                 follow_ack(&text)
             }
@@ -71,7 +71,11 @@ pub(super) async fn handle(ctx: &Context, cmd: &CommandInteraction, fb: &Footbal
                 let mut sub = store.get(Owner::User(cmd.user.id.get())).await?;
                 let now = sub.toggle_competition(c.key);
                 save(store, &mut sub, cmd.user.id.get()).await?;
-                follow_ack(&format!("{} **{}**.", if now { "⭐ You now follow" } else { "You no longer follow" }, c.name))
+                follow_ack(&format!(
+                    "{} **{}**.",
+                    if now { "⭐ You now follow" } else { "You no longer follow" },
+                    c.name
+                ))
             }
             Err(r) => r,
         },
@@ -95,7 +99,7 @@ pub(super) async fn handle(ctx: &Context, cmd: &CommandInteraction, fb: &Footbal
                 "team" => match resolve_team(fb, args.get("team").unwrap_or_default()).await {
                     Ok(t) => {
                         let mut sub = store.get(owner).await?;
-                        let text = toggle_team(&mut sub, t.slug.clone(), t.name.clone(), "This server");
+                        let text = toggle_team(&mut sub, t.slug.clone(), &t.name, "This server");
                         save(store, &mut sub, cmd.user.id.get()).await?;
                         panel(&sub, Some(text))
                     }
@@ -114,11 +118,15 @@ async fn edit(ctx: &Context, cmd: &CommandInteraction, r: Reply) -> Result<()> {
     Ok(())
 }
 
-fn toggle_team(sub: &mut Subscription, slug: String, name: String, who: &str) -> String {
-    match sub.toggle_team(FollowedTeam { slug, name: name.clone() }) {
+fn toggle_team(sub: &mut Subscription, slug: String, name: &str, who: &str) -> String {
+    match sub.toggle_team(FollowedTeam { slug, name: name.to_string() }) {
         Some(true) => format!("⭐ {who} now follow{} **{name}**.", if who == "You" { "" } else { "s" }),
         Some(false) => format!("{who} no longer follow{} **{name}**.", if who == "You" { "" } else { "s" }),
-        None => format!("❌ {who} already follow{} {} teams, the maximum.", if who == "You" { "" } else { "s" }, crate::football::follows::MAX_TEAMS),
+        None => format!(
+            "❌ {who} already follow{} {} teams, the maximum.",
+            if who == "You" { "" } else { "s" },
+            crate::football::follows::MAX_TEAMS
+        ),
     }
 }
 
@@ -151,7 +159,13 @@ fn onoff(b: bool) -> &'static str {
     if b { "On" } else { "Off" }
 }
 
-fn comp_menu(prefix: &str, id: &str, placeholder: &str, sub: &Subscription, filter: impl Fn(&str) -> bool) -> CreateActionRow {
+fn comp_menu(
+    prefix: &str,
+    id: &str,
+    placeholder: &str,
+    sub: &Subscription,
+    filter: impl Fn(&str) -> bool,
+) -> CreateActionRow {
     let options: Vec<CreateSelectMenuOption> = COMPETITIONS
         .iter()
         .filter(|c| filter(c.region))
@@ -178,13 +192,17 @@ fn is_americas(region: &str) -> bool {
 fn panel(sub: &Subscription, message: Option<String>) -> Reply {
     let guild = matches!(sub.owner(), Some(Owner::Guild(_)));
     let p = if guild { "fbs" } else { "fbf" };
-    let teams = if sub.teams.is_empty() { "None".to_string() } else { sub.teams.iter().map(|t| t.name.clone()).collect::<Vec<_>>().join(", ") };
+    let teams = if sub.teams.is_empty() {
+        "None".to_string()
+    } else {
+        sub.teams.iter().map(|t| t.name.clone()).collect::<Vec<_>>().join(", ")
+    };
     let comps = if sub.competitions.is_empty() {
         "None".to_string()
     } else {
         sub.competitions.iter().map(|k| comp_label(k, k)).collect::<Vec<_>>().join(", ")
     };
-    let channel = sub.channel_id.map(|c| format!("<#{c}>")).unwrap_or_else(|| "not set".into());
+    let channel = sub.channel_id.map_or_else(|| "not set".into(), |c| format!("<#{c}>"));
     let mut desc = if guild {
         format!(
             "**Server football posts** (off by default). Choose a channel, what the server follows, and what to post.\n\
@@ -219,7 +237,9 @@ fn panel(sub: &Subscription, message: Option<String>) -> Reply {
         .field("Teams", clip(&teams, 1024), false)
         .field("Competitions", clip(&comps, 1024), false)
         .color(COLOR)
-        .footer(CreateEmbedFooter::new("Changes are saved as you make them. /help follow and /help server explain more."));
+        .footer(CreateEmbedFooter::new(
+            "Changes are saved as you make them. /help follow and /help server explain more.",
+        ));
 
     let mut rows = vec![];
     if guild {
@@ -251,16 +271,21 @@ fn panel(sub: &Subscription, message: Option<String>) -> Reply {
         ));
     }
     let hours: Vec<CreateSelectMenuOption> = (0..24u8)
-        .map(|h| CreateSelectMenuOption::new(format!("{h:02}:00 UTC"), h.to_string()).default_selection(h == sub.digest_hour))
+        .map(|h| {
+            CreateSelectMenuOption::new(format!("{h:02}:00 UTC"), h.to_string()).default_selection(h == sub.digest_hour)
+        })
         .collect();
     // At most 4 menus: [channel or teams], two competition menus, the hour.
     rows.push(CreateActionRow::SelectMenu(
-        CreateSelectMenu::new(format!("{p}:hour"), CreateSelectMenuKind::String { options: hours }).placeholder("Time of the daily summary"),
+        CreateSelectMenu::new(format!("{p}:hour"), CreateSelectMenuKind::String { options: hours })
+            .placeholder("Time of the daily summary"),
     ));
     let toggle = |id: &str, label: &str, on: bool| {
-        CreateButton::new(format!("{p}:{id}"))
-            .label(format!("{label}: {}", onoff(on)))
-            .style(if on { ButtonStyle::Success } else { ButtonStyle::Secondary })
+        CreateButton::new(format!("{p}:{id}")).label(format!("{label}: {}", onoff(on))).style(if on {
+            ButtonStyle::Success
+        } else {
+            ButtonStyle::Secondary
+        })
     };
     let mut buttons = vec![
         toggle("digest", if guild { "Daily summary" } else { "Daily DM" }, sub.digest),
@@ -301,13 +326,13 @@ pub(super) async fn handle_component(ctx: &Context, comp: &ComponentInteraction,
         ComponentInteractionDataKind::ChannelSelect { values } => values.iter().map(|c| c.get().to_string()).collect(),
         _ => vec![],
     };
-    let action = id.split_once(':').map(|(_, a)| a).unwrap_or("");
+    let action = id.split_once(':').map_or("", |(_, a)| a);
     let mut message = None;
 
     // Buttons that open something else, as a new private message.
     if let Some(slug) = action.strip_prefix("toggle:") {
         let t = super::football::team_from_slug(fb, slug).await;
-        let text = toggle_team(&mut sub, t.slug, t.name, "You");
+        let text = toggle_team(&mut sub, t.slug, &t.name, "You");
         save(store, &mut sub, comp.user.id.get()).await?;
         let r = follow_ack(&text);
         let msg = CreateInteractionResponseMessage::new().embed(r.embed).components(r.rows).ephemeral(true);
@@ -320,7 +345,8 @@ pub(super) async fn handle_component(ctx: &Context, comp: &ComponentInteraction,
         "open:manage" => panel(&sub, None),
         a if a.starts_with("comps:") => {
             let region_is_americas = a.ends_with(":sa");
-            sub.competitions.retain(|k| competitions::by_key(k).is_some_and(|c| is_americas(c.region) != region_is_americas));
+            sub.competitions
+                .retain(|k| competitions::by_key(k).is_some_and(|c| is_americas(c.region) != region_is_americas));
             sub.competitions.extend(values.iter().filter(|v| competitions::by_key(v).is_some()).cloned());
             save(store, &mut sub, comp.user.id.get()).await?;
             panel(&sub, Some("✅ Competitions saved.".into()))
@@ -347,9 +373,15 @@ pub(super) async fn handle_component(ctx: &Context, comp: &ComponentInteraction,
         "digest" | "live" => {
             let turning_on = if action == "digest" { !sub.digest } else { !sub.live_alerts };
             // DMs only work when the user accepts them: check before switching on.
-            if turning_on && !guild_panel && let Err(e) = dm(&ctx.http, comp.user.id, welcome()).await {
+            if turning_on
+                && !guild_panel
+                && let Err(e) = dm(&ctx.http, comp.user.id, welcome()).await
+            {
                 warn!(error = %e, user = %comp.user.id, "Could not DM user enabling football alerts");
-                message = Some("❌ I couldn't DM you. Allow direct messages from server members (Privacy Settings) and try again.".to_string());
+                message = Some(
+                    "❌ I couldn't DM you. Allow direct messages from server members (Privacy Settings) and try again."
+                        .to_string(),
+                );
             } else {
                 if action == "digest" {
                     sub.digest = turning_on;
@@ -385,7 +417,9 @@ pub(super) async fn handle_component(ctx: &Context, comp: &ComponentInteraction,
     };
     comp.create_response(
         &ctx.http,
-        CreateInteractionResponse::UpdateMessage(CreateInteractionResponseMessage::new().embed(reply.embed).components(reply.rows)),
+        CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::new().embed(reply.embed).components(reply.rows),
+        ),
     )
     .await?;
     Ok(())
@@ -441,7 +475,13 @@ fn arrow(prev: Option<u32>, now: u32) -> String {
 /// Teams in the top 6 of a competition's table (for "important" matches).
 fn top_teams(fb: &Football, comp: &str) -> Vec<String> {
     fb.cached_now::<Standings>(&format!("standings:{comp}"))
-        .map(|s| s.data.groups.iter().flat_map(|g| g.rows.iter().filter(|r| r.position <= 6).map(|r| r.team.clone())).collect())
+        .map(|s| {
+            s.data
+                .groups
+                .iter()
+                .flat_map(|g| g.rows.iter().filter(|r| r.position <= 6).map(|r| r.team.clone()))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -462,8 +502,10 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
     let now = Utc::now();
     let ts = now.timestamp();
     let today = now.date_naive();
-    let day_of = |t: i64| chrono::DateTime::from_timestamp(t, 0).map(|d| d.date_naive()).unwrap_or(today);
-    let with_comp = |f: &Fixture, date: bool| format!("{} · {}", fixture_line(f, date), comp_label(&f.competition, &f.competition_name));
+    let day_of = |t: i64| chrono::DateTime::from_timestamp(t, 0).map_or(today, |d| d.date_naive());
+    let with_comp = |f: &Fixture, date: bool| {
+        format!("{} · {}", fixture_line(f, date), comp_label(&f.competition, &f.competition_name))
+    };
     let concerns = |f: &Fixture| sub.concerns(&f.competition, &f.home, &f.away);
 
     let live: Vec<Fixture> = fb
@@ -479,7 +521,12 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
         .collect();
     let soon: Vec<&Fixture> = recent
         .iter()
-        .filter(|f| f.kickoff >= ts - 3 * 3600 && day_of(f.kickoff) <= today + ChronoDuration::days(1) && f.status != Status::Live && f.status != Status::Finished)
+        .filter(|f| {
+            f.kickoff >= ts - 3 * 3600
+                && day_of(f.kickoff) <= today + ChronoDuration::days(1)
+                && f.status != Status::Live
+                && f.status != Status::Finished
+        })
         .collect();
     let soon_ids: Vec<&str> = soon.iter().map(|f| f.id.as_str()).collect();
 
@@ -514,7 +561,8 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
     let mut table = vec![];
     for c in COMPETITIONS {
         let Some(cur) = fb.cached::<Standings>(&format!("standings:{}", c.key)).await else { continue };
-        let prev = fb.cached::<Standings>(&format!("standings_prev:{}", c.key)).await.map(|p| standings_positions(&p.data));
+        let prev =
+            fb.cached::<Standings>(&format!("standings_prev:{}", c.key)).await.map(|p| standings_positions(&p.data));
         let pos = standings_positions(&cur.data);
         let followed_comp = sub.competitions.iter().any(|k| k == c.key);
         for t in &sub.teams {
@@ -529,19 +577,24 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
             && let Some(g) = cur.data.groups.first()
         {
             {
-                let leader = g.rows.first().map(|r| format!("{} leads with {} pts", r.team, r.points)).unwrap_or_default();
+                let leader =
+                    g.rows.first().map(|r| format!("{} leads with {} pts", r.team, r.points)).unwrap_or_default();
                 let mut movers: Vec<(i64, String)> = g
                     .rows
                     .iter()
                     .filter_map(|r| {
-                        let was = prev.as_ref()?.get(&r.team)?.0 as i64;
-                        let d = was - r.position as i64;
+                        let was = i64::from(prev.as_ref()?.get(&r.team)?.0);
+                        let d = was - i64::from(r.position);
                         (d.abs() >= 2).then(|| (d, format!("{}{}", r.team, arrow(Some(was as u32), r.position))))
                     })
                     .collect();
                 movers.sort_by_key(|(d, _)| std::cmp::Reverse(d.abs()));
                 let moves = movers.into_iter().take(3).map(|(_, s)| s).collect::<Vec<_>>().join(", ");
-                table.push(format!("**{}:** {leader}{}", c.name, if moves.is_empty() { String::new() } else { format!(" · moved: {moves}") }));
+                table.push(format!(
+                    "**{}:** {leader}{}",
+                    c.name,
+                    if moves.is_empty() { String::new() } else { format!(" · moved: {moves}") }
+                ));
             }
         }
     }
@@ -563,7 +616,9 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
     e = add(e, "⭐ Important matches this week", section(important, 8));
     e = add(e, "⏭ Next match", section(next, 10));
     e = add(e, "📊 Tables", section(table, 10));
-    let mut desc = format!("What you follow, as of <t:{ts}:t>. Not live: tables change once a day, scores every minute during matches.");
+    let mut desc = format!(
+        "What you follow, as of <t:{ts}:t>. Not live: tables change once a day, scores every minute during matches."
+    );
     if !any {
         desc.push_str("\n\nNothing to report right now.");
     }
@@ -577,7 +632,9 @@ pub async fn feed_embed(fb: &Football, sub: &Subscription, title: &str) -> Creat
 
 fn event_line(e: &LiveEvent) -> String {
     let f = &e.fixture;
-    let score = f.score().map(|(h, a)| format!("{} {h}–{a} {}", f.home, f.away)).unwrap_or_else(|| format!("{} vs {}", f.home, f.away));
+    let score = f
+        .score()
+        .map_or_else(|| format!("{} vs {}", f.home, f.away), |(h, a)| format!("{} {h}–{a} {}", f.home, f.away));
     let comp = comp_label(&f.competition, &f.competition_name);
     match e.kind {
         LiveEventKind::Kickoff => format!("▶️ **Kick-off** · {} vs {} · {comp}", f.home, f.away),
@@ -756,7 +813,10 @@ mod tests {
             status_text: "2nd half".into(),
             kickoff: 0,
         };
-        assert!(event_line(&LiveEvent { kind: LiveEventKind::Goal, fixture: f.clone() }).contains("Flamengo - RJ 1–0 Palmeiras - SP"));
+        assert!(
+            event_line(&LiveEvent { kind: LiveEventKind::Goal, fixture: f.clone() })
+                .contains("Flamengo - RJ 1–0 Palmeiras - SP")
+        );
         assert!(event_line(&LiveEvent { kind: LiveEventKind::Kickoff, fixture: f }).starts_with("▶️"));
         assert_eq!(arrow(Some(3), 1), " ▲2");
         assert_eq!(arrow(Some(1), 4), " ▼3");

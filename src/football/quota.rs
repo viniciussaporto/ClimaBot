@@ -55,13 +55,20 @@ impl Purpose {
 pub enum Health {
     Healthy,
     /// Per-minute limit hit: wait until `until`.
-    RateLimitedMinute { until: DateTime<Utc> },
+    RateLimitedMinute {
+        until: DateTime<Utc>,
+    },
     /// Daily quota used up: wait for the reset.
-    DailyQuotaExhausted { until: DateTime<Utc> },
+    DailyQuotaExhausted {
+        until: DateTime<Utc>,
+    },
     /// The key was rejected. Needs a configuration change (and a restart).
     Unauthorized,
     /// Timeouts / 5xx: back off until `until`.
-    Unavailable { until: DateTime<Utc>, failures: u32 },
+    Unavailable {
+        until: DateTime<Utc>,
+        failures: u32,
+    },
 }
 
 impl Health {
@@ -90,7 +97,10 @@ impl Health {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Blocked {
     NotConfigured,
-    Cooldown { state: &'static str, until: DateTime<Utc> },
+    Cooldown {
+        state: &'static str,
+        until: DateTime<Utc>,
+    },
     Unauthorized,
     /// The day's budget left for this purpose is used up.
     Budget,
@@ -138,7 +148,9 @@ pub enum Outcome {
     /// The key is fine but this resource/season isn't in the plan.
     PlanRestricted,
     Unauthorized,
-    MinuteLimit { retry_after: Option<Duration> },
+    MinuteLimit {
+        retry_after: Option<Duration>,
+    },
     DailyLimit,
     /// Timeout, connection error or 5xx.
     Unavailable,
@@ -206,7 +218,7 @@ impl Gate {
             }
             _ => {}
         }
-        let floor = (self.limits.daily as f64 * purpose.floor()).ceil() as u32;
+        let floor = (f64::from(self.limits.daily) * purpose.floor()).ceil() as u32;
         if self.remaining() <= floor {
             return Err(Blocked::Budget);
         }

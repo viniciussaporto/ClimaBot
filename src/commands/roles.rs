@@ -1,10 +1,9 @@
 use crate::metrics;
 use anyhow::Result;
 use serenity::all::{
-    ButtonStyle, CommandInteraction, ComponentInteraction, ComponentInteractionDataKind, Context,
-    CreateActionRow, CreateButton, CreateInteractionResponse, CreateInteractionResponseMessage,
-    CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, GuildId, Permissions,
-    ReactionType, Role, RoleId,
+    ButtonStyle, CommandInteraction, ComponentInteraction, ComponentInteractionDataKind, Context, CreateActionRow,
+    CreateButton, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
+    CreateSelectMenuOption, GuildId, Permissions, ReactionType, Role, RoleId,
 };
 use tracing::{debug, info, warn};
 
@@ -47,12 +46,7 @@ pub const PAGE_PREFIX: &str = "roles-";
 /// permissions, and anything at or above the bot's highest role (which the
 /// bot could not assign anyway).
 pub fn assignable_roles<'a>(roles: &'a [Role], guild_id: GuildId, bot_role_ids: &[RoleId]) -> Vec<&'a Role> {
-    let bot_top_position = roles
-        .iter()
-        .filter(|r| bot_role_ids.contains(&r.id))
-        .map(|r| r.position)
-        .max()
-        .unwrap_or(0);
+    let bot_top_position = roles.iter().filter(|r| bot_role_ids.contains(&r.id)).map(|r| r.position).max().unwrap_or(0);
 
     let mut result: Vec<&Role> = roles
         .iter()
@@ -80,10 +74,7 @@ pub fn assignable_roles<'a>(roles: &'a [Role], guild_id: GuildId, bot_role_ids: 
 /// Fetch the guild's roles and the bot's own role list.
 async fn load_roles(ctx: &Context, guild_id: GuildId) -> Result<(Vec<Role>, Vec<RoleId>)> {
     let bot_id = super::bot_user_id(ctx).await?;
-    let (roles, me) = tokio::try_join!(
-        ctx.http.get_guild_roles(guild_id),
-        ctx.http.get_member(guild_id, bot_id),
-    )?;
+    let (roles, me) = tokio::try_join!(ctx.http.get_guild_roles(guild_id), ctx.http.get_member(guild_id, bot_id),)?;
     Ok((roles, me.roles))
 }
 
@@ -116,16 +107,12 @@ fn role_menu(roles: &[&Role], page: usize, notice: Option<&str>) -> Option<Creat
     let mut buttons = Vec::new();
     if page > 0 {
         buttons.push(
-            CreateButton::new(format!("{PAGE_PREFIX}prev_{page}"))
-                .label("Previous page")
-                .style(ButtonStyle::Secondary),
+            CreateButton::new(format!("{PAGE_PREFIX}prev_{page}")).label("Previous page").style(ButtonStyle::Secondary),
         );
     }
     if start + ROLES_PER_PAGE < roles.len() {
         buttons.push(
-            CreateButton::new(format!("{PAGE_PREFIX}next_{page}"))
-                .label("Next page")
-                .style(ButtonStyle::Primary),
+            CreateButton::new(format!("{PAGE_PREFIX}next_{page}")).label("Next page").style(ButtonStyle::Primary),
         );
     }
 
@@ -136,23 +123,18 @@ fn role_menu(roles: &[&Role], page: usize, notice: Option<&str>) -> Option<Creat
 
     let header = format!("**Available Roles** ({} total)", roles.len());
     let content = match notice {
-        Some(n) => format!("{n}
+        Some(n) => format!(
+            "{n}
 
-{header}"),
+{header}"
+        ),
         None => header,
     };
-    Some(
-        CreateInteractionResponseMessage::new()
-            .content(content)
-            .components(components)
-            .ephemeral(true),
-    )
+    Some(CreateInteractionResponseMessage::new().content(content).components(components).ephemeral(true))
 }
 
 fn ephemeral(content: impl Into<String>) -> CreateInteractionResponse {
-    CreateInteractionResponse::Message(
-        CreateInteractionResponseMessage::new().content(content).ephemeral(true),
-    )
+    CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().content(content).ephemeral(true))
 }
 
 /// The bot's guild-level permissions as reported by Discord on the interaction.
@@ -160,8 +142,7 @@ fn bot_can_manage_roles(app_permissions: Option<Permissions>) -> bool {
     app_permissions.is_none_or(|p| p.intersects(Permissions::ADMINISTRATOR | Permissions::MANAGE_ROLES))
 }
 
-const MISSING_PERMISSION: &str =
-    "I need the **Manage Roles** permission in this server to assign roles.";
+const MISSING_PERMISSION: &str = "I need the **Manage Roles** permission in this server to assign roles.";
 
 // ─────────────────────────────────────────────
 //  /roles
@@ -181,16 +162,12 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction) -> Result<(
     let (roles, bot_roles) = load_roles(ctx, guild_id).await?;
     let assignable = assignable_roles(&roles, guild_id, &bot_roles);
 
-    match role_menu(&assignable, 0, None) {
-        Some(menu) => {
-            cmd.create_response(&ctx.http, CreateInteractionResponse::Message(menu)).await?;
-            info!(user = %cmd.user.name, guild = %guild_id, roles = assignable.len(), "Role menu shown");
-        }
-        None => {
-            warn!(guild = %guild_id, "No assignable roles in this server");
-            cmd.create_response(&ctx.http, ephemeral("No assignable roles available in this server!"))
-                .await?;
-        }
+    if let Some(menu) = role_menu(&assignable, 0, None) {
+        cmd.create_response(&ctx.http, CreateInteractionResponse::Message(menu)).await?;
+        info!(user = %cmd.user.name, guild = %guild_id, roles = assignable.len(), "Role menu shown");
+    } else {
+        warn!(guild = %guild_id, "No assignable roles in this server");
+        cmd.create_response(&ctx.http, ephemeral("No assignable roles available in this server!")).await?;
     }
     Ok(())
 }
@@ -230,14 +207,13 @@ pub async fn handle_select(ctx: &Context, comp: &ComponentInteraction) -> Result
 
     // Re-render the menu in place: this shows the result and resets the
     // selection, so the same role can be toggled again straight away.
-    let response = match role_menu(&assignable, page, Some(&notice))
-        .or_else(|| role_menu(&assignable, 0, Some(&notice)))
-    {
-        Some(menu) => CreateInteractionResponse::UpdateMessage(menu),
-        None => CreateInteractionResponse::UpdateMessage(
-            CreateInteractionResponseMessage::new().content(notice).components(vec![]),
-        ),
-    };
+    let response =
+        match role_menu(&assignable, page, Some(&notice)).or_else(|| role_menu(&assignable, 0, Some(&notice))) {
+            Some(menu) => CreateInteractionResponse::UpdateMessage(menu),
+            None => CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new().content(notice).components(vec![]),
+            ),
+        };
     comp.create_response(&ctx.http, response).await?;
     Ok(())
 }
@@ -280,11 +256,7 @@ async fn toggle_role(
 
 /// Page encoded in a select menu custom id (`role-select_2` → 2).
 fn select_page(custom_id: &str) -> usize {
-    custom_id
-        .strip_prefix(SELECT_ID)
-        .and_then(|rest| rest.strip_prefix('_'))
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(0)
+    custom_id.strip_prefix(SELECT_ID).and_then(|rest| rest.strip_prefix('_')).and_then(|p| p.parse().ok()).unwrap_or(0)
 }
 
 // ─────────────────────────────────────────────
@@ -319,9 +291,7 @@ pub async fn handle_pagination(ctx: &Context, comp: &ComponentInteraction) -> Re
 
     let response = match role_menu(&assignable, page, None).or_else(|| role_menu(&assignable, 0, None)) {
         Some(menu) => menu,
-        None => CreateInteractionResponseMessage::new()
-            .content("No roles available!")
-            .components(vec![]),
+        None => CreateInteractionResponseMessage::new().content("No roles available!").components(vec![]),
     };
     comp.create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(response)).await?;
     Ok(())
@@ -363,10 +333,8 @@ mod tests {
             role(17, "Sneaky admin", 1, Permissions::ADMINISTRATOR, false),
         ];
 
-        let got: Vec<&str> = assignable_roles(&roles, guild, &[RoleId::new(14)])
-            .iter()
-            .map(|r| r.name.as_str())
-            .collect();
+        let got: Vec<&str> =
+            assignable_roles(&roles, guild, &[RoleId::new(14)]).iter().map(|r| r.name.as_str()).collect();
         assert_eq!(got, ["Red", "Blue"]);
     }
 
@@ -387,9 +355,8 @@ mod tests {
 
     #[test]
     fn menu_pages() {
-        let roles: Vec<Role> = (0..30)
-            .map(|i| role(100 + i, &format!("R{i}"), 1, Permissions::empty(), false))
-            .collect();
+        let roles: Vec<Role> =
+            (0..30).map(|i| role(100 + i, &format!("R{i}"), 1, Permissions::empty(), false)).collect();
         let refs: Vec<&Role> = roles.iter().collect();
         assert!(role_menu(&refs, 0, None).is_some());
         assert!(role_menu(&refs, 1, Some("hi")).is_some());

@@ -1,0 +1,20 @@
+# Lint and format the Grafana generators (deploy/grafana/*.py) with Ruff:
+#   ruff check deploy && ruff format --check deploy
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplifications
+    "C4",      # comprehensions
+    "RUF",     # Ruff's own rules
+]
+# Long PromQL / JSON strings read better unwrapped.
+ignore = ["E501"]
+# En dashes are shown in Grafana on purpose ("–" for no value).
+allowed-confusables = ["–"]

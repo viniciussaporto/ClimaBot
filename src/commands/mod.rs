@@ -13,9 +13,8 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use serenity::all::{
-    CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
-    EditInteractionResponse, InteractionContext, UserId,
+    CommandInteraction, CommandOptionType, ComponentInteraction, Context, CreateCommand, CreateCommandOption,
+    CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse, InteractionContext, UserId,
 };
 use std::{sync::OnceLock, time::Instant};
 use tracing::{debug, error, info, warn};
@@ -41,12 +40,8 @@ pub async fn bot_user_id(ctx: &Context) -> Result<UserId> {
 
 pub fn definitions() -> Vec<CreateCommand> {
     let location = |what: &str| {
-        CreateCommandOption::new(
-            CommandOptionType::String,
-            "location",
-            format!("The location to get the {what} for"),
-        )
-        .required(true)
+        CreateCommandOption::new(CommandOptionType::String, "location", format!("The location to get the {what} for"))
+            .required(true)
     };
     let units = || {
         CreateCommandOption::new(CommandOptionType::String, "units", "Units to show the results in (default: metric)")
@@ -141,22 +136,16 @@ pub async fn handle_command(ctx: &Context, cmd: &CommandInteraction, store: &Sto
     };
 
     metrics::COMMAND_COUNTER.with_label_values(&[label, status]).inc();
-    metrics::RESPONSE_TIME
-        .with_label_values(&[label, status])
-        .observe(start.elapsed().as_secs_f64());
+    metrics::RESPONSE_TIME.with_label_values(&[label, status]).observe(start.elapsed().as_secs_f64());
 }
 
 /// Tell the user something failed, whether or not the interaction was
 /// already acknowledged.
 async fn reply_error(ctx: &Context, cmd: &CommandInteraction, message: &str) {
-    let fresh = CreateInteractionResponse::Message(
-        CreateInteractionResponseMessage::new().content(message).ephemeral(true),
-    );
+    let fresh =
+        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().content(message).ephemeral(true));
     if cmd.create_response(&ctx.http, fresh).await.is_err() {
-        let edit = EditInteractionResponse::new()
-            .content(message)
-            .embeds(vec![])
-            .components(vec![]);
+        let edit = EditInteractionResponse::new().content(message).embeds(vec![]).components(vec![]);
         if let Err(e) = cmd.edit_response(&ctx.http, edit).await {
             error!(error = %e, "Could not deliver error message to user");
         }
@@ -237,9 +226,8 @@ pub async fn handle_component(ctx: &Context, comp: &ComponentInteraction, store:
 /// Reply for a location OpenCage could not resolve. Not a bot failure, so the
 /// command still counts as successful.
 fn not_found_reply(location: &str) -> EditInteractionResponse {
-    EditInteractionResponse::new().content(format!(
-        "❌ I couldn't find a location matching **{location}**. Try adding a state or country."
-    ))
+    EditInteractionResponse::new()
+        .content(format!("❌ I couldn't find a location matching **{location}**. Try adding a state or country."))
 }
 
 async fn weather_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> {
@@ -265,12 +253,10 @@ async fn weather_command(ctx: &Context, cmd: &CommandInteraction) -> Result<()> 
     // is likely here; otherwise the map is drawn without precipitation.
     let precipitation_expected = radar::rain_expected(&current);
     let map = async {
-        let data = tokio::time::timeout(
-            std::time::Duration::from_secs(12),
-            radar::fetch(&coords, precipitation_expected),
-        )
-        .await
-        .unwrap_or_else(|_| Err(anyhow!("timed out")))?;
+        let data =
+            tokio::time::timeout(std::time::Duration::from_secs(12), radar::fetch(&coords, precipitation_expected))
+                .await
+                .unwrap_or_else(|_| Err(anyhow!("timed out")))?;
         let offset = current.utc_offset_seconds;
         let gif = tokio::task::spawn_blocking(move || radar::render_gif(&data, offset)).await??;
         Ok::<_, anyhow::Error>(radar::Map { gif, precipitation_expected })

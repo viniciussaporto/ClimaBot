@@ -1,0 +1,10 @@
+# Formatting for `cargo fmt`. Stable options only, so any stable toolchain
+# formats the same way (CI runs `cargo fmt --check`). The edition comes from
+# Cargo.toml.
+#
+# 120 columns with "Max" heuristics keeps builder chains and short calls on
+# one line, the way the code was written before rustfmt was adopted.
+max_width = 120
+use_small_heuristics = "Max"
+use_field_init_shorthand = true
+use_try_shorthand = true

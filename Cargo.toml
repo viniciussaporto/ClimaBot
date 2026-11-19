@@ -69,3 +69,30 @@ strip = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
+
+# Lints for `cargo clippy` (CI denies warnings). Clippy's default groups plus
+# `pedantic`, minus the pedantic lints that are noise for this code base.
+[lints.rust]
+unsafe_code = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unused_qualifications = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Numeric casts here are between bounded values (pixels, timestamps, counts
+# shown to users); checked conversions would add noise, not safety.
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+# Product and provider names (SportScore, OpenCage…) are not code.
+doc_markdown = "allow"
+# Command definitions and embed builders are long by nature.
+too_many_lines = "allow"
+# Short math names (x, y, dx) in the map renderer.
+many_single_char_names = "allow"
+similar_names = "allow"
+# `s.push_str(&format!(…))` reads better than `write!` for short strings.
+format_push_string = "allow"
+# Hex colours (0x0099ff) are clearer without digit separators.
+unreadable_literal = "allow"

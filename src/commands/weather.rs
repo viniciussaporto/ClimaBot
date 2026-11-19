@@ -150,7 +150,7 @@ pub async fn get_coordinates(location: &str) -> Result<Location> {
         .query(&[("key", api_key), ("q", location), ("no_annotations", "1"), ("limit", "1")])
         .send()
         .await
-        .and_then(|r| r.error_for_status());
+        .and_then(reqwest::Response::error_for_status);
     let response: GeocodingResponse = match result {
         Ok(r) => r.json().await.context("invalid OpenCage response")?,
         Err(e) => {
@@ -166,32 +166,16 @@ pub async fn get_coordinates(location: &str) -> Result<Location> {
         usage::report(usage::Service::OpenCage, r.limit, r.remaining, reset);
     }
 
-    let result = response
-        .results
-        .into_iter()
-        .next()
-        .ok_or_else(|| LocationNotFound(location.to_string()))?;
+    let result = response.results.into_iter().next().ok_or_else(|| LocationNotFound(location.to_string()))?;
 
     info!(location, resolved = %result.formatted, "Resolved coordinates");
 
-    Ok(Location {
-        lat: result.geometry.lat,
-        lng: result.geometry.lng,
-        formatted: result.formatted,
-    })
+    Ok(Location { lat: result.geometry.lat, lng: result.geometry.lng, formatted: result.formatted })
 }
 
 async fn open_meteo<T: serde::de::DeserializeOwned>(kind: &str, params: &[(&str, String)]) -> Result<T> {
-    let result = async {
-        HTTP.get(OPEN_METEO_BASE)
-            .query(params)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<T>()
-            .await
-    }
-    .await;
+    let result =
+        async { HTTP.get(OPEN_METEO_BASE).query(params).send().await?.error_for_status()?.json::<T>().await }.await;
 
     let status = if result.is_ok() { "success" } else { "error" };
     metrics::WEATHER_API_COUNTER.with_label_values(&[kind, status]).inc();
@@ -223,11 +207,7 @@ pub async fn get_current(loc: &Location) -> Result<CurrentWeather> {
             total_mm: h.precipitation.iter().flatten().sum(),
         })
         .unwrap_or_default();
-    Ok(CurrentWeather {
-        utc_offset_seconds: response.utc_offset_seconds,
-        rain_outlook,
-        ..response.current
-    })
+    Ok(CurrentWeather { utc_offset_seconds: response.utc_offset_seconds, rain_outlook, ..response.current })
 }
 
 /// Fetch a 5-day daily forecast for a coordinate.
@@ -235,10 +215,7 @@ pub async fn get_forecast(loc: &Location) -> Result<ForecastDaily> {
     let params = [
         ("latitude", loc.lat.to_string()),
         ("longitude", loc.lng.to_string()),
-        (
-            "daily",
-            "temperature_2m_max,temperature_2m_min,precipitation_probability_max".to_string(),
-        ),
+        ("daily", "temperature_2m_max,temperature_2m_min,precipitation_probability_max".to_string()),
         ("forecast_days", "5".to_string()),
         ("timezone", "auto".to_string()),
     ];
@@ -352,10 +329,7 @@ pub fn weather_embed(
         embed = embed
             .field("\u{200b}", caption, false)
             .image("attachment://precipitation.gif")
-            .footer(CreateEmbedFooter::new(format!(
-                "Open-Meteo · OpenCage · Map {}",
-                super::radar::ATTRIBUTION
-            )));
+            .footer(CreateEmbedFooter::new(format!("Open-Meteo · OpenCage · Map {}", super::radar::ATTRIBUTION)));
     }
 
     (embed, attachments)
@@ -363,9 +337,7 @@ pub fn weather_embed(
 
 /// Build the `/weather forecast` embed.
 pub fn forecast_embed(loc: &Location, d: &ForecastDaily, units: Units) -> CreateEmbed {
-    let mut embed = CreateEmbed::new()
-        .title(format!("🌦 5-day forecast for {}", loc.formatted))
-        .color(EMBED_COLOR);
+    let mut embed = CreateEmbed::new().title(format!("🌦 5-day forecast for {}", loc.formatted)).color(EMBED_COLOR);
 
     let fmt_temp = |v: Option<&Option<f64>>| match v.copied().flatten() {
         Some(t) => units.temperature(t),
@@ -475,6 +447,8 @@ fn weather_image(code: i32) -> &'static [u8] {
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/images/icons8-", $name, "-48.png"))
         };
     }
+    // Clippy sees the `include_bytes!` arms as identical; they load different files.
+    #[allow(clippy::match_same_arms)]
     match code {
         0 => icon!("sun"),
         1 | 2 => icon!("partly-cloudy-day"),
@@ -534,8 +508,7 @@ mod tests {
     #[test]
     fn every_documented_code_has_description_and_icon() {
         let codes = [
-            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82,
-            85, 86, 95, 96, 99,
+            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99,
         ];
         let unknown = weather_image(-1);
         for code in codes {

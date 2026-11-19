@@ -7,6 +7,7 @@
 **A Discord bot for weather, live football, self-assignable roles and product price tracking.**
 
 [![Rust](https://img.shields.io/badge/Rust-2024_edition-orange?logo=rust)](https://www.rust-lang.org/)
+[![CI](https://github.com/viniciussaporto/ClimaBot/actions/workflows/ci.yml/badge.svg)](https://github.com/viniciussaporto/ClimaBot/actions/workflows/ci.yml)
 [![Discord](https://img.shields.io/badge/Discord-slash%20commands-5865F2?logo=discord&logoColor=white)](https://discord.com/api/oauth2/authorize?client_id=1109598244884979792&permissions=534723951680&scope=applications.commands%20bot)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
@@ -401,9 +402,27 @@ The reverse proxy forwards only that path to the bot; `/metrics` stays private. 
 ```sh
 cargo build
 cargo test                       # unit tests, offline: provider parsing uses saved responses
-cargo clippy --all-targets       # must be warning-free
 cargo run                        # runs the bot with .env
 ```
+
+**Formatting and linting.** CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs these on every push to `main`/`preprod` and every pull request, and fails on any finding. Run them before pushing:
+
+```sh
+cargo fmt                                       # format (rustfmt.toml: 120 columns)
+cargo clippy --all-targets -- -D warnings       # lints, configured under [lints] in Cargo.toml
+ruff check deploy && ruff format --check deploy # the Grafana generators (ruff.toml)
+shellcheck deploy/install.sh deploy/grafana/install.sh deploy/shell/climabot.sh deploy/climabot
+```
+
+| Tool | Configuration | What it enforces |
+| --- | --- | --- |
+| rustfmt | `rustfmt.toml` | Stable options only: 120 columns, `Max` width heuristics, field-init and `?` shorthands |
+| Clippy and rustc | `[lints]` in `Cargo.toml` | Clippy's default and `pedantic` groups (a few noisy pedantic lints allowed, each with its reason), `unsafe_code` forbidden, `rust_2018_idioms`, `unused_qualifications` |
+| Ruff | `ruff.toml` | pycodestyle, pyflakes, import order, bugbear, pyupgrade, simplifications and Ruff's own rules; Ruff's formatter |
+| ShellCheck | inline directives | Every deploy script; intended exceptions are annotated where they occur |
+| EditorConfig | `.editorconfig` | UTF-8, LF line endings, final newline, no trailing whitespace |
+
+CI also regenerates the Grafana dashboards and alerts and fails if the committed files differ from what the generators produce. The commit that first formatted the code is listed in `.git-blame-ignore-revs`, so `git blame` skips it (`git config blame.ignoreRevsFile .git-blame-ignore-revs` locally; GitHub does it automatically).
 
 **Live tests.** These call the real APIs, so they are `#[ignore]`d by default:
 
@@ -460,7 +479,7 @@ images/                  Weather icons used in the embeds
 
 **Conventions**
 
-- **Formatting:** the code isn't uniformly `rustfmt`-formatted. Format only the files you change (`rustfmt --edition 2024 <file>`) so diffs stay readable.
+- **Formatting:** `cargo fmt` for Rust and `ruff format` for Python; never hand-format against them. A lint you disagree with is allowed in the narrowest scope (`#[allow(...)]` on the item) with a comment saying why.
 - **Football providers:**
   - Keep the provider's attribution on every view that shows its data. SportScore's free tier requires a visible link.
   - New fields from a provider are `Option`s: a missing field must never fail a whole reply.
@@ -480,7 +499,7 @@ Suggestions and pull requests are welcome. Open an [issue](https://github.com/vi
 
 1. Fork the project.
 2. Create a branch from `preprod` (`git checkout -b feature/my-feature preprod`).
-3. Make sure `cargo test` and `cargo clippy --all-targets` pass.
+3. Make sure `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass (CI checks them).
 4. Push the branch and open a pull request into `preprod`.
 
 ## License and contact
