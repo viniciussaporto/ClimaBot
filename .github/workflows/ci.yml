@@ -21,15 +21,19 @@ jobs:
     name: Rust (fmt, clippy, tests)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: OpenSSL headers (native-tls)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
-      - uses: dtolnay/rust-toolchain@stable
+      # Same Rust as the Docker image (Dockerfile: rust:1.93): new Clippy lints
+      # arrive with an upgrade of both, not with whatever stable is today.
+      - uses: dtolnay/rust-toolchain@1.93
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Formatting
         run: cargo fmt --check
+      - name: Versions
+        run: rustc --version && cargo clippy --version
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: Tests
@@ -40,8 +44,8 @@ jobs:
     name: Scripts (ruff, shellcheck, generated files)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Ruff
