@@ -1,0 +1,55 @@
+{
+ "sport": "football",
+ "team1": "flamengo-rj",
+ "team2": "palmeiras-sp",
+ "summary": {
+  "team1_wins": 3,
+  "team2_wins": 1,
+  "draws": 1,
+  "meetings": 5
+ },
+ "matches": [
+  {
+   "home": "Flamengo - RJ",
+   "away": "Palmeiras - SP",
+   "home_logo": "https://img.thesports.com/football/team/f19b2f9fa5b0c72acc262bc4f0d2cd77.png",
+   "away_logo": "https://img.thesports.com/football/team/e6a85b64d28f448601e90857eb799140.png",
+   "home_score": "0",
+   "away_score": "3",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2026-05-24T00:00:00+00:00",
+   "competition": "Brazilian Serie A",
+   "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+   "url": "/football/match/palmeiras-vs-cr-flamengo/3glrw7hn3wk7qdy/"
+  },
+  {
+   "home": "Palmeiras - SP",
+   "away": "Flamengo - RJ",
+   "home_logo": "https://img.thesports.com/football/team/e6a85b64d28f448601e90857eb799140.png",
+   "away_logo": "https://img.thesports.com/football/team/f19b2f9fa5b0c72acc262bc4f0d2cd77.png",
+   "home_score": "0",
+   "away_score": "1",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2025-11-29T21:00:00+00:00",
+   "competition": "CONMEBOL Copa Libertadores",
+   "competition_logo": "https://img.thesports.com/football/competition/59bd81b686fe94b57f0e3c3ff2a28c45.png",
+   "url": "/football/match/palmeiras-vs-cr-flamengo/1l4rjnh95oe5m7v/"
+  },
+  {
+   "home": "Flamengo - RJ",
+   "away": "Palmeiras - SP",
+   "home_logo": "https://img.thesports.com/football/team/f19b2f9fa5b0c72acc262bc4f0d2cd77.png",
+   "away_logo": "https://img.thesports.com/football/team/e6a85b64d28f448601e90857eb799140.png",
+   "home_score": "3",
+   "away_score": "2",
+   "status": "finished",
+   "status_text": "Finished",
+   "time": "2025-10-19T19:00:00+00:00",
+   "competition": "Brazilian Serie A",
+   "competition_logo": "https://img.thesports.com/football/competition/5ad7bd885c64690f15f6971a2827190d.png",
+   "url": "/football/match/palmeiras-vs-cr-flamengo/n54qllh7l38yqvy/"
+  }
+ ]
+}

@@ -97,6 +97,16 @@ impl SportScore {
         parse_player(&self.get(up, "player", &path, purpose).await?)
     }
 
+    /// Recent meetings of two teams (by slug) and the win/draw summary.
+    pub async fn h2h(&self, up: &Upstream, team1: &str, team2: &str, purpose: Purpose) -> FetchResult<HeadToHead> {
+        let path = format!(
+            "/api/v1/h2h/?sport=football&team1={}&team2={}&limit=10",
+            urlencode(team1),
+            urlencode(team2)
+        );
+        Ok(parse_h2h(&self.get(up, "h2h", &path, purpose).await?))
+    }
+
     pub async fn search(&self, up: &Upstream, query: &str, purpose: Purpose) -> FetchResult<SearchResults> {
         let path = format!("/api/v1/search/?sport=football&limit=10&q={}", urlencode(query));
         Ok(parse_search(&self.get(up, "search", &path, purpose).await?))
@@ -369,6 +379,18 @@ pub fn parse_player(v: &Value) -> FetchResult<PlayerProfile> {
     })
 }
 
+pub fn parse_h2h(v: &Value) -> HeadToHead {
+    let s = &v["summary"];
+    HeadToHead {
+        team1: str_or_empty(&v["team1"]),
+        team2: str_or_empty(&v["team2"]),
+        team1_wins: unum(&s["team1_wins"]).unwrap_or(0),
+        team2_wins: unum(&s["team2_wins"]).unwrap_or(0),
+        draws: unum(&s["draws"]).unwrap_or(0),
+        matches: parse_matches(v),
+    }
+}
+
 pub fn parse_search(v: &Value) -> SearchResults {
     let pairs = |k: &str| {
         v[k].as_array()
@@ -474,6 +496,14 @@ mod tests {
         assert!(p.stats.contains(&("Red cards".into(), "0".into())));
         let none = parse_player(&serde_json::json!({"player":{"name":"X","slug":"x"},"stats":null})).unwrap();
         assert!(none.stats.is_empty());
+    }
+
+    #[test]
+    fn head_to_head() {
+        let h = parse_h2h(&serde_json::from_str(include_str!("../testdata/sportscore_h2h.json")).unwrap());
+        assert_eq!((h.team1_wins, h.team2_wins, h.draws), (3, 1, 1));
+        assert_eq!(h.matches.len(), 3);
+        assert!(h.matches.iter().all(|m| m.score().is_some()));
     }
 
     #[test]

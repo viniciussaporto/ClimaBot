@@ -361,7 +361,7 @@ pub fn weather_embed(
     (embed, attachments)
 }
 
-/// Build the `/forecast` embed.
+/// Build the `/weather forecast` embed.
 pub fn forecast_embed(loc: &Location, d: &ForecastDaily, units: Units) -> CreateEmbed {
     let mut embed = CreateEmbed::new()
         .title(format!("🌦 5-day forecast for {}", loc.formatted))

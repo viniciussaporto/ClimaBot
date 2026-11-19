@@ -199,6 +199,16 @@ pub static FOOTBALL_CACHE_COUNTER: LazyLock<CounterVec> = LazyLock::new(|| {
     .expect("failed to register football_cache_requests_total")
 });
 
+/// Follow notifications: live alerts and daily summaries, by outcome
+pub static FOOTBALL_NOTIFICATIONS: LazyLock<CounterVec> = LazyLock::new(|| {
+    register_counter_vec!(
+        "football_notifications_total",
+        "Football follow notifications (DMs and server posts), by kind and outcome",
+        &["kind", "status"]
+    )
+    .expect("failed to register football_notifications_total")
+});
+
 pub static FOOTBALL_POLL_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec!(
         "football_poll_duration_seconds",
@@ -239,6 +249,7 @@ pub fn start_metrics_server(port: u16) {
     LazyLock::force(&FOOTBALL_LIVE_MATCHES);
     LazyLock::force(&FOOTBALL_CACHE_COUNTER);
     LazyLock::force(&FOOTBALL_POLL_DURATION);
+    LazyLock::force(&FOOTBALL_NOTIFICATIONS);
 
     tokio::spawn(async move {
         let app = Router::new()

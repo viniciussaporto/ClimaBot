@@ -270,6 +270,21 @@ def info_groups():
                  "at 00:00 UTC.",
                  "SportScore: a registered key (SPORTSCORE_API_KEY) raises the limit; the bot's "
                  "own budget is SPORTSCORE_DAILY_BUDGET.")),
+        info("cb-football-notify-errors", "Football notifications failing",
+             'sum(increase(football_notifications_total{status="error"}[6h])) / '
+             'sum(increase(football_notifications_total[6h])) '
+             'and on () sum(increase(football_notifications_total[6h])) >= 3',
+             threshold=0.5, for_="15m",
+             summary="More than half of the football alerts and summaries failed in the last 6 hours",
+             description="Users or servers that switched notifications on aren't getting them.",
+             value=shown("Failed", "pct"),
+             runbook=steps(
+                 "`climabot logs | grep -i 'not delivered'` shows the subscription (user:<id> or guild:<id>) "
+                 "and Discord's error.",
+                 "Missing Access / Missing Permissions: the bot can't post in the server's chosen channel; "
+                 "its moderators fix it in `/football server setup` (Send a test post shows the problem).",
+                 "Cannot send messages to this user: the user closed their DMs; nothing to do, they can turn "
+                 "the alerts off in `/football follow manage`.")),
         info("cb-football-provider-down", "Football data provider failing",
              "max by (provider) (1 - football_provider_up)",
              for_="30m",

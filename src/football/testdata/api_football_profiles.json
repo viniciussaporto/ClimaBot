@@ -1,0 +1,94 @@
+{
+ "get": "players/profiles",
+ "parameters": {
+  "search": "Pedro"
+ },
+ "errors": [],
+ "results": 250,
+ "paging": {
+  "current": 1,
+  "total": 2
+ },
+ "response": [
+  {
+   "player": {
+    "id": 374,
+    "name": "João Pedro",
+    "firstname": "João Pedro",
+    "lastname": "Maturano dos Santos",
+    "age": 30,
+    "birth": {
+     "date": "1996-11-15",
+     "place": "Presidente Bernardes",
+     "country": "Brazil"
+    },
+    "nationality": "Brazil",
+    "height": "179",
+    "weight": "71",
+    "number": 18,
+    "position": "Midfielder",
+    "photo": "https://media.api-sports.io/football/players/374.png"
+   }
+  },
+  {
+   "player": {
+    "id": 1499,
+    "name": "Pedro Marques",
+    "firstname": "Pedro David",
+    "lastname": "Rosendo Marques",
+    "age": 28,
+    "birth": {
+     "date": "1998-04-25",
+     "place": "Lisboa",
+     "country": "Portugal"
+    },
+    "nationality": "Portugal",
+    "height": "181",
+    "weight": "77",
+    "number": 43,
+    "position": "Attacker",
+    "photo": "https://media.api-sports.io/football/players/1499.png"
+   }
+  },
+  {
+   "player": {
+    "id": 1864,
+    "name": "Pedro Neto",
+    "firstname": "Pedro",
+    "lastname": "Lomba Neto",
+    "age": 26,
+    "birth": {
+     "date": "2000-03-09",
+     "place": "Viana do Castelo",
+     "country": "Portugal"
+    },
+    "nationality": "Portugal",
+    "height": "174",
+    "weight": "62",
+    "number": 17,
+    "position": "Midfielder",
+    "photo": "https://media.api-sports.io/football/players/1864.png"
+   }
+  },
+  {
+   "player": {
+    "id": 1891,
+    "name": "Joao Pedro Guerra Cunha",
+    "firstname": "Joao Pedro",
+    "lastname": "Guerra Cunha",
+    "age": 40,
+    "birth": {
+     "date": "1986-05-04",
+     "place": "Figueira de Castelo Rodrigo",
+     "country": "Portugal"
+    },
+    "nationality": "Portugal",
+    "height": "176 cm",
+    "weight": "70 kg",
+    "number": null,
+    "position": "Attacker",
+    "photo": "https://media.api-sports.io/football/players/1891.png"
+   }
+  }
+ ]
+}

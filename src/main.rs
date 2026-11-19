@@ -66,6 +66,9 @@ impl EventHandler for Handler {
         if !self.price_job_started.swap(true, Ordering::SeqCst) {
             tokio::spawn(pricetracker::run_scheduler(self.store.clone(), ctx.http.clone()));
             info!("Price-check scheduler started");
+            if let Some(fb) = football::get() {
+                tokio::spawn(commands::football_follow::run_notifier(ctx.http.clone(), fb));
+            }
         }
     }
 

@@ -43,6 +43,9 @@ pub async fn run(fb: Arc<Football>) {
     let mut last_live: Option<Instant> = None;
     // Live matches at the previous poll, to notice when one ends.
     let mut previous_live: HashMap<String, Fixture> = HashMap::new();
+    // The first scoreboard after a start only sets the baseline: matches
+    // already under way aren't announced as kick-offs.
+    let mut primed = false;
 
     loop {
         tick.tick().await;
@@ -53,11 +56,30 @@ pub async fn run(fb: Arc<Football>) {
             // and every table.
             let started = Instant::now();
             refresh_fixtures(&fb, &[today - ChronoDuration::days(1), today, today + ChronoDuration::days(1)]).await;
+            // The week ahead, for "important upcoming matches" in follow feeds.
+            let week: Vec<_> = (2..=7).map(|d| today + ChronoDuration::days(d)).collect();
+            refresh_fixtures(&fb, &week).await;
             for c in competitions::COMPETITIONS {
+                // Yesterday's table stays available to show position changes.
+                fb.keep_previous_standings(c).await;
                 if let Err(e) = fb.standings(c, Purpose::Metadata).await {
                     debug!(competition = c.key, error = %e, "Standings refresh skipped");
                 }
                 tokio::time::sleep(PACE).await;
+            }
+            // Followed teams' schedules (next and last matches for follow feeds).
+            if let Some(store) = fb.follows.get() {
+                match store.followed_team_slugs().await {
+                    Ok(slugs) => {
+                        for slug in slugs {
+                            if let Err(e) = fb.team(&slug, Purpose::Metadata).await {
+                                debug!(team = slug, error = %e, "Followed team refresh skipped");
+                            }
+                            tokio::time::sleep(PACE).await;
+                        }
+                    }
+                    Err(e) => warn!(error = format!("{e:#}"), "Could not list followed teams"),
+                }
             }
             observe("daily", started);
             last_daily = Some(today);
@@ -84,12 +106,18 @@ pub async fn run(fb: Arc<Football>) {
                     metrics::FOOTBALL_LIVE_MATCHES.set(l.value.data.len() as f64);
                     let now_live: HashMap<String, Fixture> =
                         l.value.data.iter().map(|f| (f.id.clone(), f.clone())).collect();
+                    if primed {
+                        fb.publish_events(super::live_changes(&previous_live, &l.value.data));
+                    }
                     for (id, f) in &previous_live {
-                        if !now_live.contains_key(id) {
-                            verify_final(&fb, f).await;
+                        if !now_live.contains_key(id)
+                            && let Some(done) = verify_final(&fb, f).await
+                        {
+                            fb.publish_events(vec![super::LiveEvent { kind: super::LiveEventKind::FullTime, fixture: done }]);
                         }
                     }
                     previous_live = now_live;
+                    primed = true;
                 }
                 Ok(l) => warn!(reason = l.note.unwrap_or_default(), "Live scoreboard refresh failed; serving cached data"),
                 Err(e) => warn!(error = %e, "Live scoreboard refresh failed"),
@@ -142,21 +170,33 @@ async fn refresh_fixtures(fb: &Football, dates: &[chrono::NaiveDate]) {
     }
 }
 
-/// A match left the live list: confirm how it ended and refresh what depends on it.
-async fn verify_final(fb: &Football, f: &Fixture) {
+/// A match left the live list: confirm how it ended and refresh what depends
+/// on it. Returns the match when it's confirmed finished.
+async fn verify_final(fb: &Football, f: &Fixture) -> Option<Fixture> {
     info!(home = f.home, away = f.away, competition = f.competition, "Match left the live list; verifying the final score");
+    let mut finished = None;
     if !f.slug.is_empty() {
         fb.expire(&format!("match:{}", f.slug));
-        let _ = fb.match_detail(&f.slug, Purpose::Detail).await;
+        if let Ok(d) = fb.match_detail(&f.slug, Purpose::Detail).await
+            && !d.stale
+            && d.value.data.fixture.status == Status::Finished
+        {
+            finished = Some(d.value.data.fixture.clone());
+        }
     }
     if let Some(c) = competitions::by_key(&f.competition) {
         let date = chrono::DateTime::from_timestamp(f.kickoff, 0).map(|d| d.date_naive()).unwrap_or_else(|| Utc::now().date_naive());
         let key = super::fixtures_key(c, date);
         fb.expire(&key);
-        let _ = fb.fixtures(c, date, Purpose::Detail).await;
+        if let Ok(list) = fb.fixtures(c, date, Purpose::Detail).await
+            && finished.is_none()
+        {
+            finished = list.value.data.into_iter().find(|x| x.id == f.id && x.status == Status::Finished);
+        }
         // Tables and scorers change after a result; refresh them on next use.
         fb.expire(&format!("standings:{}", c.key));
         fb.expire(&format!("scorers:{}:goals", c.key));
         fb.expire(&format!("scorers:{}:assists", c.key));
     }
+    finished
 }

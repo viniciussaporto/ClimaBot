@@ -37,21 +37,27 @@ const TOPICS: &[Topic] = &[
         sections: &[
             (
                 "🌤 Weather · `/help weather`, `/help forecast`",
-                "`/weather <location> [units]` — Current conditions with an animated precipitation map\n\
-                 `/forecast <location> [units]` — 5-day forecast",
+                "`/weather now <location> [units]` — Current conditions with an animated precipitation map\n\
+                 `/weather forecast <location> [units]` — 5-day forecast",
             ),
             (
                 "🔴 Live football · `/help live`",
-                "`/live all [competition]` — Every live match in the competitions I follow\n\
-                 `/live competition <competition>` — Live matches in one competition\n\
-                 `/live match <match>` — Score, clock and latest events of one match",
+                "`/football live all|competition|match` — Live scores, clock and latest events",
             ),
             (
                 "⚽ Football · `/help football`",
                 "`/football competition list|fixtures|table|scorers` — Competitions, matches, standings, top scorers\n\
-                 `/football match details|events|lineup|stats <match>` — Match report\n\
-                 `/football team info|fixtures|squad|stats <team>` — Teams\n\
-                 `/football player <name>` — Player statistics",
+                 `/football match details|events|lineup|stats` — Match report\n\
+                 `/football team info|fixtures|squad|injuries|stats|compare` — Teams\n\
+                 `/football player stats|career|injuries` — Players",
+            ),
+            (
+                "⭐ Following · `/help follow`",
+                "`/football follow team|competition|manage|feed` — Your teams and competitions, your feed, optional DM alerts",
+            ),
+            (
+                "📣 Server posts · `/help server`",
+                "`/football server setup|team|preview` — Daily summaries and live alerts in a channel (moderators; off by default)",
             ),
             ("🎭 Roles · `/help roles`", "`/roles` — Pick self-assignable roles from a menu"),
             (
@@ -68,10 +74,10 @@ const TOPICS: &[Topic] = &[
     },
     Topic {
         name: "weather",
-        description: "How /weather works",
-        title: "🌤 /weather",
-        intro: "`/weather <location> [units]` — the weather right now anywhere on Earth, with a map of rain, \
-                snow and thunderstorms around it.",
+        description: "How /weather now works",
+        title: "🌤 /weather now",
+        intro: "`/weather now <location> [units]` — the weather right now anywhere on Earth, with a map of \
+                rain, snow and thunderstorms around it.",
         sections: &[
             (
                 "How to use",
@@ -113,11 +119,11 @@ const TOPICS: &[Topic] = &[
     },
     Topic {
         name: "forecast",
-        description: "How /forecast works",
-        title: "🌦 /forecast",
-        intro: "`/forecast <location> [units]` — the next 5 days, starting today.",
+        description: "How /weather forecast works",
+        title: "🌦 /weather forecast",
+        intro: "`/weather forecast <location> [units]` — the next 5 days, starting today.",
         sections: &[
-            ("How to use", "Same options as `/weather`: a `location`, and optionally **Imperial** `units`."),
+            ("How to use", "Same options as `/weather now`: a `location`, and optionally **Imperial** `units`."),
             (
                 "Where the data comes from",
                 "OpenCage finds the place; **Open-Meteo**'s daily forecast gives the highest and lowest \
@@ -132,15 +138,16 @@ const TOPICS: &[Topic] = &[
     },
     Topic {
         name: "live",
-        description: "How /live works",
-        title: "🔴 /live",
+        description: "How live scores work",
+        title: "🔴 /football live",
         intro: "Live football scores in the competitions I follow (see `/football competition list`).",
         sections: &[
             (
                 "How to use",
-                "• `/live all [competition]`: every live match, grouped by competition.\n\
-                 • `/live competition <competition>`: one competition.\n\
-                 • `/live match <match>`: start typing a team name and pick the match from the list.",
+                "• `/football live all [competition]`: every live match, grouped by competition.\n\
+                 • `/football live competition <competition>`: one competition.\n\
+                 • `/football live match <match>`: start typing a team name and pick the match from the list. \
+                 Buttons switch between the live view, events, line-ups and stats.",
             ),
             (
                 "Where the data comes from",
@@ -161,7 +168,8 @@ const TOPICS: &[Topic] = &[
                 "Good to know",
                 "• No live matches? The reply says when the next one kicks off.\n\
                  • A finished or upcoming match is never shown as live: the reply tells you its status \
-                 and points you to `/football match details`.",
+                 and offers the full report.\n\
+                 • Want alerts instead of checking? See `/help follow`.",
             ),
         ],
     },
@@ -170,7 +178,7 @@ const TOPICS: &[Topic] = &[
         description: "How /football works",
         title: "⚽ /football",
         intro: "Fixtures, results, tables, scorers, match reports, teams, squads and players. Not live: every reply \
-                says how old its data is (use `/live` for live scores).",
+                says how old its data is (`/football live` is). Buttons under a reply switch between views.",
         sections: &[
             (
                 "Competitions",
@@ -178,41 +186,125 @@ const TOPICS: &[Topic] = &[
                  Copa do Nordeste, Copa Verde, Paulistão, Carioca, Mineiro, Gaúcho, Libertadores, Sudamericana, \
                  the UEFA competitions, and the leagues and cups of England, Spain, Germany, Italy, France and Portugal.\n\
                  • `fixtures <competition> [date]`: matches on a day (`today`, `tomorrow`, `yesterday`, `YYYY-MM-DD`).\n\
-                 • `table <competition>`: standings, one table per group where there are groups. Knockout cups have none.\n\
-                 • `scorers <competition> [stat]`: top 15 for goals or assists.",
+                 • `table`: standings, one table per group where there are groups. Knockout cups have none.\n\
+                 • `scorers [stat]`: top 15 for goals or assists.",
             ),
             (
                 "Matches",
-                "Pick a match of yesterday, today or tomorrow from the list as you type.\n\
-                 • `details`: score, status, half-time score, goals and red cards, formations.\n\
-                 • `events`: the whole timeline.\n\
-                 • `lineup`: starting XIs and substitutes with numbers and positions (G, D, M, F), © captain; \
-                 marked official or expected.\n\
-                 • `stats`: team statistics, when the source has them.",
+                "Pick a match of yesterday, today or tomorrow from the list as you type. `details` (score, key \
+                 events, formations), `events` (the whole timeline), `lineup` (XIs and substitutes, official or \
+                 expected) and `stats` (when the source has them) are also buttons under each other.",
             ),
             (
-                "Teams and players",
-                "• `team info`: league positions, form (W/D/L, oldest first), last 5 results, next 5 matches.\n\
-                 • `team fixtures`: all recent results and upcoming matches.\n\
-                 • `team squad`: current registered players by position, with numbers and ages.\n\
-                 • `team stats <team> <competition>`: position, points, record, goals, per-game averages, form.\n\
-                 • `player <name>`: season statistics in the player's main competition.",
+                "Teams",
+                "• `info`: league positions, form (W/D/L, oldest first), last 5 results, next 5 matches.\n\
+                 • `fixtures`, `squad` (by position, numbers, ages), `stats <competition>` (record, goals, per game).\n\
+                 • `injuries`: see below.\n\
+                 • `compare <team> <other>`: head-to-head record, recent meetings, positions and form side by side.\n\
+                 Buttons: Info · Fixtures · Squad · Injuries · ⭐ Follow.",
+            ),
+            (
+                "Players",
+                "• `player stats`: this season, in the player's main competition.\n\
+                 • `player career`: clubs and national teams by season, season statistics (2022–2024 only, a \
+                 limit of the free plan), transfers with fees, trophies. International appearance counts aren't available.\n\
+                 • `player injuries`: availability (out, suspended, or available), current absence with its \
+                 type and expected return, and past absences.\n\
+                 When several players share a name, pick the right one from a menu.",
+            ),
+            (
+                "Injuries and suspensions: what to expect",
+                "The free sources publish **no current injury list per team**. `team injuries` lets you pick \
+                 players from the squad and checks each one's absence history (once a day per player). Absences \
+                 are only as complete as the source: **Brazilian competitions are often missing recent entries**, \
+                 and suspensions for accumulated cards are usually not listed. The reply says when data looks \
+                 out of date; it never guesses.",
             ),
             (
                 "Where the data comes from",
-                "• **SportScore**: everything except squads.\n\
-                 • **football-data.org**: backup for fixtures, tables and scorers of the main leagues when \
-                 SportScore fails (its scores may be delayed; the reply says so).\n\
-                 • **API-Football**: squads.\n\
-                 Data is refreshed on a schedule (fixtures every 6 hours, tables daily, after each final \
-                 whistle) and kept, so replies are fast and the free request limits aren't exceeded.",
+                "• **SportScore**: fixtures, live scores, events, line-ups, tables, scorers, teams, head-to-head.\n\
+                 • **football-data.org**: backup for fixtures, tables and scorers (delayed; the reply says so).\n\
+                 • **API-Football**: squads, careers, transfers, trophies, injuries (100 requests a day, so each \
+                 player is looked up once and kept for weeks).\n\
+                 The bot refreshes data on a schedule and keeps it; commands read that copy.",
             ),
             (
                 "How to read a reply",
                 "• The end of every reply names the source and says when the data was updated.\n\
                  • ⚠️ means a refresh failed and you're seeing the last saved copy.\n\
-                 • \"Not provided by the current data source\" means the source has no such data for it \
-                 (often match statistics): nothing is guessed.",
+                 • \"Not provided by the current data source\" means the source doesn't have it: nothing is guessed.",
+            ),
+        ],
+    },
+    Topic {
+        name: "follow",
+        description: "Follow teams and competitions",
+        title: "⭐ /football follow",
+        intro: "Follow teams and competitions to get one feed for all of them, and optionally alerts by DM.",
+        sections: &[
+            (
+                "How to use",
+                "• `/football follow team <team>` or the **⭐ Follow** button under a team: follow or unfollow it.\n\
+                 • `/football follow competition <competition>`: the same for a competition.\n\
+                 • `/football follow manage`: menus to pick competitions, unfollow teams, choose the time of your \
+                 daily summary, and buttons to switch DM alerts on or off.\n\
+                 • `/football follow feed`: your feed now.\n\
+                 Up to 25 teams and every competition. Only you see these replies.",
+            ),
+            (
+                "What the feed shows",
+                "🔴 live matches · 📅 today's and tomorrow's matches · ✅ yesterday's results · ⭐ important matches \
+                 this week (your teams, cup ties, top-6 clashes) · ⏭ each team's next match · 📊 table positions \
+                 with changes since yesterday (▲▼), leaders and big movers of followed leagues.",
+            ),
+            (
+                "DM alerts (off by default)",
+                "• **Daily DM**: the feed once a day, at the hour you pick (UTC).\n\
+                 • **Live alerts DM**: kick-off, each goal and the final score of matches you follow, a minute or \
+                 two after they happen.\n\
+                 Switching one on sends you a test DM first: allow direct messages from server members if it fails.",
+            ),
+            (
+                "Good to know",
+                "Alerts and the feed reuse the data the bot already refreshes on schedule, so following more \
+                 doesn't slow anything down. Only teams in the competitions I follow appear in the feed.",
+            ),
+        ],
+    },
+    Topic {
+        name: "server",
+        description: "Set up football posts for a server (moderators)",
+        title: "📣 /football server",
+        intro: "Daily football summaries and live alerts posted in a channel of this server. **Off until a \
+                moderator switches them on.**",
+        sections: &[
+            (
+                "Who can set it up",
+                "Members with **Manage Server**, **Manage Channels**, **Moderate Members** or **Administrator**. \
+                 Everyone else can see `/football server preview` but can't change anything.",
+            ),
+            (
+                "Setting it up",
+                "1. `/football server setup` opens the settings panel (only you see it).\n\
+                 2. Pick the **channel** for the posts.\n\
+                 3. Pick **competitions** in the two menus, and add **teams** with `/football server team <team>` \
+                 (run it again to remove one).\n\
+                 4. Choose the **time** of the daily summary (UTC).\n\
+                 5. Switch on **Daily summary** and/or **Live alerts**.\n\
+                 6. Press **Send a test post** to check the bot can post there.",
+            ),
+            (
+                "Permissions the bot needs",
+                "In the chosen channel: **View Channel**, **Send Messages** and **Embed Links**. The test post \
+                 tells you if one is missing.",
+            ),
+            (
+                "What gets posted",
+                "• **Daily summary**: once a day at the chosen hour, the same feed as `/help follow` describes, \
+                 for what the server follows.\n\
+                 • **Live alerts**: kick-off, goals and final scores of followed matches, grouped into one message \
+                 per update.\n\
+                 **Turn everything off** in the panel stops all posts at once.",
             ),
         ],
     },
@@ -535,7 +627,7 @@ mod tests {
 
     #[test]
     fn every_command_has_a_topic() {
-        for name in ["weather", "forecast", "live", "football", "roles", "pt"] {
+        for name in ["weather", "forecast", "live", "football", "follow", "server", "roles", "pt"] {
             assert!(TOPICS.iter().any(|t| t.name == name), "{name}");
         }
         assert_eq!(TOPICS[0].name, "overview");
