@@ -173,7 +173,7 @@ impl Football {
         let af_key = env_secret("API_FOOTBALL_KEY");
         let mut limits = vec![(
             Provider::SportScore,
-            Limits { daily: env_u32("SPORTSCORE_DAILY_BUDGET", 9000), per_minute: env_u32("SPORTSCORE_PER_MINUTE", 120) },
+            Limits { daily: env_u32("SPORTSCORE_DAILY_BUDGET", 9000), per_minute: env_u32("SPORTSCORE_PER_MINUTE", 300) },
         )];
         if fd_token.is_some() {
             // No daily cap on the free tier; 10 per minute.
