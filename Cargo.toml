@@ -45,7 +45,7 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 fastrand = "2"
 
 # Web scraping
-scraper = "0.27"
+scraper = "0.29"
 
 # Precipitation map for /weather: decode the PNG map tiles, encode the animated GIF
 png = "0.18"
