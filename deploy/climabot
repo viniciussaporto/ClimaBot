@@ -79,8 +79,21 @@ wait_for_login() {
         sleep 2
     done
     rust_compose logs --tail 30 climabot || true
-    die "bot did not report a Discord login; see the logs above"
+    return 1
 }
+
+# Recreate the bot container and wait for its login.
+recreate_bot() {
+    local since
+    since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    rust_compose up -d --no-deps --force-recreate climabot
+    wait_for_login "$since"
+}
+
+# The image that was running before a build, to fall back to if the new one
+# doesn't come up (see up_rust).
+IMAGE=climabot:rust
+PREVIOUS_IMAGE=climabot:previous
 
 build_rust() {
     git_pull "$RUST_DIR" "$RUST_BRANCH"
@@ -89,21 +102,29 @@ build_rust() {
     "$RUST_DIR/deploy/install.sh" >/dev/null
     log "Pulling images (MongoDB, FlareSolverr, Byparr)"
     rust_compose pull --ignore-buildable --quiet
+    if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+        docker tag "$IMAGE" "$PREVIOUS_IMAGE"
+    fi
     log "Building the bot"
     rust_compose build climabot
 }
 
 # Start the stack, then always recreate the bot container so it restarts
-# even when nothing changed (MongoDB and the browsers are left alone).
+# even when nothing changed (MongoDB and the browsers are left alone). If the
+# new build doesn't log in, go back to the image that ran before it.
 up_rust() {
     ensure_network
     ensure_log_dir
     log "Starting the stack"
-    local since
-    since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     rust_compose up -d --remove-orphans
-    rust_compose up -d --no-deps --force-recreate climabot
-    wait_for_login "$since"
+    recreate_bot && return 0
+    if docker image inspect "$PREVIOUS_IMAGE" >/dev/null 2>&1 \
+        && [[ "$(docker image inspect -f '{{.Id}}' "$PREVIOUS_IMAGE")" != "$(docker image inspect -f '{{.Id}}' "$IMAGE")" ]]; then
+        log "The new build did not come up: rolling back to the previous image"
+        docker tag "$PREVIOUS_IMAGE" "$IMAGE"
+        recreate_bot && die "rolled back to the previous image: the new build is broken (its logs are above)"
+    fi
+    die "bot did not report a Discord login; see the logs above"
 }
 
 cmd_start() {
