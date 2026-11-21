@@ -120,6 +120,10 @@ fn mongo_config() -> MongoConfig {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if env::args().nth(1).as_deref() == Some("--version") {
+        println!("climabot {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     dotenvy::dotenv().ok();
     logger::init();
     usage::init();
