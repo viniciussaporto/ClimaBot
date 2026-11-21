@@ -16,12 +16,19 @@ WORKDIR /usr/src/climabot
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
     cargo build --release --locked && \
-    rm -rf src target/release/climabot target/release/deps/climabot-*
+    cargo clean --release --package climabot && \
+    rm -rf src
 
 # ── Application build ─────────────────────────────────────────
 COPY images ./images
 COPY src ./src
-RUN cargo build --release --locked
+# `cargo clean -p` above forgets the placeholder build whatever Cargo's
+# build-directory layout; touching main.rs makes sure the real sources are
+# rebuilt even if COPY kept old timestamps. The version check fails the build
+# if the placeholder binary (which prints nothing) slipped through anyway.
+RUN touch src/main.rs && \
+    cargo build --release --locked && \
+    ./target/release/climabot --version | grep -q '^climabot '
 
 # ─── Stage 2: runtime ─────────────────────────────────────────
 FROM debian:bookworm-slim
