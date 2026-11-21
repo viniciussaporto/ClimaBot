@@ -16,7 +16,12 @@ services:
   climabot:
     image: climabot:rust
     build: .
-    env_file: .env
+    env_file:
+      - .env
+      # Optional: API keys kept out of .env (on the reference server,
+      # manassas-secrets writes the football keys here from OpenBao).
+      - path: secrets.env
+        required: false
     environment:
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DB: climabot

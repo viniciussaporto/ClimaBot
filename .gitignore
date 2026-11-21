@@ -1,5 +1,6 @@
 .env
 .env.old
+secrets.env
 /target
 *.db
 *.db-*
