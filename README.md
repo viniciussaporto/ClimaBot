@@ -397,7 +397,7 @@ The reverse proxy forwards only that path to the bot; `/metrics` stays private. 
 
 ## Development
 
-**Requirements:** Rust 1.88 or newer (the Docker build uses 1.93), plus OpenSSL headers (`pkg-config` and `libssl-dev` on Debian/Ubuntu). For `cargo run` you also need a MongoDB and a `.env`.
+**Requirements:** Rust 1.88 or newer (the Docker build and CI use 1.100), plus OpenSSL headers (`pkg-config` and `libssl-dev` on Debian/Ubuntu). For `cargo run` you also need a MongoDB and a `.env`.
 
 ```sh
 cargo build

@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn bot_without_roles_can_assign_nothing() {
         let roles = vec![role(10, "Blue", 1, Permissions::empty(), false)];
-        assert!(assignable_roles(&roles, GuildId::new(1), &[]).is_empty());
+        assert_eq!(assignable_roles(&roles, GuildId::new(1), &[]).len(), 0);
     }
 
     #[test]

@@ -380,10 +380,10 @@ mod tests {
     #[test]
     fn profile_matching() {
         let list = parse_profiles(&sample(include_str!("../testdata/api_football_profiles.json")));
-        assert!(!list.is_empty());
+        assert_ne!(list.len(), 0);
         let ranked = rank_players(list.clone(), "Pedro Neto");
         assert_eq!(ranked[0].name, "Pedro Neto");
-        assert!(rank_players(list, "Zzyzx").is_empty());
+        assert_eq!(rank_players(list, "Zzyzx"), vec![]);
         assert_eq!(profile_query("Giorgian de Arrascaeta").as_deref(), Some("arrascaeta"));
         assert_eq!(profile_query("Jo"), None);
     }

@@ -420,13 +420,13 @@ mod tests {
         assert_eq!(serie_a.score(), None, "no score before kick-off");
         assert!(!serie_a.slug.is_empty() && !serie_a.id.is_empty() && serie_a.slug != serie_a.id);
         // Not a tracked competition.
-        assert!(f[2].competition.is_empty());
+        assert_eq!(f[2].competition, "", "not a tracked competition");
     }
 
     #[test]
     fn live() {
         let f = parse_matches(&sample("live"));
-        assert!(!f.is_empty());
+        assert_ne!(f.len(), 0);
         assert!(f.iter().all(|m| m.status == Status::Live && m.score().is_some()));
     }
 
@@ -471,7 +471,7 @@ mod tests {
         assert_eq!(s[0].player, "Kevin Viveros");
         assert_eq!(s[0].goals, Some(21));
         let t = parse_team(&sample("team")).unwrap();
-        assert!(!t.matches.is_empty());
+        assert_ne!(t.matches.len(), 0);
         assert!(t.matches.windows(2).all(|w| w[0].kickoff <= w[1].kickoff));
         let r = parse_search(&serde_json::json!({"teams":[{"name":"Benfica","slug":"benfica"}],"players":[]}));
         assert_eq!(r.teams, vec![("Benfica".into(), "benfica".into())]);
@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(p.stats[0], ("Matches".into(), "31".into()));
         assert!(p.stats.contains(&("Red cards".into(), "0".into())));
         let none = parse_player(&serde_json::json!({"player":{"name":"X","slug":"x"},"stats":null})).unwrap();
-        assert!(none.stats.is_empty());
+        assert_eq!(none.stats, vec![]);
     }
 
     #[test]
