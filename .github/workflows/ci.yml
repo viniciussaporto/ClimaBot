@@ -40,6 +40,25 @@ jobs:
         # Tests that call real APIs are #[ignore]d and don't run here.
         run: cargo test --locked
 
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: climabot:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: The image runs the real bot
+        # The build itself checks `climabot --version`; this checks the
+        # runtime stage (shared libraries, user) too.
+        run: docker run --rm climabot:ci climabot --version | grep '^climabot '
+
   scripts:
     name: Scripts (ruff, shellcheck, generated files)
     runs-on: ubuntu-24.04
