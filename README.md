@@ -285,7 +285,7 @@ Global slash commands are registered on every start. Discord can take a few minu
 
 ## Configuration
 
-Everything is set in `.env`. [`.env.example`](.env.example) documents every option.
+Everything is set in `.env`. [`.env.example`](.env.example) documents every option. Any variable can also go in an optional `secrets.env` next to it (git- and Docker-ignored, loaded after `.env`), to keep API keys apart from the rest of the configuration.
 
 **Required**
 
