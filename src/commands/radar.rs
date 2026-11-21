@@ -106,7 +106,7 @@ static TILES: LazyLock<Mutex<TileCache>> = LazyLock::new(Default::default);
 
 /// Map tiles currently cached (for `/help status`).
 pub fn cached_tiles() -> usize {
-    TILES.lock().map(|t| t.len()).unwrap_or(0)
+    TILES.lock().map_or(0, |t| t.len())
 }
 
 // ─────────────────────────────────────────────
@@ -273,9 +273,9 @@ fn decode_png(bytes: &[u8]) -> Result<(usize, usize, Vec<Rgba>)> {
     let info = reader.next_frame(&mut buf)?;
     let buf = &buf[..info.buffer_size()];
     let px: Vec<Rgba> = match info.color_type {
-        png::ColorType::Rgba => buf.chunks_exact(4).map(|p| [p[0], p[1], p[2], p[3]]).collect(),
-        png::ColorType::Rgb => buf.chunks_exact(3).map(|p| [p[0], p[1], p[2], 255]).collect(),
-        png::ColorType::GrayscaleAlpha => buf.chunks_exact(2).map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        png::ColorType::Rgba => buf.as_chunks::<4>().0.iter().map(|p| [p[0], p[1], p[2], p[3]]).collect(),
+        png::ColorType::Rgb => buf.as_chunks::<3>().0.iter().map(|p| [p[0], p[1], p[2], 255]).collect(),
+        png::ColorType::GrayscaleAlpha => buf.as_chunks::<2>().0.iter().map(|p| [p[0], p[0], p[0], p[1]]).collect(),
         png::ColorType::Grayscale => buf.iter().map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => bail!("PNG palette was not expanded"),
     };

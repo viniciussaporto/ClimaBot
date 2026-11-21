@@ -1,5 +1,5 @@
 # ─── Stage 1: builder ─────────────────────────────────────────
-FROM rust:1.93-slim-bookworm AS builder
+FROM rust:1.100-slim-bookworm AS builder
 
 # Limit parallel rustc processes; the production host has little free RAM.
 ARG CARGO_BUILD_JOBS=2

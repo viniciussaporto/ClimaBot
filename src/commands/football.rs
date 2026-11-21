@@ -1144,6 +1144,8 @@ pub(super) struct TeamRef {
 }
 
 /// A team from autocomplete (a slug in a cached table) or typed text (looked up).
+// The error is the reply to send; it's built once per command.
+#[allow(clippy::result_large_err)]
 pub(super) async fn resolve_team(fb: &Football, input: &str) -> Result<TeamRef, Reply> {
     let known = fb.known_teams();
     if let Some((name, slug, c)) = known.iter().find(|(_, s, _)| s == input) {
@@ -1585,7 +1587,7 @@ mod tests {
         assert!(second.starts_with("**A** (cont.)"));
         let (last, _) = paginate(&blocks, 99);
         assert!(last.contains("line 59"));
-        assert!(page_buttons("la:-", 0, 1).is_empty());
+        assert_eq!(page_buttons("la:-", 0, 1).len(), 0, "one page needs no buttons");
         let ids: Vec<String> =
             (0..3).map(|p| format!("{PAGE_PREFIX}cf:brazilian-campeonato-mineiro-division-1:2026-11-22:{p}")).collect();
         assert!(ids.iter().all(|i| i.len() <= 100));
@@ -1795,9 +1797,9 @@ mod tests {
             // No Libertadores table there (404): its fallback covers fixtures only.
             assert_eq!(fd.standings(&fb.up, "CLI", Purpose::User).await.unwrap_err(), FetchError::NotFound);
             let s = fd.standings(&fb.up, "BSA", Purpose::User).await.unwrap();
-            assert!(!s.groups.is_empty());
+            assert_ne!(s.groups.len(), 0, "BSA table from football-data.org");
             let sc = fd.scorers(&fb.up, "PL", Purpose::User).await.unwrap();
-            assert!(!sc.is_empty());
+            assert_ne!(sc.len(), 0, "PL scorers from football-data.org");
             println!(
                 "football-data.org: {} BSA results, {} BSA table(s), PL top scorer {}",
                 m.len(),
