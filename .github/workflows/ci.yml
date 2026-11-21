@@ -39,6 +39,12 @@ jobs:
       - name: Tests
         # Tests that call real APIs are #[ignore]d and don't run here.
         run: cargo test --locked
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: Security advisories (RustSec)
+        # Fails on vulnerabilities; "unmaintained" notices are only reported.
+        run: cargo audit
 
   docker:
     name: Docker image

@@ -1,0 +1,20 @@
+# Weekly dependency updates, opened against preprod (changes reach main from
+# there). Security updates for the default branch are separate and immediate.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: preprod
+    schedule:
+      interval: weekly
+    groups:
+      # Patch and minor releases in one pull request; majors stay separate.
+      cargo-minor:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: preprod
+    schedule:
+      interval: weekly
+# The Rust Docker image is upgraded by hand, together with the CI toolchain
+# (.github/workflows/ci.yml) and any new Clippy lints.

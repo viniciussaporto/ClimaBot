@@ -354,7 +354,7 @@ Older versions are kept as the tags `archive/DeployThis` (the first Rust deploym
 | Alias | Command | What it does |
 | --- | --- | --- |
 | `climabot-start` | `climabot start` | Pull `main`, rebuild the bot, pull the MongoDB and browser images, start the stack |
-| `climabot-update` | `climabot update` | Pull `main`, rebuild and restart the running bot |
+| `climabot-update` | `climabot update` | Pull `main`, rebuild and restart the running bot; rolls back if the new build doesn't come up |
 | `climabot-stop` | `climabot stop` | Stop the bot and its stack |
 | `climabot-status` | `climabot status` | Branch, commit and container status |
 | `climabot-logs` | `climabot logs` | Follow the bot's logs |
@@ -367,6 +367,8 @@ Older versions are kept as the tags `archive/DeployThis` (the first Rust deploym
 - **3 minutes after every boot**, so a restarted server always comes back on the latest `main`
 
 ClimaBot alerts are muted from 05:25 to 06:15 UTC around the nightly run.
+
+**Rollback.** Before building, `climabot update` and `climabot start` keep the running image as `climabot:previous`. If the new container doesn't log in to Discord within about 90 seconds, the previous image is put back and restarted, and the command fails with the new build's logs. The Docker build itself refuses to produce an image whose binary doesn't answer `climabot --version`.
 
 ### Monitoring
 
@@ -410,6 +412,7 @@ cargo run                        # runs the bot with .env
 ```sh
 cargo fmt                                       # format (rustfmt.toml: 120 columns)
 cargo clippy --all-targets -- -D warnings       # lints, configured under [lints] in Cargo.toml
+cargo audit                                     # known vulnerabilities in Cargo.lock (RustSec)
 ruff check deploy && ruff format --check deploy # the Grafana generators (ruff.toml)
 shellcheck deploy/install.sh deploy/grafana/install.sh deploy/shell/climabot.sh deploy/climabot
 ```
@@ -421,8 +424,11 @@ shellcheck deploy/install.sh deploy/grafana/install.sh deploy/shell/climabot.sh 
 | Ruff | `ruff.toml` | pycodestyle, pyflakes, import order, bugbear, pyupgrade, simplifications and Ruff's own rules; Ruff's formatter |
 | ShellCheck | inline directives | Every deploy script; intended exceptions are annotated where they occur |
 | EditorConfig | `.editorconfig` | UTF-8, LF line endings, final newline, no trailing whitespace |
+| cargo-audit | – | No dependency with a known vulnerability ([RustSec](https://rustsec.org/)); "unmaintained" notices are reported, not fatal |
 
-CI also regenerates the Grafana dashboards and alerts and fails if the committed files differ from what the generators produce. The commit that first formatted the code is listed in `.git-blame-ignore-revs`, so `git blame` skips it (`git config blame.ignoreRevsFile .git-blame-ignore-revs` locally; GitHub does it automatically).
+CI also builds the Docker image (and runs `climabot --version` in it), and regenerates the Grafana dashboards and alerts, failing if the committed files differ from what the generators produce.
+
+**Dependencies.** Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) opens weekly update pull requests against `preprod`: Cargo patch and minor updates grouped in one, majors and GitHub Actions separately. Security alerts on `main` get their own updates as soon as they're published. The Rust version is upgraded by hand, in the Dockerfile and the CI workflow together, along with any new Clippy lints. The commit that first formatted the code is listed in `.git-blame-ignore-revs`, so `git blame` skips it (`git config blame.ignoreRevsFile .git-blame-ignore-revs` locally; GitHub does it automatically).
 
 **Live tests.** These call the real APIs, so they are `#[ignore]`d by default:
 
